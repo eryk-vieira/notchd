@@ -32,7 +32,7 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 
 ## Several notches
 
-The Notches page (`notch`) lists the notches. Each one's gear opens its page, `notch/<index>` (`Settings.notchPageId`), which holds every field for its own keys: name, modules, compact style, position, workspaces... Showing that page sets `NotchService.settingsNotch`, the notch the window edits. Those fields take that notch's key: `position.edge` at the top level, `notches.1.position.edge` in a list, with the top-level value it inherits as the field's default. Picking that value removes the notch's own key, so it inherits again. The General page has what applies to every notch: the hover delays and, unless they name another page, the host's fields. The gear in an expanded notch opens the window on that notch's page.
+The Notches page (`notch`) lists the notches. Each one's gear opens its page, `notch/<index>` (`Settings.notchPageId`), which holds every field for its own keys: name, modules, position, workspaces... Showing that page sets `NotchService.settingsNotch`, the notch the window edits. Those fields take that notch's key: `position.edge` at the top level, `notches.1.position.edge` in a list, with the top-level value it inherits as the field's default. Picking that value removes the notch's own key, so it inherits again. The General page has what applies to every notch: the hover delays and, unless they name another page, the host's fields. In Omarchy, the gear next to a notch in the bar button's panel opens the window on that notch's page.
 
 ## Modules
 

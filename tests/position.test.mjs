@@ -26,14 +26,6 @@ test('isVertical: only the side edges', () => {
   assert.equal(Position.isVertical('bottom'), false);
 });
 
-test('effective: bar style locks the notch to the middle of the bar, on every screen', () => {
-  const pos = { edge: 'left', offset: 0.1 };
-  assert.deepEqual(plain(Position.effective(pos, 'bar', 'bottom')), { edge: 'bottom', offset: 0.5, screen: 'all' });
-  assert.deepEqual(plain(Position.effective(pos, 'bar', undefined)), { edge: 'top', offset: 0.5, screen: 'all' });
-  assert.deepEqual(plain(Position.effective({ screen: 'all' }, 'notch', 'top')), { edge: 'top', offset: 0.5, screen: 'all' });
-  assert.deepEqual(plain(Position.effective(pos, 'notch', 'bottom')), { edge: 'left', offset: 0.1, screen: '' });
-});
-
 test('insets: only the bar edge, only while the bar shows', () => {
   assert.deepEqual(plain(Position.insets('top', 30, true)), { top: 30, bottom: 0, left: 0, right: 0 });
   assert.deepEqual(plain(Position.insets('left', 28, true)), { top: 0, bottom: 0, left: 28, right: 0 });
@@ -152,8 +144,7 @@ test('place: no rounding, so a growing card grows evenly on both sides', () => {
 test('resolve keeps the home screen by name', () => {
   assert.deepEqual(plain(Position.resolve({ edge: 'left', screen: 'eDP-1' })), { edge: 'left', offset: 0.5, screen: 'eDP-1' });
   assert.equal(Position.resolve({ screen: 3 }).screen, '');
-  assert.equal(Position.effective({ screen: 'eDP-1' }, 'bar', 'top').screen, 'all');
-  assert.equal(Position.effective({ screen: 'eDP-1' }, 'notch', 'top').screen, 'eDP-1');
+  assert.equal(Position.resolve({ screen: 'all' }).screen, 'all');
 });
 
 test('configValue keeps the home screen, even at top-center', () => {

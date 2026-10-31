@@ -58,7 +58,6 @@ ColumnLayout {
           title: entry.modelData.notchId
           subtitle: Settings.notchSummary({
             edge: entry.modelData.edge,
-            compactStyle: entry.modelData.compactStyle,
             moduleIds: entry.modelData.moduleIds
           }, control.titles)
           removable: control.notches.length > 1

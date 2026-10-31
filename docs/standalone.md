@@ -12,7 +12,7 @@ Start it with your session, e.g. Hyprland's `exec-once = qs -p ~/.local/share/no
 
 Differences from the Omarchy host:
 
-- **No bar indicator**, so `compactStyle` is always `"notch"`.
+- **No bar button**, so the settings window opens over IPC (`settings`, below); bind it to a key in your compositor to have it at hand.
 - **No `osd` module yet.** It needs its own volume and brightness sources.
 - **Theme from the config.**
 
@@ -34,7 +34,7 @@ Use a Nerd Font for `fontFamily` so module icons render.
 ```sh
 qs -p ~/.local/share/notchd ipc call notchd push '{"id":"deploy","title":"Deploying api","progress":40,"sticky":true}'
 qs -p ~/.local/share/notchd ipc call notchd clear deploy
-qs -p ~/.local/share/notchd ipc call notchd settings          # settings window (also the gear)
+qs -p ~/.local/share/notchd ipc call notchd settings          # settings window
 qs -p ~/.local/share/notchd ipc call notchd set topOffset 32   # change one key; '' resets it
 qs -p ~/.local/share/notchd ipc call notchd state
 ```

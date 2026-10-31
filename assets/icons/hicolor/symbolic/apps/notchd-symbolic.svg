@@ -1,0 +1,14 @@
+<!-- The app icon in one color, for the Omarchy bar indicator: a white tile with the
+     notch knocked out of its top and the dot and n inside it, so the bar can tint it
+     with the theme color. Same geometry as ../../scalable/apps/notchd.svg. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 16 480 480">
+  <defs>
+    <mask id="notch-cutout" maskUnits="userSpaceOnUse" x="16" y="16" width="480" height="480">
+      <rect x="16" y="16" width="480" height="480" rx="108" fill="#ffffff"/>
+      <path fill="#000000" d="M72,16 A34,34 0 0 1 106,50 L106,106 A60,60 0 0 0 166,166 L346,166 A60,60 0 0 0 406,106 L406,50 A34,34 0 0 1 440,16 Z"/>
+    </mask>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" fill="#ffffff" mask="url(#notch-cutout)"/>
+  <circle cx="206" cy="94" r="22" fill="#ffffff"/>
+  <path d="M266,122 V66 M266,92 A26,26 0 0 1 318,92 V122" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

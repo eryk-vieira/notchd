@@ -30,7 +30,6 @@ ShellRoot {
     property string tag: ""
     ipcTarget: "notchd-hero-" + tag
     configPath: root.outDir + "/hero-" + tag + ".json"
-    barStyleAvailable: false
   }
   Service { id: compactSvc; tag: "compact"; defaultModules: ["media"] }
   Service { id: activitySvc; tag: "activity"; defaultModules: ["activities"] }
@@ -249,7 +248,7 @@ ShellRoot {
           Caption {
             Layout.fillWidth: true
             title: "Expanded"
-            detail: "Hover or click: every active module at once, with its controls. The gear opens the settings."
+            detail: "Hover or click: every active module at once, with its controls."
           }
         }
       }

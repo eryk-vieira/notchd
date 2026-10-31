@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import "Config.js" as Config
 import "State.js" as State
 import "Position.js" as Position
 
@@ -11,7 +10,7 @@ import "Position.js" as Position
 //   following focus      one copy, which moves to the focused screen
 //   kept on a screen     one copy, which stays where it hangs (its home, or
 //                        where `workspaces` sends it), peeks included
-//   on every screen      ("all", and bar style) a copy per screen, each a
+//   on every screen      ("all") a copy per screen, each a
 //                        notch of its own
 //
 // The service also makes one `visitor`: no config of its own, every module,
@@ -46,13 +45,8 @@ Item {
     var service = notch.svc
     return service ? list.filter(function(id) { return !service.isStandalone(id) }) : list
   }
-  readonly property string configuredStyle: notch.spec ? notch.spec.compactStyle : Config.DEFAULTS.compactStyle
-  // Where the compact state lives: "bar" (in the host's bar indicator; the
-  // notch only drops out to peek or expand) or "notch" (hanging from its
-  // edge all the time). One notch at most gets the bar (State.compactStyles).
-  readonly property string compactStyle: notch.svc && !notch.guest ? notch.svc.compactStyleAt(notch.index) : "notch"
-  // Keep windows out of the strip the closed notch hangs into (compactStyle
-  // "notch" only); NotchSurface reserves it.
+  // Keep windows out of the strip the closed notch hangs into; NotchSurface
+  // reserves it.
   readonly property bool reserveSpace: !!notch.spec && notch.spec.reserveSpace
   // Workspaces the closed notch hangs on (ids or names); null: every one.
   readonly property var workspaces: notch.spec ? notch.spec.workspaces : null
@@ -60,17 +54,16 @@ Item {
   readonly property var position: Position.resolve(notch.standaloneId !== "" ? (notch.svc ? notch.svc.standalonePosition(notch.standaloneId) : { screen: Position.ALL_SCREENS })
     : notch.visitor ? { screen: Position.ALL_SCREENS }
     : notch.spec ? notch.spec.position : undefined)
-  // Where it is: bar style locks it to the middle of the bar.
-  readonly property var placement: Position.effective(notch.position, notch.compactStyle, notch.svc ? notch.svc.barEdge : "top")
+  // Where it is.
+  readonly property var placement: notch.position
   readonly property string edge: notch.placement.edge
   readonly property bool vertical: Position.isVertical(notch.edge)
   // A copy on every screen, each showing the notch.
   readonly property bool everyScreen: notch.placement.screen === Position.ALL_SCREENS
   // Kept on one screen (its home), by name.
   readonly property bool homed: !notch.everyScreen && notch.placement.screen !== ""
-  // Whether it can be dragged to another edge; never in bar style, where it
-  // belongs to the bar.
-  readonly property bool canDrag: !!notch.spec && notch.spec.draggable && notch.compactStyle === "notch"
+  // Whether it can be dragged to another edge.
+  readonly property bool canDrag: !!notch.spec && notch.spec.draggable
 
   // The config key for one of this notch's keys: "position" at the top
   // level, "notches.<index>.position" in a list.

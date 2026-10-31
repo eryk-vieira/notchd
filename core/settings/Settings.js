@@ -211,12 +211,12 @@ function notchIndexOfPage(id) {
 }
 
 // One line about a notch, for the Notches page: where it is and what it
-// shows. `notch`: { edge, compactStyle, moduleIds }; `titles`: id -> title.
+// shows. `notch`: { edge, moduleIds }; `titles`: id -> title.
 function notchSummary(notch, titles) {
   if (!notch) return ""
   titles = titles || {}
   var edge = String(notch.edge || "top")
-  var where = notch.compactStyle === "bar" ? "In the bar" : edge.charAt(0).toUpperCase() + edge.slice(1) + " edge"
+  var where = edge.charAt(0).toUpperCase() + edge.slice(1) + " edge"
   var ids = toList(notch.moduleIds)
   var shows = ids.length === 0 ? "no modules" : ids.map(function(id) { return titles[id] || moduleTitle(id, null) }).join(", ")
   return where + " · " + shows

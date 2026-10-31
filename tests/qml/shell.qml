@@ -82,7 +82,6 @@ ShellRoot {
       { name: "a visitor copy has a window only while it shows, and shortly after", run: root.visitorWindowOnlyWhileShown },
       { name: "notches, copies and modules survive a config edit", run: root.survivesConfigEdits },
       { name: "adding a notch and removing it gives the config back", run: root.addAndRemoveNotch },
-      { name: "only the first notch asking for the bar gets it", run: root.oneBarNotch },
       { name: "a notch kept on a screen stays there and a peek also shows where you work", run: root.peekBesideHomedNotch },
       { name: "an OSD peek shows once, on the focused screen only", run: root.osdPeekOnFocusedScreen },
       { name: "a standalone module shows in its own place, never in a notch", run: root.standaloneOwnPlace },
@@ -133,16 +132,6 @@ ShellRoot {
     defaultModules: ["activities"]
   }
 
-  NotchService {
-    id: barred
-    ipcTarget: "notchd-qmltest-bar"
-    configPath: root.dir + "/bar.json"
-    compositor: twoScreens
-    screens: [{ name: "A" }, { name: "B" }]
-    barStyleAvailable: true
-    defaultModules: []
-  }
-
   // ---------------------------------------------------------------- cases
   // Bug: a list edited in the settings went through the control's `var`
   // signal, came out as a sequence (Array.isArray false), and Config.resolve
@@ -181,14 +170,12 @@ ShellRoot {
     property string mode: "compact"
     property string edge: "top"
     property bool dragging: false
-    readonly property string compactStyle: "notch"
     readonly property bool reserveSpace: true
     property var compactModule: fakeModule
     readonly property var peekModule: fakeModule
     readonly property var expandedModules: []
     function togglePinned(screenName) {}
     function close() {}
-    function openSettings() {}
   }
   QtObject {
     id: fakeModule
@@ -430,7 +417,7 @@ ShellRoot {
       Item {
         implicitWidth: 300
         implicitHeight: 100
-        // A control that takes hover, like the gear or the media buttons.
+        // A control that takes hover, like the media buttons.
         MouseArea {
           anchors.fill: parent
           hoverEnabled: true
@@ -443,14 +430,12 @@ ShellRoot {
     id: pointerSvc
     readonly property string mode: "expanded"
     readonly property string edge: "top"
-    readonly property string compactStyle: "notch"
     readonly property var compactModule: null
     readonly property var peekModule: null
     readonly property var expandedModules: [controlModule]
     property int pins: 0
     function togglePinned(screenName) { pins++ }
     function close() {}
-    function openSettings() {}
   }
   FloatingWindow {
     id: pointerWin
@@ -690,19 +675,6 @@ ShellRoot {
     root.done()
   }
 
-  function oneBarNotch() {
-    barred.replaceConfig({ notches: [{}, { id: "second" }] })
-    root.steps([[50, function() {}]], function() {
-      var first = barred.notches[0], second = barred.notches[1]
-      root.check(barred.barNotch === first, "the bar went to " + (barred.barNotch ? barred.barNotch.notchId : "none"))
-      root.check(first.compactStyle === "bar" && second.compactStyle === "notch",
-                 "styles " + first.compactStyle + " / " + second.compactStyle)
-      root.check(first.everyScreen && first.copies.length === 2, "the bar notch needs a copy per bar")
-      root.check(!!first.copyOn("B") && first.copyOn("B") !== first.copyOn("A"), "no copy for bar B")
-      root.done()
-    })
-  }
-
   // Bug: the notch kept on the ultrawide (position.screen) showing music
   // left it when the volume changed on the laptop screen. Now it stays and
   // shows the volume there; on the laptop screen, where no notch with the
@@ -888,7 +860,7 @@ ShellRoot {
     root.check(multi.settingsPages.some(function(p) { return p.id === "notch/1" && p.label === "side" }), "no page for side")
     multi.settingsPage = "general"
     multi.openSettings(0)
-    root.check(multi.settingsPage === "notch/0" && multi.settingsNotch === 0, "the gear opened " + multi.settingsPage)
+    root.check(multi.settingsPage === "notch/0" && multi.settingsNotch === 0, "openSettings(0) opened " + multi.settingsPage)
     multi.closeSettings()
     multi.replaceConfig({})
     root.done()

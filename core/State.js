@@ -1,7 +1,7 @@
 // The notch's state rules: which modules show, which peek wins, which mode
 // the notch is in. Pure functions with no QML globals, so Node tests them too
 // (tests/state.test.mjs). Modules are any objects with `active`, `priority`,
-// `compact`, `barView`, `peek`, `expanded` and `urgentPeek`.
+// `compact`, `peek`, `expanded` and `urgentPeek`.
 
 // Active modules, highest priority first.
 function activeModules(modules) {
@@ -16,7 +16,7 @@ function activeModules(modules) {
 // for it.
 function compactModule(active) {
   for (var i = 0; i < active.length; i++)
-    if (active[i].compact || active[i].barView) return active[i]
+    if (active[i].compact) return active[i]
   return null
 }
 
@@ -56,15 +56,14 @@ function needsWindow(s) {
 }
 
 // How far windows are kept from the notch's edge (the layer-shell exclusive
-// zone), in px; 0 reserves nothing. Only a notch that hangs there when
-// closed (compactStyle "notch") needs it. It follows the closed notch, not
+// zone), in px; 0 reserves nothing. It follows the closed notch, not
 // what is on screen: peeks and the expanded notch open over the windows.
 // `compact`: a module shows a compact view; then the tallest compact view
 // seen (`tallest`), never less than `baseline`, so a module whose view
 // changes size doesn't move windows each time. Otherwise the rest lip
 // (`rest`).
 function reservedSpace(s) {
-  if (!s.enabled || s.compactStyle !== "notch") return 0
+  if (!s.enabled) return 0
   if (!s.compact) return Math.ceil(Number(s.rest) || 0)
   return Math.ceil(Math.max(Number(s.baseline) || 0, Number(s.tallest) || 0))
 }
@@ -132,19 +131,6 @@ function reserveScreens(screens, home) {
 }
 
 // ---------------------------------------------------------------- notches
-// The compact style each notch gets, from the ones configured: the host's
-// bar holds one notch's compact state, so only the first notch that asks
-// for "bar" gets it, and only when the host has a bar indicator; the rest
-// hang ("notch").
-function compactStyles(configured, barAvailable) {
-  var taken = !barAvailable
-  return (configured || []).map(function(style) {
-    if (style !== "bar" || taken) return "notch"
-    taken = true
-    return "bar"
-  })
-}
-
 // The copy of a notch that shows a peek, by its screen name: the copy on
 // the focused screen, else the first. A notch with one copy (it follows
 // focus or stays on its screen) has `copies` [""] and that copy peeks.

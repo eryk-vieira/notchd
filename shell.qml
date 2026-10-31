@@ -9,8 +9,8 @@ import "core"
 // resolves types from files inside the config folder: `import "../../core"`
 // from hosts/standalone fails with "NotchSurface is not a type".
 //
-// No desktop shell to lean on, so: no bar indicator (compactStyle is always
-// "notch"), the theme comes from the config's "theme" object, and the gap
+// No desktop shell to lean on, so: no bar indicator (settings open over IPC),
+// the theme comes from the config's "theme" object, and the gap
 // above the notch (e.g. your bar's height) from "topOffset".
 //
 // Config: $NOTCHD_CONFIG if set, else $XDG_CONFIG_HOME/notchd/config.json.

@@ -55,20 +55,21 @@ const one = (cfg, defaults = ['media']) => plain(Config.notches(cfg, defaults))[
 
 test('notches: without a list, the top level is the one notch, at its defaults', () => {
   assert.deepEqual(plain(Config.notches({}, ['media'])), [{
-    id: 'main', index: 0, prefix: '', moduleIds: ['media'], compactStyle: 'bar',
+    id: 'main', index: 0, prefix: '', moduleIds: ['media'],
     reserveSpace: false, draggable: true, workspaces: null, position: undefined
   }].map(plain));
   assert.equal(plain(Config.notches({ notches: [] }, [])).length, 1);
 });
 
 test('notches: reads and clamps the notch keys', () => {
-  const n = one({ modules: ['osd', 3], compactStyle: 'notch', reserveSpace: true, draggable: false, workspaces: [1, 'code'] }, []);
+  const n = one({ modules: ['osd', 3], reserveSpace: true, draggable: false, workspaces: [1, 'code'] }, []);
   assert.deepEqual(n.moduleIds, ['osd', '3']);
-  assert.equal(n.compactStyle, 'notch');
   assert.equal(n.reserveSpace, true);
   assert.equal(n.draggable, false);
   assert.deepEqual(n.workspaces, [1, 'code']);
-  assert.equal(one({ compactStyle: 'weird' }).compactStyle, 'bar');
+  // The compact style left with the notch in the bar: a config that still
+  // has one changes nothing.
+  assert.equal(one({ compactStyle: 'bar' }).compactStyle, undefined);
   assert.equal(one({ reserveSpace: 'yes' }).reserveSpace, false);
   assert.equal(one({ draggable: 'no' }).draggable, true);
   assert.equal(one({ workspaces: [] }).workspaces, null);

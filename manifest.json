@@ -19,9 +19,9 @@
   },
   "barWidget": {
     "displayName": "notchd",
-    "description": "notchd's compact state in the bar (compactStyle \"bar\"); hover to drop the notch",
+    "description": "notchd's button: its notches, open or close each, and the settings",
     "category": "System",
     "allowMultiple": false,
-    "defaultSection": "center"
+    "defaultSection": "right"
   }
 }

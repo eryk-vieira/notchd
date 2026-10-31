@@ -31,11 +31,8 @@ Item {
   // Extra modules the host ships, as { id: url }. They win over built-ins
   // with the same id.
   property var hostModules: ({})
-  // Whether the host has a bar indicator that can hold the compact state.
-  // Without one, compactStyle is always "notch".
-  property bool barStyleAvailable: false
-  // The screen edge the host's bar is on ("top", "bottom", "left", "right").
-  // In compactStyle "bar" the notch hangs from it.
+  // The screen edge the host's bar is on ("top", "bottom", "left", "right"):
+  // a notch on that edge hangs from the bar.
   property string barEdge: "top"
   // Prefix for log lines.
   property string logName: svc.ipcTarget
@@ -302,7 +299,6 @@ Item {
       var v = Config.valueAt(svc.config, k)
       return v === undefined ? fallback : v
     }
-    var style = n ? n.compactStyle : "notch"
     var several = svc.notches.length > 1
     // The picked notch's page, under Notches.
     var own = Settings.notchPageId(n ? n.index : 0)
@@ -320,57 +316,34 @@ Item {
                               : "Switched-on modules load. Their order breaks ties in the expanded view.")
                      + (svc.standaloneIds.length > 0 ? " Standalone modules, such as " + svc.moduleCatalog.filter(function(m) { return m.standalone })
                           .map(function(m) { return m.title }).join(", ") + ", have a place of their own: see the Modules page." : "") })
-    // The bar holds one notch's compact state; another notch can't pick it
-    // until that one hangs.
-    var barOwner = svc.barNotch
-    if (svc.barStyleAvailable && barOwner && n && barOwner !== n) {
-      out.push({ page: own, section: "Layout", type: "note", label: "Compact style: hanging",
-                 help: "The bar holds the compact state of " + barOwner.notchId + ", so this notch hangs from its edge. Set " + barOwner.notchId + " to the hanging notch to give the bar to this one." })
-    } else if (svc.barStyleAvailable) {
-      out.push({ page: own, section: "Layout", key: key("compactStyle"), type: "choice", display: "cards",
-                 label: "Compact style", default: inherited("compactStyle", Config.DEFAULTS.compactStyle),
-                 help: several ? "Where an active module lives when the notch is closed. The bar holds one notch at a time."
-                               : "Where an active module lives when the notch is closed.",
-                 options: [
-                   { value: "bar", label: "In the bar", preview: Qt.resolvedUrl("settings/previews/CompactBar.qml") },
-                   { value: "notch", label: "Hanging notch", preview: Qt.resolvedUrl("settings/previews/CompactNotch.qml") }
-                 ] })
-    }
-    // Only a notch that hangs below the edge while closed has a strip to keep.
-    if (style === "notch")
-      out.push({ page: own, section: "Layout", key: key("reserveSpace"), type: "boolean",
-                 label: "Keep windows clear", default: inherited("reserveSpace", Config.DEFAULTS.reserveSpace),
-                 help: "Windows keep clear of the closed notch instead of going under it, along its whole edge: a sliver at rest, more while a module is active. Peeks and the open notch still cover them." })
-    if (style === "notch") {
-      out.push({ page: own, section: "Position", key: key("position.edge"), type: "choice", display: "cards",
-                 label: "Edge", default: inherited("position.edge", "top"),
-                 help: "The screen edge the notch hangs from. On a side edge, an active module without a vertical view shows a dot.",
-                 options: ["top", "bottom", "left", "right"].map(function(e) {
-                   return { value: e, label: e.charAt(0).toUpperCase() + e.slice(1),
-                            preview: Qt.resolvedUrl("settings/previews/Edge.qml") }
-                 }) })
-      out.push({ page: own, section: "Position", key: key("position.offset"), type: "number", display: "percent",
-                 label: "Along the edge", default: inherited("position.offset", 0.5), min: 0, max: 1, step: 0.01,
-                 help: "Where on the edge: 0 % is its left (or top) end, 50 % the middle." })
-      var screens = svc.screens
-      if (screens.length > 1)
-        out.push({ page: own, section: "Position", key: key("position.screen"), type: "choice",
-                   label: "Screen", default: inherited("position.screen", ""),
-                   help: "Where the notch stays. Following focus, it moves to the screen you work on. On a screen of its own, it stays there, peeks included; on a screen without a notch that shows it, a peek appears at the top. On every screen, each screen has its own copy, and a peek shows on the focused one.",
-                   options: [{ value: "", label: "Follow focus" }, { value: "all", label: "Every screen" }].concat(screens.map(function(s) {
-                     return { value: s.name, label: s.name }
-                   })) })
-      out.push({ page: own, section: "Position", key: key("draggable"), type: "boolean",
-                 label: "Drag to move", default: inherited("draggable", Config.DEFAULTS.draggable),
-                 help: "Hold the notch for a moment, then drag it to any edge of the screen; it snaps to the nearest one, and to the middle when close to it. A quick click only pins it." })
-    } else {
-      out.push({ page: own, section: "Position", type: "note", label: "Follows the bar",
-                 help: "With the compact state in the bar, the notch drops out of the middle of the bar, on every screen. Pick the hanging notch to place it on any edge." })
-    }
+    out.push({ page: own, section: "Layout", key: key("reserveSpace"), type: "boolean",
+               label: "Keep windows clear", default: inherited("reserveSpace", Config.DEFAULTS.reserveSpace),
+               help: "Windows keep clear of the closed notch instead of going under it, along its whole edge: a sliver at rest, more while a module is active. Peeks and the open notch still cover them." })
+    out.push({ page: own, section: "Position", key: key("position.edge"), type: "choice", display: "cards",
+               label: "Edge", default: inherited("position.edge", "top"),
+               help: "The screen edge the notch hangs from. On a side edge, an active module without a vertical view shows a dot.",
+               options: ["top", "bottom", "left", "right"].map(function(e) {
+                 return { value: e, label: e.charAt(0).toUpperCase() + e.slice(1),
+                          preview: Qt.resolvedUrl("settings/previews/Edge.qml") }
+               }) })
+    out.push({ page: own, section: "Position", key: key("position.offset"), type: "number", display: "percent",
+               label: "Along the edge", default: inherited("position.offset", 0.5), min: 0, max: 1, step: 0.01,
+               help: "Where on the edge: 0 % is its left (or top) end, 50 % the middle." })
+    var screens = svc.screens
+    if (screens.length > 1)
+      out.push({ page: own, section: "Position", key: key("position.screen"), type: "choice",
+                 label: "Screen", default: inherited("position.screen", ""),
+                 help: "Where the notch stays. Following focus, it moves to the screen you work on. On a screen of its own, it stays there, peeks included; on a screen without a notch that shows it, a peek appears at the top. On every screen, each screen has its own copy, and a peek shows on the focused one.",
+                 options: [{ value: "", label: "Follow focus" }, { value: "all", label: "Every screen" }].concat(screens.map(function(s) {
+                   return { value: s.name, label: s.name }
+                 })) })
+    out.push({ page: own, section: "Position", key: key("draggable"), type: "boolean",
+               label: "Drag to move", default: inherited("draggable", Config.DEFAULTS.draggable),
+               help: "Hold the notch for a moment, then drag it to any edge of the screen; it snaps to the nearest one, and to the middle when close to it. A quick click only pins it." })
     if (svc.compositor && svc.compositor.supportsWorkspaces)
       out.push({ page: own, section: "Layout", key: key("workspaces"), type: "workspaces",
                  label: "Workspaces", default: inherited("workspaces", undefined),
-                 help: "Where the closed notch (or its bar indicator) shows; none picked means every workspace. Peeks and the open notch show on any." })
+                 help: "Where the closed notch shows; none picked means every workspace. Peeks and the open notch show on any." })
     out.push({ page: "general", section: "Hover", key: "hoverOpenDelay", type: "integer", label: "Open delay",
                help: several ? "How long the pointer rests on a notch before it expands. For every notch."
                              : "How long the pointer rests on the notch before it expands.",
@@ -423,11 +396,6 @@ Item {
       if (svc.notchSpecs[i].id === id) return svc.notchSpecs[i]
     return null
   }
-
-  // The compact style of the notch at `index`: only one gets the bar.
-  readonly property var compactStyles: State.compactStyles(
-    svc.notchSpecs.map(function(n) { return n.compactStyle }), svc.barStyleAvailable)
-  function compactStyleAt(index) { return svc.compactStyles[index] || "notch" }
 
   // `notch: svc` would bind the notch's own property to itself (the property
   // name shadows the id), so the reference goes through `owner`.
@@ -490,12 +458,6 @@ Item {
   // The first notch's first copy: what a single-notch view (the visual
   // tests, the README image) draws.
   readonly property var firstCopy: svc.copies.length > 0 ? svc.copies[0] : null
-  // The notch whose compact state the host's bar holds, if any.
-  readonly property var barNotch: {
-    for (var i = 0; i < svc.notches.length; i++)
-      if (svc.notches[i].compactStyle === "bar") return svc.notches[i]
-    return null
-  }
 
   function notchById(id) {
     for (var i = 0; i < svc.notches.length; i++)
@@ -655,7 +617,6 @@ Item {
         notches: svc.notches.map(function(n) {
           return {
             id: n.notchId,
-            compactStyle: n.compactStyle,
             reserveSpace: n.reserveSpace,
             workspaces: n.workspaces,
             position: n.placement,

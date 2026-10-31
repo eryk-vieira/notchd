@@ -149,14 +149,6 @@ NotchModule {
     }
   }
 
-  barView: Component {
-    Row {
-      spacing: Theme.space(6)
-      Art { anchors.verticalCenter: parent.verticalCenter; size: Theme.space(16); radius: Theme.space(4) }
-      Equalizer { anchors.verticalCenter: parent.verticalCenter; barHeight: Theme.space(12) }
-    }
-  }
-
   peek: Component {
     RowLayout {
       spacing: Theme.space(12)

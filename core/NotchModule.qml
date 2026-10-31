@@ -5,10 +5,9 @@ import QtQuick
 // NotchService.hostModules). List its id in the config's "modules" to load it.
 //
 // The notch shows, by state:
-//   rest      nothing active: a small lip at its edge (hidden in bar style)
+//   rest      nothing active: a small lip at its edge
 //   compact   the highest-priority active module's `compact` view against
-//             its edge (`verticalCompact` on a side edge, else a dot), or its
-//             `barView` in the host's bar (compactStyle "bar")
+//             its edge (`verticalCompact` on a side edge, else a dot)
 //   peek      a module's `peek` view (`verticalPeek` on a side edge, if it
 //             has one), for a few seconds, after requestPeek()
 //   expanded  on hover or click: the `expanded` view of every active module
@@ -45,9 +44,6 @@ Item {
   property bool peekOnFocusedScreen: false
 
   property Component compact: null
-  // Compact view sized for the bar strip (compactStyle "bar"); falls back to
-  // `compact` when unset.
-  property Component barView: null
   // Compact view for a side edge (left/right): narrow and tall. Without one,
   // the notch shows a dot there while the module is active.
   property Component verticalCompact: null

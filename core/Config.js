@@ -6,7 +6,6 @@
 var DEFAULTS = {
   hoverOpenDelay: 120,
   hoverCloseDelay: 300,
-  compactStyle: "bar",
   reserveSpace: false,
   draggable: true
 }
@@ -102,7 +101,7 @@ function resolve(cfg) {
 // of the config, then its default; `position` merges key by key. Without
 // `notches` (or with an empty list) there is one notch, made of the
 // top-level keys: a config from before there were several still works.
-var NOTCH_KEYS = ["modules", "compactStyle", "reserveSpace", "draggable", "workspaces", "position"]
+var NOTCH_KEYS = ["modules", "reserveSpace", "draggable", "workspaces", "position"]
 
 // Whether the config lists its notches (else the top level is the one).
 function hasNotchList(cfg) {
@@ -117,7 +116,7 @@ function defaultNotchId(index) { return index === 0 ? "main" : "notch-" + (index
 //   index       its place in the list
 //   prefix      what goes before a notch key in the config: "" for the
 //               top-level notch, "notches.<index>." otherwise
-//   moduleIds, compactStyle, reserveSpace, draggable, workspaces
+//   moduleIds, reserveSpace, draggable, workspaces
 //               as the service's keys of those names
 //   position    the raw `position` value, top-level keys merged under the
 //               notch's (Position.resolve reads it)
@@ -142,7 +141,6 @@ function notches(cfg, defaultModules) {
       index: i,
       prefix: listed ? "notches." + i + "." : "",
       moduleIds: Array.isArray(modules) ? modules.map(String) : (defaultModules || []).slice(),
-      compactStyle: pick("compactStyle") === "notch" ? "notch" : DEFAULTS.compactStyle,
       reserveSpace: pick("reserveSpace") === true,
       draggable: pick("draggable") !== false,
       workspaces: workspaceList(pick("workspaces")),

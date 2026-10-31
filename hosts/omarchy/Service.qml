@@ -4,9 +4,10 @@ import "../../core"
 
 // Omarchy host: the notch service as an Omarchy shell plugin. Wires the core
 // to Omarchy: its IPC name, the osd module that receives `omarchy osd` (a
-// standalone module: its own place, top-center by default), the
-// bar indicator (so compactStyle "bar" works), Hyprland (for workspaces) and
-// Omarchy's theme.
+// standalone module: its own place, top-center by default), the bar's edge
+// (a notch there hangs from the bar), Hyprland (for workspaces) and
+// Omarchy's theme. The bar indicator (BarIndicator.qml) finds it through the
+// shell.
 NotchService {
   id: svc
 
@@ -15,7 +16,6 @@ NotchService {
 
   ipcTarget: "eryk.notchd"
   logName: "eryk.notchd"
-  barStyleAvailable: true
   barEdge: svc.shell && svc.shell.bar ? String(svc.shell.bar.position || "top") : "top"
   compositor: hyprland
   defaultModules: ["media", "activities"]

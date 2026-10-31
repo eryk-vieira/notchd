@@ -11,8 +11,8 @@ test('activeModules keeps active ones, highest priority first', () => {
   assert.deepEqual(plain(State.activeModules(list).map((m) => m.id)), ['osd', 'media']);
 });
 
-test('compactModule is the first active module with a compact or bar view', () => {
-  const active = [mod('osd', 100), mod('media', 50, { barView: {} }), mod('act', 40, { compact: {} })];
+test('compactModule is the first active module with a compact view', () => {
+  const active = [mod('osd', 100), mod('media', 50, { compact: {} }), mod('act', 40, { compact: {} })];
   assert.equal(State.compactModule(active).id, 'media');
   assert.equal(State.compactModule([mod('osd', 100)]), null);
 });
@@ -70,19 +70,17 @@ test('needsWindow: a guest only while open or lingering after; a notch always', 
   assert.equal(State.needsWindow({ guest: true, lingering: true }), true);
 });
 
-test('reservedSpace: only when enabled in notch style; compact never below the baseline', () => {
-  const on = { enabled: true, compactStyle: 'notch', compact: true, baseline: 36, tallest: 0, rest: 5 };
+test('reservedSpace: only when enabled; compact never below the baseline', () => {
+  const on = { enabled: true, compact: true, baseline: 36, tallest: 0, rest: 5 };
   assert.equal(State.reservedSpace(on), 36);
   assert.equal(State.reservedSpace({ ...on, tallest: 41.2 }), 42);
   assert.equal(State.reservedSpace({ ...on, tallest: 20 }), 36);
   assert.equal(State.reservedSpace({ ...on, enabled: false }), 0);
-  assert.equal(State.reservedSpace({ ...on, compactStyle: 'bar' }), 0);
 });
 
 test('reservedSpace: at rest, only the lip', () => {
-  const rest = { enabled: true, compactStyle: 'notch', compact: false, baseline: 36, tallest: 50, rest: 5.4 };
+  const rest = { enabled: true, compact: false, baseline: 36, tallest: 50, rest: 5.4 };
   assert.equal(State.reservedSpace(rest), 6);
-  assert.equal(State.reservedSpace({ ...rest, compactStyle: 'bar' }), 0);
 });
 
 test('reserveStep: grow or drop now, shrink later, nothing when equal', () => {
@@ -135,11 +133,6 @@ test('reserveScreens: only the home screen while the notch can hang there', () =
   assert.deepEqual(plain(State.reserveScreens(screens, 'HDMI-A-1')), ['DP-1', 'eDP-1']);
 });
 
-test('compactStyles: only the first notch asking for the bar gets it', () => {
-  assert.deepEqual(plain(State.compactStyles(['notch', 'bar', 'bar'], true)), ['notch', 'bar', 'notch']);
-  assert.deepEqual(plain(State.compactStyles(['bar', 'bar'], false)), ['notch', 'notch']);
-  assert.deepEqual(plain(State.compactStyles([], true)), []);
-});
 
 // Bug: with the notch showing media on one monitor, changing the volume on
 // another moved the one notch there. A notch on every screen peeks only on

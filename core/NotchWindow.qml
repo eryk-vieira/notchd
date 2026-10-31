@@ -10,9 +10,7 @@ import "Config.js" as Config
 // edge). Hidden over a fullscreen app and, closed, where its workspace
 // doesn't take it; peeks and the open notch show regardless. The copy holds
 // the state and NotchCard draws it; this places the card, routes the
-// pointer and handles the drag. With compactStyle "bar" the card hides at
-// rest/compact (the host's bar indicator shows that) and drops out from
-// under the bar to peek or expand.
+// pointer and handles the drag.
 //
 // The window covers the whole screen on the overlay layer but its input mask
 // is just the notch, so everything else stays click-through. What the closed
@@ -33,7 +31,7 @@ Scope {
   readonly property bool standalone: !!root.notch && root.notch.standaloneId !== ""
   readonly property var compositor: root.copy ? root.copy.compositor : null
 
-  // What the notch shows (NotchCard.mode): the copy's mode, or "hidden".
+  // What the notch shows (NotchCard.mode): the copy's mode.
   readonly property string mode: card.mode
 
   // -------------------------------------------------------------- geometry
@@ -64,10 +62,10 @@ Scope {
   readonly property var insets: Position.insets(root.copy && root.copy.svc ? root.copy.svc.barEdge : "top",
                                                 root.barHeight, root.barVisible)
 
-  // Hidden in bar style at rest/compact; over a fullscreen app, or with no
-  // screen on an allowed workspace, only peeks and the open notch show.
-  readonly property bool hidden: root.mode === "hidden"
-    || ((root.fullscreenOnScreen || root.offWorkspace) && (root.mode === "rest" || root.mode === "compact"))
+  // Over a fullscreen app, or with no screen on an allowed workspace, only
+  // peeks and the open notch show.
+  readonly property bool hidden: (root.fullscreenOnScreen || root.offWorkspace)
+    && (root.mode === "rest" || root.mode === "compact")
   // Also hidden while another notch on its edge is open over it, or a
   // standalone card shows over it (`covered`).
   readonly property bool concealed: root.hidden || (root.covered && !root.cardOpen)

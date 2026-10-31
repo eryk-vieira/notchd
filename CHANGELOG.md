@@ -6,7 +6,8 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
-- An app icon: the notch with an orange dot and an `n`, in Gruvbox colors. `assets/icons/` has the SVG, PNGs at every size from 16 to 1024 px and a `.ico`.
+- An app icon: the notch with an orange dot and an `n`, in Gruvbox colors. `assets/icons/` has the SVG, PNGs at every size from 16 to 1024 px, a `.ico` and a one-color symbolic SVG.
+- Omarchy: a notchd button in the bar, with the app icon. Its panel lists every notch, where it is and what it shows; clicking one opens or closes it, its gear opens that notch's settings, and Settings (or a right click on the icon) opens the settings window.
 - `timer` module: a countdown or a pomodoro, started from the expanded notch or with `timer 25m`, `timer pomodoro`, `timer toggle`, `timer +5m`, `timer stop` over IPC. The closed notch shows the time left; at the end it peeks, even over the open notch, and sends a desktop notification. Its lengths, rounds, auto-start and notification are in settings (Modules › Timer). Not loaded by default.
 - `media.equalizer` (settings: Modules › Now playing › Equalizer): `"smooth"` (the default) glides the bars at 60 fps, `"light"` makes them jump about six times a second, for less CPU.
 - `resources` module: CPU, memory and the disk holding `/`, each with a bar and how much is used in the expanded notch, and their percentages in the closed notch. One that runs short (90 % or more; the CPU for about 10 s in a row, so a burst doesn't count) turns red and peeks once. `resources.compact: "short"` (settings: Modules › Resources › Closed notch) keeps them out of the closed notch until one runs short. Not loaded by default.
@@ -16,17 +17,16 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 - Modules can set `peekOnFocusedScreen`: their peek shows once, on the focused monitor only, in the first notch there that shows the module, else at the top. For feedback on what you just did there.
 - Settings: the Notches page lists the notches, where each is and what it shows; a gear opens a notch's page with everything it has of its own (name, modules, compact style, position, workspaces), and Add opens the new one's. A Modules page lists every module and where it shows, with a gear to its own settings, even while no notch shows it. General comes first and has what applies to every notch.
 - Several notches (`notches`; settings: the Notches page, a gear per notch): each with its own modules, compact style, position, workspaces and reserved space, inheriting the top-level keys it leaves out. A module may show in several. IPC gets `openNotch`, `closeNotch` and `toggleNotch` by notch id, and `state` lists the notches and their copies.
-- `position.screen: "all"` (settings: Notches › Position › Screen › Every screen): a copy of the notch on every monitor, each hovered, pinned and dragged on its own. A peek shows on the focused monitor only, so changing the volume on one monitor no longer takes the notch away from the music playing on another. In bar style the notch has a copy per bar.
+- `position.screen: "all"` (settings: Notches › Position › Screen › Every screen): a copy of the notch on every monitor, each hovered, pinned and dragged on its own. A peek shows on the focused monitor only, so changing the volume on one monitor no longer takes the notch away from the music playing on another.
 
 - Drag the notch onto another monitor: a preview shows it there, and the drop makes that monitor its home (`position.screen`; settings: Notches › Position › Screen), where the notch stays whichever monitor has focus, peeks included; a peek also shows at the top of the monitor you work on when no notch there shows it. Dropped on a workspace left out of `workspaces`, it adds that workspace, so the notch stays where it landed. Reserved space is kept on the home monitor only.
-- With a vertical Omarchy bar, the bar indicator shows the compact state down the bar (the module's vertical view, or a dot) instead of hiding, and the notch drops out of the side.
-- Settings window with a sidebar of pages (General, Notches, Modules, Appearance), fields grouped by section, compact style picked from picture cards, segmented choices and switches for modules.
+- Settings window with a sidebar of pages (General, Notches, Modules, Appearance), fields grouped by section, the edge picked from picture cards, segmented choices and switches for modules.
 - Settings fields can be `boolean` or `note`, live on a `page`, and show a choice as picture cards (`display: "cards"`); hosts can add pages with `hostSettingsPages`.
 - Theme tokens derived from the host's colors (`muted`, `faint`, `line`, `hover`, `selected`, `surface`, `danger`, radii).
 - `make check`: Node tests, QML behaviour tests, qmllint, plugin validation and offscreen visual scenarios.
-- `reserveSpace` (settings: Notches › Layout › Keep windows clear): with the notch hanging in `"notch"` style, windows tile below it instead of under it. The space follows the closed notch, a sliver at rest and a compact notch's height while a module is active; peeks never move windows.
-- `workspaces` (settings: Notches › Layout › Workspaces): the workspaces the closed notch, or its bar indicator, shows on. On others it moves to a screen that shows one, or hides; peeks and the open notch still show, and reserved space is only kept where the notch can hang. Hyprland only.
-- `position` (settings: Notches › Position): the hanging notch on any screen edge (`edge`: top, bottom, left, right) and anywhere along it (`offset`). On a side edge peeks and the expanded notch keep their layout and the notch grows sideways; reserved space moves to that edge. In `"bar"` style the notch stays in the middle of the bar, on whichever edge the bar is.
+- `reserveSpace` (settings: Notches › Layout › Keep windows clear): windows tile below the closed notch instead of under it. The space follows the closed notch, a sliver at rest and a compact notch's height while a module is active; peeks never move windows.
+- `workspaces` (settings: Notches › Layout › Workspaces): the workspaces the closed notch shows on. On others it moves to a screen that shows one, or hides; peeks and the open notch still show, and reserved space is only kept where the notch can hang. Hyprland only.
+- `position` (settings: Notches › Position): the hanging notch on any screen edge (`edge`: top, bottom, left, right) and anywhere along it (`offset`). On a side edge peeks and the expanded notch keep their layout and the notch grows sideways; reserved space moves to that edge.
 - Hold the hanging notch for a moment and drag it to any edge (`draggable`, on by default; settings: Notches › Position › Drag to move); a quick click only pins it. It follows the nearest edge as you drag, snaps to the middle, and the drop is saved as `position`. Windows move once, when it lands. `recenter` over IPC puts it back at the top.
 - Modules can give `verticalCompact` and `verticalPeek` views for a side edge; a module without a vertical compact view shows a dot there. The media and activities modules stack their compact view down the edge, and the Omarchy OSD stands its bar up.
 - Settings fields can be a `number` (a slider with a fractional step, shown as a percentage with `display: "percent"`); card pictures get their option's `value`.
@@ -34,10 +34,11 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Changed
 
+- The expanded notch has no gear any more. In Omarchy the settings open from the notchd button in the bar; anywhere, with the `settings` IPC method.
 - At either end of its edge the notch sits flush in the corner, square against the screen's side (or the bar), instead of short of it by its shoulder.
 - Notches that come within a few pixels of each other on one edge (or are dropped near one) join flush into one shape, as deep as the deepest of them. One that opens grows from where it is and pushes the others aside, evenly in the middle of the edge and away from the screen's side against it, instead of hiding them.
 
-- Modules read `notch.expanded` and `notch.peeking(module)` instead of `notch.mode` and `notch.peekModule`, since a module can show in several notches. Hosts read the place and workspaces from each notch (`service.notches`, `service.barNotch`); `NotchSurface` no longer takes a `compositor` of its own.
+- Modules read `notch.expanded` and `notch.peeking(module)` instead of `notch.mode` and `notch.peekModule`, since a module can show in several notches. Hosts read the place and workspaces from each notch (`service.notches`); `NotchSurface` no longer takes a `compositor` of its own.
 
 - The repository root is the Omarchy plugin (`manifest.json` at the root). Point `~/.config/omarchy/plugins/eryk.notchd` at the checkout instead of `hosts/omarchy`.
 - The standalone host is `shell.qml` at the repository root: run `qs -p <checkout>` instead of `qs -p hosts/standalone`.
@@ -54,12 +55,13 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 - A running timer redrew the notch four times a second; it now wakes as its clock turns, once a second, so the open notch's progress bar steps once a second too.
 - Music playing cost a quarter to a third of a CPU core (on a 160 Hz monitor) and kept the compositor busy: the hidden default notch drew the media view on every monitor, and the equalizer and the progress bar never stopped easing. It now costs about 1 %: hidden copies hold no view, the equalizer and the progress bar move at 60 fps instead of the monitor's rate (8 % of a core while music plays, under 1 % of a 20-thread CPU), and a notch hidden over a fullscreen app stops its equalizer.
 - The notch's animations looked choppy at their slow end: one side of the outline moved a whole pixel at a time while the other glided. It now moves in fractions of a pixel and settles on whole pixels, with its content kept on whole pixels throughout.
-- Moving the pointer across the open notch's controls (the media buttons, the gear) closed and reopened it: those controls took the hover from the notch.
+- Moving the pointer across the open notch's controls (the media buttons) closed and reopened it: those controls took the hover from the notch.
 - With `reserveSpace`, windows took 4 s to reclaim the space after the last module ended; they now do as the notch finishes collapsing (400 ms).
 - Media artwork, and its placeholder, vanished entirely under Qt's software renderer; it now shows with square corners there.
 
 ### Removed
 
+- The compact view in the bar (`compactStyle: "bar"`, which was the default): every notch hangs from its edge. A config that still sets `compactStyle` changes nothing, so a notch that was in the bar now hangs from the top, in the middle; drag it or set `position` to move it. Modules lose `barView`, and the service `barStyleAvailable` and `barNotch`.
 - `scripts/build-omarchy.sh` and `dist/`: no build step is needed any more.
 
 Earlier history is in `git log`.

@@ -90,41 +90,6 @@ NotchModule {
     }
   }
 
-  barView: Component {
-    Row {
-      readonly property var item: acts.items.length > 0 ? acts.items[acts.items.length - 1] : null
-      spacing: Theme.space(6)
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        textFormat: Text.PlainText
-        text: parent.item ? parent.item.icon : ""
-        color: Theme.accent
-        font.family: Theme.font.family
-        font.pixelSize: Theme.font.body
-      }
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        width: Math.min(implicitWidth, Theme.space(140))
-        textFormat: Text.PlainText
-        text: parent.item ? parent.item.title : ""
-        elide: Text.ElideRight
-        color: Theme.foreground
-        font.family: Theme.font.family
-        font.pixelSize: Theme.font.bodySmall
-      }
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        visible: !!parent.item && parent.item.progress >= 0
-        textFormat: Text.PlainText
-        text: parent.item && parent.item.progress >= 0 ? Math.round(parent.item.progress) + "%" : ""
-        color: Theme.foreground
-        opacity: 0.6
-        font.family: Theme.font.family
-        font.pixelSize: Theme.font.caption
-      }
-    }
-  }
-
   peek: Component {
     ActivityRow {
       item: acts.last

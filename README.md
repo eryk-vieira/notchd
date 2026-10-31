@@ -10,32 +10,27 @@ It is a **notch framework, not a shell**. Modules show what the system is alread
 
 notchd runs inside a *host*: the desktop-specific wiring around the generic core.
 
-- **Omarchy**: the repository is an Omarchy shell plugin (`eryk.notchd`), with volume/brightness OSD and the compact view in the bar. See [hosts/omarchy](hosts/omarchy/README.md).
+- **Omarchy**: the repository is an Omarchy shell plugin (`eryk.notchd`), with volume/brightness OSD and a button in the bar for the notches and the settings. See [hosts/omarchy](hosts/omarchy/README.md).
 - **Any other Wayland compositor with layer-shell**: the repository is also a standalone Quickshell config (`qs -p <checkout>`). See [docs/standalone.md](docs/standalone.md).
 
 ## States
 
 | State | When | Shows |
 |---|---|---|
-| rest | nothing active | a small lip (nothing in bar style) |
-| compact | a module is active | the highest-priority active module's `compact` view, or its `barView` in the host's bar |
+| rest | nothing active | a small lip |
+| compact | a module is active | the highest-priority active module's `compact` view, hanging from its edge |
 | peek | a module calls `requestPeek()` | that module's `peek` view, for a few seconds |
 | expanded | hover (click pins it, click outside unpins) | the `expanded` view of every active module |
 
 Over a fullscreen app only peeks show.
 
-`compactStyle` in the config sets where compact lives:
+Hold the notch for a moment, then drag it to move it (a quick click only pins it open): it closes as it is picked up, jumps to the screen edge nearest the pointer as you go, sits with its middle under the pointer, snaps to the middle of an edge when close to it, and stays where you drop it. With more than one monitor you can drag it onto another one: a preview shows it there, and the monitor you drop it on becomes its home, where it stays whichever monitor has focus. A peek shows on the notch, and also at the top of the monitor you work on if no notch there shows it. The volume and brightness OSD, standalone, shows in its own place on the monitor you work on. If that monitor shows a workspace left out of `workspaces`, the drop adds it; on another such workspace later, the notch goes back to the monitors whose workspace takes it. `draggable: false` turns dragging off, and `recenter` over IPC puts it back at the top, following focus.
 
-- `"bar"`: in the host's bar indicator. The notch only drops out to peek or expand. Only hosts with a bar indicator support it; that is only the Omarchy host today.
-- `"notch"`: compact hangs from its edge all the time, Mac style.
+The drop is stored as `position`, which you can also set by hand: `{"edge": "left", "offset": 0.3, "screen": "eDP-1"}`. `edge` is `"top"` (the default), `"bottom"`, `"left"` or `"right"`; `offset` runs from 0 (the left or top end) to 1, 0.5 being the middle of the stretch the bar leaves free; at either end (or close enough that its shoulder would not fit) the notch sits flush in the corner, square against the screen's side or the bar; `screen` names the home monitor (none: follow focus; `"all"`: a copy on every monitor, see [Several notches](#several-notches)). On a side edge peeks and the expanded notch keep their layout and the notch grows sideways; the closed notch runs down the edge with each module's vertical view (media: artwork over the equalizer; activities: icon over a progress bar) and the volume and brightness OSD stands its bar up. A module without a vertical view shows a dot.
 
-Hold the hanging notch for a moment, then drag it to move it (a quick click only pins it open): it closes as it is picked up, jumps to the screen edge nearest the pointer as you go, sits with its middle under the pointer, snaps to the middle of an edge when close to it, and stays where you drop it. With more than one monitor you can drag it onto another one: a preview shows it there, and the monitor you drop it on becomes its home, where it stays whichever monitor has focus. A peek shows on the notch, and also at the top of the monitor you work on if no notch there shows it. The volume and brightness OSD, standalone, shows in its own place on the monitor you work on. If that monitor shows a workspace left out of `workspaces`, the drop adds it; on another such workspace later, the notch goes back to the monitors whose workspace takes it. `draggable: false` turns dragging off, and `recenter` over IPC puts it back at the top, following focus.
+The notch covers the windows under it. `reserveSpace: true` keeps windows clear of it instead: the compositor reserves a strip as deep as the closed notch, along the whole of its edge on its home monitor, or on every monitor it may hang on while it follows focus (layer-shell can only reserve whole edges). At rest that is the thin lip; while a module is active, a compact notch's height. It grows at once and shrinks as soon as the notch has collapsed, so windows move when music starts or stops or an activity comes and goes, not for peeks: volume, brightness and the expanded notch open over windows.
 
-The drop is stored as `position`, which you can also set by hand: `{"edge": "left", "offset": 0.3, "screen": "eDP-1"}`. `edge` is `"top"` (the default), `"bottom"`, `"left"` or `"right"`; `offset` runs from 0 (the left or top end) to 1, 0.5 being the middle of the stretch the bar leaves free; at either end (or close enough that its shoulder would not fit) the notch sits flush in the corner, square against the screen's side or the bar; `screen` names the home monitor (none: follow focus; `"all"`: a copy on every monitor, see [Several notches](#several-notches)). On a side edge peeks and the expanded notch keep their layout and the notch grows sideways; the closed notch runs down the edge with each module's vertical view (media: artwork over the equalizer; activities: icon over a progress bar) and the volume and brightness OSD stands its bar up. A module without a vertical view shows a dot. In `"bar"` style the notch stays in the middle of the bar, wherever the bar is, on every monitor.
-
-A hanging notch covers the windows under it. `reserveSpace: true` keeps windows clear of it instead: the compositor reserves a strip as deep as the closed notch, along the whole of its edge on its home monitor, or on every monitor it may hang on while it follows focus (layer-shell can only reserve whole edges). At rest that is the thin lip; while a module is active, a compact notch's height. It grows at once and shrinks as soon as the notch has collapsed, so windows move when music starts or stops or an activity comes and goes, not for peeks: volume, brightness and the expanded notch open over windows. It does nothing in `"bar"` style.
-
-`workspaces` limits where the closed notch shows, e.g. `[1, 2, 3]` (ids or names). When the focused screen shows another workspace, the closed notch moves to a screen that shows one of them, or hides if none does; in `"bar"` style the bar indicator hides on those screens. Peeks and the open notch still show, whatever the workspace, so the volume OSD never goes missing. Reserved space follows too: a screen showing a workspace without the notch reserves nothing, so switching a screen between the two moves its windows. It needs a compositor adapter that knows workspaces (Hyprland today).
+`workspaces` limits where the closed notch shows, e.g. `[1, 2, 3]` (ids or names). When the focused screen shows another workspace, the closed notch moves to a screen that shows one of them, or hides if none does. Peeks and the open notch still show, whatever the workspace, so the volume OSD never goes missing. Reserved space follows too: a screen showing a workspace without the notch reserves nothing, so switching a screen between the two moves its windows. It needs a compositor adapter that knows workspaces (Hyprland today).
 
 ## Modules
 
@@ -67,12 +62,11 @@ To write your own, see [docs/modules.md](docs/modules.md).
 
 - `position.screen` decides where each one is: following focus (none), on one monitor (its name), or on every monitor (`"all"`), each with a copy of its own that you hover, pin and drag on its own.
 - A module may show in several notches. Its peek shows in each of them: on the focused monitor for a notch on every monitor (or one that follows focus), the others keeping what they show, and where it is for a notch kept on one monitor. When no notch with the module is on the monitor you work on, the peek also shows there, once, at the top. The volume and brightness OSD is standalone: it shows in its own place on the monitor you work on, never in a notch. So changing the volume on the laptop shows it there, and the notch with the music stays on the ultrawide.
-- The host's bar holds one notch's compact state: the first notch in `"bar"` style. The others hang. A notch in the bar has a copy on every monitor, one per bar.
 - Notches never sit on each other. On the same edge of a monitor they go side by side, each as near its `offset` as the others let it; when one grows (music starts) its neighbors make room. Notches that come within a few pixels of each other (or are dropped near one) join flush into one shape, as deep as the deepest of them. One that opens (a peek, the pointer) grows from where it is and pushes its neighbors aside, staying joined to them: in the middle of the edge it grows evenly to both sides, against the screen's side it grows away from it. A neighbor that no longer fits on the edge hides until it closes.
 - Notches that share an edge reserve the deepest of them (`reserveSpace`), not the sum.
 - `id` names a notch for IPC (`openNotch jobs`); without one the first is `main` and the others `notch-2`, `notch-3`...
 
-In the settings window, pick the notch to set up at the top of the Notches page, which has everything that notch has of its own (modules, compact style, position, workspaces); Add notch puts a new one on a free edge, and removing all but one puts its keys back at the top level.
+In the settings window, pick the notch to set up at the top of the Notches page, which has everything that notch has of its own (modules, position, workspaces); Add notch puts a new one on a free edge, and removing all but one puts its keys back at the top level.
 
 ## Config
 
@@ -81,12 +75,11 @@ The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/no
 | Key | Default | |
 |---|---|---|
 | `modules` | `["media", "activities"]` | module ids to show, in order; *per notch* |
-| `compactStyle` | `"bar"` | see above; *per notch* |
 | `hoverOpenDelay` | `120` | ms |
 | `hoverCloseDelay` | `300` | ms |
-| `position` | top, middle, following focus | `{ "edge", "offset", "screen" }`: where the hanging notch sits (`"notch"` style); see above; *per notch* |
-| `draggable` | `true` | drag the hanging notch to move it (`"notch"` style); *per notch* |
-| `reserveSpace` | `false` | keep windows clear of the closed notch (`"notch"` style); see above; *per notch* |
+| `position` | top, middle, following focus | `{ "edge", "offset", "screen" }`: where the notch sits; see above; *per notch* |
+| `draggable` | `true` | drag the notch to move it; *per notch* |
+| `reserveSpace` | `false` | keep windows clear of the closed notch; see above; *per notch* |
 | `workspaces` | every one | workspaces the closed notch shows on; see above; *per notch* |
 | `notches` | one notch | `[{ "id", ...per-notch keys }]`; see [Several notches](#several-notches) |
 
@@ -94,7 +87,7 @@ Hosts add their own keys; the standalone host, for example, adds `topOffset` and
 
 ## Settings
 
-The gear in the expanded notch (or the `settings` IPC method) opens the settings window: a sidebar of pages, and on each page its fields grouped by section. Every change applies at once and is written back to the config file; there is no Apply button. Clearing a field, or picking its default, removes the key. Ctrl+Tab cycles pages; Esc closes.
+The settings window opens from the host: in Omarchy, the notchd button in the bar (Settings in its panel, or a right click); anywhere, the `settings` IPC method. It has a sidebar of pages, and on each page its fields grouped by section. Every change applies at once and is written back to the config file; there is no Apply button. Clearing a field, or picking its default, removes the key. Ctrl+Tab cycles pages; Esc closes.
 
 ## IPC
 

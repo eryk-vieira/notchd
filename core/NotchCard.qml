@@ -54,11 +54,7 @@ Item {
   property real maxHeight: Theme.space(1200)
 
   // ------------------------------------------------------------------ mode
-  readonly property string notchMode: card.notch ? card.notch.mode : "rest"
-  readonly property bool barStyle: !!card.notch && card.notch.compactStyle === "bar"
-  // What the notch shows: in bar style, rest and compact belong to the bar.
-  readonly property string mode: (card.barStyle && (card.notchMode === "rest" || card.notchMode === "compact"))
-    ? "hidden" : card.notchMode
+  readonly property string mode: card.notch ? card.notch.mode : "rest"
 
   // On a side edge, compact shows the module's `verticalCompact` (a module
   // without one gets a dot) and peek its `verticalPeek`, if it has one.
@@ -253,30 +249,6 @@ Item {
             color: Theme.muted
             font.family: Theme.font.family
             font.pixelSize: Theme.font.caption
-          }
-        }
-      }
-
-      // Footer: the gear opens the settings window (and closes the notch,
-      // which would otherwise sit over it).
-      Item {
-        width: expandedStack.width
-        implicitHeight: gear.implicitHeight
-        Text {
-          id: gear
-          anchors.right: parent.right
-          textFormat: Text.PlainText
-          text: String.fromCodePoint(0xF0493)  // nf-md-cog
-          color: gearArea.containsMouse ? Theme.foreground : Theme.muted
-          font.family: Theme.font.family
-          font.pixelSize: Theme.font.heading
-          MouseArea {
-            id: gearArea
-            anchors.fill: parent
-            anchors.margins: -Theme.space(6)
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: if (card.notch) { card.notch.close(); card.notch.openSettings() }
           }
         }
       }

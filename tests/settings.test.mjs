@@ -203,9 +203,9 @@ test('notch pages are sub-pages of Notches, by index', () => {
 
 test('notchSummary says where a notch is and what it shows', () => {
   const titles = { media: 'Now playing' };
-  assert.equal(Settings.notchSummary({ edge: 'bottom', compactStyle: 'notch', moduleIds: ['media', 'timer'] }, titles),
+  assert.equal(Settings.notchSummary({ edge: 'bottom', moduleIds: ['media', 'timer'] }, titles),
     'Bottom edge · Now playing, Timer');
-  assert.equal(Settings.notchSummary({ edge: 'top', compactStyle: 'bar', moduleIds: [] }, titles), 'In the bar · no modules');
+  assert.equal(Settings.notchSummary({ edge: 'top', moduleIds: [] }, titles), 'Top edge · no modules');
   assert.equal(Settings.notchSummary(null, titles), '');
 });
 

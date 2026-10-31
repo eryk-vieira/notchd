@@ -31,15 +31,6 @@ function resolve(value) {
   }
 }
 
-// Where the notch actually goes. compactStyle "bar" locks it to the middle
-// of the host's bar, with a copy on every screen (its compact state lives in
-// the bar, and there is a bar on each); otherwise the configured position.
-function effective(position, compactStyle, barEdge) {
-  if (compactStyle === "bar")
-    return { edge: isEdge(barEdge) ? barEdge : DEFAULT_EDGE, offset: DEFAULT_OFFSET, screen: ALL_SCREENS }
-  return resolve(position)
-}
-
 // The card's top-left corner on screen, in px. `s`:
 //   edge, offset        the position
 //   width, height       the screen

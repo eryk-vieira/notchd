@@ -33,8 +33,8 @@ ShellRoot {
       help: "Colors, fonts and spacing come from the active Omarchy theme and change with it." }
   ]
 
-  // Each scenario: the page, the theme, whether the host has a bar and its
-  // extra fields, config keys to set, the notch the window edits and whether
+  // Each scenario: the page, the theme, `bar` for the Omarchy host's look
+  // (workspaces 1 to 3 picked), its extra fields, config keys to set, the notch the window edits and whether
   // to scroll the page to its end. Or, with `edge`, the notch on
   // that edge instead of the settings window.
   readonly property var scenarios: [
@@ -49,7 +49,7 @@ ShellRoot {
     { name: "module-resources-light", page: "modules/resources", theme: root.light, bar: true, fields: root.omarchyFields },
     { name: "appearance-omarchy-dark", page: "appearance", theme: root.dark, bar: true, fields: root.omarchyFields },
     { name: "notch-hanging-dark", page: "notch/0", theme: root.dark, bar: true, fields: root.omarchyFields,
-      config: { compactStyle: "notch", position: { edge: "left", offset: 0.3 } }, scrollTo: "end" },
+      config: { position: { edge: "left", offset: 0.3 } }, scrollTo: "end" },
     { name: "notches-dark", page: "notch/1", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { notches: [{}, { id: "jobs", modules: ["activities"], position: { edge: "bottom", screen: "all" } }] },
       notch: 1 },
@@ -82,7 +82,6 @@ ShellRoot {
     ipcTarget: "notchd-visual"
     compositor: fakeCompositor
     configPath: root.outDir + "/config.json"
-    barStyleAvailable: root.scenario ? !!root.scenario.bar : false
     hostSettingsSchema: root.scenario && root.scenario.fields ? root.scenario.fields : []
     settingsPage: root.scenario && root.scenario.page ? root.scenario.page : "notch"
   }
@@ -96,7 +95,6 @@ ShellRoot {
     property string tag: ""
     ipcTarget: "notchd-visual-" + tag
     configPath: root.outDir + "/edge-" + tag + ".json"
-    barStyleAvailable: false
   }
   DemoService { id: mediaSvc; tag: "media"; defaultModules: ["media"] }
   DemoService { id: activitySvc; tag: "activity"; defaultModules: ["activities"] }
@@ -375,7 +373,6 @@ ShellRoot {
     Theme.provider = root.scenario.theme
     svc.setConfigValue("workspaces", root.scenario.bar ? [1, 2, 3] : undefined)
     var cfg = root.scenario.config || {}
-    svc.setConfigValue("compactStyle", cfg.compactStyle)
     svc.setConfigValue("position", cfg.position)
     svc.setConfigValue("notches", cfg.notches)
     svc.setConfigValue("modules", cfg.modules)

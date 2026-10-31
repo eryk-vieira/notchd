@@ -21,7 +21,6 @@ Item {
   readonly property string edge: copy.owner ? copy.owner.edge : "top"
   readonly property bool vertical: !!copy.owner && copy.owner.vertical
   readonly property var placement: copy.owner ? copy.owner.placement : ({ edge: "top", offset: 0.5, screen: "" })
-  readonly property string compactStyle: copy.owner ? copy.owner.compactStyle : "notch"
   readonly property bool reserveSpace: !!copy.owner && copy.owner.reserveSpace
   readonly property bool canDrag: !!copy.owner && copy.owner.canDrag
   readonly property var compactModule: copy.owner ? copy.owner.compactModule : null
@@ -48,8 +47,8 @@ Item {
   Timer { id: peekTimer; onTriggered: copy.peekModule = null }
 
   // ----------------------------------------------------------------- hover
-  // Several surfaces report the pointer (the notch card, the bar indicator
-  // on this copy's screen); the copy counts as hovered while any has it.
+  // Several surfaces report the pointer (the notch card, the slack around
+  // it); the copy counts as hovered while any has it.
   property var pointerSources: ({})
   readonly property bool pointerInside: Object.keys(copy.pointerSources).length > 0
   property bool hovered: false
@@ -100,8 +99,6 @@ Item {
     if (screenName) copy.openScreen = screenName
     copy.pinned = !copy.pinned
   }
-  // The settings window, on this notch's page.
-  function openSettings() { if (copy.svc) copy.svc.openSettings(copy.owner ? copy.owner.index : 0) }
 
   // ------------------------------------------------------------------ mode
   readonly property string mode: State.mode({ peekModule: copy.peekModule, pinned: copy.pinned, dragging: copy.dragging,
