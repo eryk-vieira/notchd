@@ -13,6 +13,11 @@ Item {
   // Width the notch may grow to (the screen, less some margin).
   property real maxWidth: Theme.space(1200)
 
+  // The pointer is on the card. Here, not on an item beside it, so the
+  // controls inside the views (which take hover themselves) never hide it.
+  readonly property bool hovered: hover.hovered
+  HoverHandler { id: hover }
+
   // ------------------------------------------------------------------ mode
   readonly property string svcMode: card.svc ? card.svc.mode : "rest"
   readonly property bool barStyle: !!card.svc && card.svc.compactStyle === "bar"

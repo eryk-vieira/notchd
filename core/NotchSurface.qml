@@ -136,6 +136,13 @@ Item {
       onClicked: if (root.svc) root.svc.close()
     }
 
+    // The pointer is on the notch while it is on the card or the slack
+    // around it. The card reports its own hover: an item beside it loses
+    // the pointer to any control inside the card that takes hover, which
+    // closed the notch as the pointer crossed its buttons. Naming the
+    // screen keeps the notch on it while open, even when another screen has
+    // focus (the closed notch can hang off-focus).
+    readonly property string screenName: window.screen ? window.screen.name : ""
     Item {
       id: hoverZone
       x: card.x - window.slack
@@ -143,9 +150,7 @@ Item {
       width: root.concealed ? 0 : card.width + window.slack * 2
       height: root.concealed ? 0 : card.height + window.slack * 2
       HoverHandler {
-        // Naming the screen keeps the notch on it while open, even when
-        // another screen has focus (the closed notch can hang off-focus).
-        onHoveredChanged: if (root.svc) root.svc.setPointer("notch", hovered, window.screen ? window.screen.name : "")
+        onHoveredChanged: if (root.svc) root.svc.setPointer("notch-slack", hovered, window.screenName)
       }
     }
 
@@ -156,6 +161,7 @@ Item {
       x: Math.round((window.width - width) / 2)
       y: root.topOffset
       opacity: root.concealed ? 0 : 1
+      onHoveredChanged: if (root.svc) root.svc.setPointer("notch", card.hovered, window.screenName)
       Behavior on opacity { NumberAnimation { duration: 160 } }
     }
   }

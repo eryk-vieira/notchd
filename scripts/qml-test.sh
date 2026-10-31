@@ -20,7 +20,9 @@ NOTCHD_QMLTEST_DIR="$scratch/data" "$root/scripts/isolated.sh" "$scratch/runtime
 
 grep -oE '(PASS|FAIL) .*' "$scratch/log" || true
 
-problems=$(grep -E '^\s*(WARN|ERROR)' "$scratch/log" || true)
+# The offscreen backend's lack of window masks is expected (the pointer
+# tests use a window).
+problems=$(grep -E '^\s*(WARN|ERROR)' "$scratch/log" | grep -vE 'window masks' || true)
 if [[ -n $problems ]]; then
   echo "QML warnings during the tests:" >&2
   echo "$problems" >&2

@@ -1,4 +1,5 @@
 import QtQuick
+import QtTest
 import Quickshell
 import "core"
 import "core/settings"
@@ -66,7 +67,8 @@ ShellRoot {
       { name: "peeks and the open notch never move windows", run: root.reserveIgnoresOpenNotch },
       { name: "reserved space grows at once and shrinks after the delay", run: root.reserveGrowsAndShrinks },
       { name: "one module ending as another starts keeps the space", run: root.reserveBridgesModules },
-      { name: "the space shrinks as the notch closes, not seconds later", run: root.reserveShrinksPromptly }
+      { name: "the space shrinks as the notch closes, not seconds later", run: root.reserveShrinksPromptly },
+      { name: "the notch stays hovered over the controls inside it", run: root.hoverOverControls }
     ]
     Qt.callLater(root.next)
   }
@@ -270,5 +272,72 @@ ShellRoot {
                  "still " + defaultReserve.space + " px 600 ms after the notch closed; the lip is " + rest)
       root.done()
     })
+  }
+
+  // ------------------------------------------------------------- pointer
+  // Real pointer events (QtTest) on a card in a window. The TestCase runs
+  // no tests of its own; it only sends the events.
+  TestCase { id: pointer; when: false }
+
+  QtObject {
+    id: controlModule
+    property bool controlHovered: false
+    readonly property Component expanded: Component {
+      Item {
+        implicitWidth: 300
+        implicitHeight: 100
+        // A control that takes hover, like the gear or the media buttons.
+        MouseArea {
+          anchors.fill: parent
+          hoverEnabled: true
+          onContainsMouseChanged: controlModule.controlHovered = containsMouse
+        }
+      }
+    }
+  }
+  QtObject {
+    id: pointerSvc
+    readonly property string mode: "expanded"
+    readonly property string compactStyle: "notch"
+    readonly property var compactModule: null
+    readonly property var peekModule: null
+    readonly property var expandedModules: [controlModule]
+    property int pins: 0
+    function togglePinned(screenName) { pins++ }
+    function close() {}
+    function openSettings() {}
+  }
+  FloatingWindow {
+    id: pointerWin
+    implicitWidth: 500
+    implicitHeight: 400
+    NotchCard {
+      id: pointerCard
+      svc: pointerSvc
+      x: 50
+    }
+  }
+  // A spot on the card outside its content: the open side's padding.
+  function padX() { return pointerCard.width / 2 }
+  function padY() { return pointerCard.height - 4 }
+
+  // Bug: the hover was tracked on an item beside the card, and any control
+  // inside the card that takes hover took the pointer from it. Crossing the
+  // media buttons or the gear closed the notch (after the close delay) and
+  // opened it again: it flickered.
+  function hoverOverControls() {
+    root.steps([
+      [600, function() { pointer.mouseMove(pointerCard, root.padX(), root.padY()) }],
+      [50, function() {
+        root.check(pointerCard.hovered === true, "not hovered on the card's padding")
+        pointer.mouseMove(pointerCard, pointerCard.width / 2, pointerCard.height / 2)
+      }],
+      [50, function() {
+        root.check(controlModule.controlHovered, "the pointer is not on the control (test setup)")
+        root.check(pointerCard.hovered === true, "lost the hover over a control inside the card")
+        pointer.mouseMove(pointerCard, root.padX(), root.padY())
+      }],
+      [50, function() { root.check(pointerCard.hovered === true, "not hovered back on the padding") }]
+    ], function() { root.done() })
   }
 }

@@ -108,7 +108,7 @@ Objects and arrays built inside the vm have their own prototypes; compare them t
 
 ### QML behaviour tests
 
-`tests/qml/shell.qml`, run by `make qmltest` (part of `make check`): cases that need real bindings, signals or animations, such as a list that stops being an `Array` after a `var` signal, or a height measured halfway through a transition. Each case is a function in the `cases` list that checks with `root.check(cond, why)` and ends with `root.done()`; `root.steps([[ms, fn], ...], last)` waits between steps. They run offscreen through `scripts/isolated.sh`, with the service's config in a scratch dir. A case that guards a bug says which one in a comment.
+`tests/qml/shell.qml`, run by `make qmltest` (part of `make check`): cases that need real bindings, signals or animations, such as a list that stops being an `Array` after a `var` signal, or a height measured halfway through a transition. Each case is a function in the `cases` list that checks with `root.check(cond, why)` and ends with `root.done()`; `root.steps([[ms, fn], ...], last)` waits between steps. They run offscreen through `scripts/isolated.sh`, with the service's config in a scratch dir. For hover, clicks and drags, the `pointer` TestCase (QtTest, running no tests of its own) sends real pointer events to a card in a window: `pointer.mouseMove(item, x, y)`, `mousePress`, `mouseRelease`, `mouseClick`. A case that guards a bug says which one in a comment.
 
 ### Visual scenarios
 
