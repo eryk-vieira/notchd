@@ -11,6 +11,8 @@ NotchModule {
   title: "OSD"
   priority: 100
   urgentPeek: true
+  // Volume and brightness change where you work; the feedback shows there.
+  peekOnFocusedScreen: true
 
   property string icon: ""
   property string message: ""

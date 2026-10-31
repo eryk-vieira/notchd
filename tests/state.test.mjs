@@ -172,3 +172,17 @@ test('needsVisitor: only when no notch with the module peeks on the focused scre
   assert.equal(State.needsVisitor([], 'eDP-1'), true);
   assert.equal(State.needsVisitor([homedOnDp], ''), false);
 });
+
+// Brightness changes on the focused monitor only, yet its OSD opened on the
+// notches of the other monitors too. The OSD peeks once, on the focused one.
+test('focusedPeek: the first notch peeking on the focused screen, else the visitor', () => {
+  const dp = { kind: 'homed', screen: 'DP-1' };
+  const edp = { kind: 'homed', screen: 'eDP-1' };
+  assert.equal(State.focusedPeek([dp, edp, { kind: 'homed', screen: 'eDP-1' }], 'eDP-1'), 1);
+  assert.equal(State.focusedPeek([dp, { kind: 'all' }], 'eDP-1'), 1);
+  assert.equal(State.focusedPeek([dp, { kind: 'follow' }, edp], 'eDP-1'), 1);
+  assert.equal(State.focusedPeek([dp], 'eDP-1'), -1);
+  assert.equal(State.focusedPeek([dp], 'DP-1'), 0);
+  assert.equal(State.focusedPeek([dp, edp], ''), 0);
+  assert.equal(State.focusedPeek([], ''), -1);
+});

@@ -80,7 +80,8 @@ ShellRoot {
       { name: "notches, copies and modules survive a config edit", run: root.survivesConfigEdits },
       { name: "adding a notch and removing it gives the config back", run: root.addAndRemoveNotch },
       { name: "only the first notch asking for the bar gets it", run: root.oneBarNotch },
-      { name: "a notch kept on a screen stays there and a peek also shows where you work", run: root.peekBesideHomedNotch }
+      { name: "a notch kept on a screen stays there and a peek also shows where you work", run: root.peekBesideHomedNotch },
+      { name: "an OSD peek shows once, on the focused screen only", run: root.osdPeekOnFocusedScreen }
     ]
     Qt.callLater(root.next)
   }
@@ -660,6 +661,53 @@ ShellRoot {
         root.check(visitor.copyOn("B").mode !== "peek", "the visitor peeked beside a notch that follows focus")
         multi.dismissPeek(null)
         multi.moduleById("activities").clear("")
+      }]
+    ], function() { root.done() })
+  }
+
+  // Bug: brightness changes on the focused monitor only, yet its OSD opened
+  // in the notches of the other monitors too. A module with
+  // peekOnFocusedScreen (the OSD) peeks once: in the first notch on the
+  // focused screen that shows it, else at the top, in the visitor.
+  function osdPeekOnFocusedScreen() {
+    var module = multi.moduleById("activities")
+    var visitor = multi.visitor
+    function modes() {
+      return multi.notches.map(function(n) { return n.notchId + ":" + n.copies[0].mode }).join(" ")
+        + " visitor:" + visitor.copies.map(function(c) { return c.mode }).join("/")
+    }
+    function peeking() {
+      return multi.notches.filter(function(n) { return n.copies[0].mode === "peek" }).map(function(n) { return n.notchId })
+        .concat(visitor.copies.filter(function(c) { return c.mode === "peek" }).map(function(c) { return "visitor@" + c.fixedScreen }))
+        .join(" ")
+    }
+    root.steps([
+      [0, function() {
+        module.peekOnFocusedScreen = true
+        multi.replaceConfig({ modules: ["activities"],
+                              notches: [{ position: { screen: "A" } }, { id: "a2", position: { edge: "left", screen: "A" } },
+                                        { id: "b", position: { screen: "B" } }] })
+        twoScreens.focusedScreenName = "B"
+      }],
+      [100, function() { root.push("brightness", true) }],
+      [100, function() {
+        root.check(peeking() === "b", "focus on B: " + modes())
+        multi.dismissPeek(null)
+        twoScreens.focusedScreenName = "A"
+        root.push("volume", true)
+      }],
+      [100, function() {
+        root.check(peeking() === "main", "focus on A: " + modes())
+        multi.dismissPeek(null)
+        multi.setConfigValue("notches.2.position.screen", "A")
+        twoScreens.focusedScreenName = "B"
+        root.push("volume", true)
+      }],
+      [100, function() {
+        root.check(peeking() === "visitor@B", "nothing on B: " + modes())
+        multi.dismissPeek(null)
+        module.peekOnFocusedScreen = false
+        module.clear("")
       }]
     ], function() { root.done() })
   }

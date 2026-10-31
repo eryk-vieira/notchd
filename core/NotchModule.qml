@@ -38,6 +38,11 @@ Item {
   // Peek even while the notch is expanded by hover (e.g. the volume OSD).
   property bool urgentPeek: false
 
+  // Peek only on the focused screen, once: for feedback on what you just
+  // did there (volume, brightness). Otherwise every notch that shows the
+  // module peeks, wherever it is.
+  property bool peekOnFocusedScreen: false
+
   property Component compact: null
   // Compact view sized for the bar strip (compactStyle "bar"); falls back to
   // `compact` when unset.

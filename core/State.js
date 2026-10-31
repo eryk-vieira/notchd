@@ -155,6 +155,19 @@ function needsVisitor(peeks, focused) {
   return true
 }
 
+// Where a peek that shows only on the focused screen goes (a module's
+// `peekOnFocusedScreen`): the index of the first notch in `peeks` (the
+// notches that show the module, in config order, as needsVisitor takes
+// them) that peeks on the focused screen, or -1 for the visitor. With the
+// focused screen unknown, the first notch; -1 with none.
+function focusedPeek(peeks, focused) {
+  peeks = peeks || []
+  if (!focused) return peeks.length > 0 ? 0 : -1
+  for (var i = 0; i < peeks.length; i++)
+    if (peeks[i].kind !== "homed" || peeks[i].screen === focused) return i
+  return -1
+}
+
 // What windows leave free per screen edge, from every notch copy's reserve
 // ({ screens, edge, space }): the deepest one on each, so notches sharing
 // an edge don't add up. As { "<screen>|<edge>": space }, spaces above 0.

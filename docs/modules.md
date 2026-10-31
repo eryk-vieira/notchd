@@ -12,6 +12,7 @@ NotchModule {
   priority: 60          // higher wins the compact slot / outranks lower peeks
   active: true          // show in compact/expanded while true
   // urgentPeek: true   // peek even while expanded by hover
+  // peekOnFocusedScreen: true  // peek once, on the focused screen only (feedback, like the OSD)
 
   compact: Component { Text { text: "hi"; color: Theme.foreground } }
   barView: Component { Text { text: "hi"; color: Theme.foreground } }  // optional, for the bar
@@ -44,7 +45,7 @@ A module **shows** state, it does not **own** it. A notifications module mirrors
 | `barView` | as `compact`, in the host's bar indicator (compactStyle `"bar"`); falls back to `compact` |
 | `verticalCompact` | as `compact`, with the notch on a side edge, and in a vertical bar: narrow and tall. Without one the notch shows a dot there |
 | `verticalPeek` | as `peek`, on a side edge: narrow and tall. Without one, `peek` shows there |
-| `peek` | the module called `requestPeek(ms)` and won: a pinned notch never peeks, hover only lets `urgentPeek` modules through, and a peek on screen is not cut short by a lower-priority one. It shows in every notch that lists the module (on the focused monitor for a notch on every monitor), and at the top of the focused monitor when no notch with the module is there |
+| `peek` | the module called `requestPeek(ms)` and won: a pinned notch never peeks, hover only lets `urgentPeek` modules through, and a peek on screen is not cut short by a lower-priority one. It shows in every notch that lists the module (on the focused monitor for a notch on every monitor), and at the top of the focused monitor when no notch with the module is there. With `peekOnFocusedScreen` it shows once, on the focused monitor only: in the first notch there that lists the module, else at the top |
 | `expanded` | the notch is expanded and the module is active; every active module's view stacks, highest priority first |
 
 The rules live in `core/State.js` and are tested in `tests/state.test.mjs`.

@@ -400,17 +400,25 @@ Item {
 
   // A module's peek goes to every notch that shows the module (on the copy
   // on the focused screen of one that has a copy per screen), and to the
-  // visitor when none of them peeks on the focused screen: the volume shows
-  // where you work, once, and a notch kept on another screen stays there.
+  // visitor when none of them peeks on the focused screen. A module that
+  // peeks on the focused screen only (the OSD) peeks once: in the first
+  // notch there that shows it, else in the visitor (State.focusedPeek).
   function requestPeek(module, ms) {
     var places = []
+    var owners = []
     for (var i = 0; i < svc.notches.length; i++) {
-      var n = svc.notches[i]
-      if (!n.hasModule(module)) continue
-      places.push(n.peekPlace())
-      n.requestPeek(module, ms)
+      if (!svc.notches[i].hasModule(module)) continue
+      places.push(svc.notches[i].peekPlace())
+      owners.push(svc.notches[i])
     }
     var focused = svc.compositor ? svc.compositor.focusedScreenName : ""
+    if (module && module.peekOnFocusedScreen) {
+      var at = State.focusedPeek(places, focused)
+      if (at >= 0) owners[at].requestPeek(module, ms)
+      else visitorNotch.requestPeek(module, ms)
+      return
+    }
+    for (var j = 0; j < owners.length; j++) owners[j].requestPeek(module, ms)
     if (State.needsVisitor(places, focused)) visitorNotch.requestPeek(module, ms)
   }
   function dismissPeek(module) {
