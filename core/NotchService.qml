@@ -65,7 +65,8 @@ Item {
   // -------------------------------------------------------------- built-ins
   readonly property var builtinModules: ({
     media: Qt.resolvedUrl("modules/media.qml"),
-    activities: Qt.resolvedUrl("modules/activities.qml")
+    activities: Qt.resolvedUrl("modules/activities.qml"),
+    resources: Qt.resolvedUrl("modules/resources.qml")
   })
 
   function moduleUrl(id) {
@@ -299,7 +300,8 @@ Item {
                default: Config.DEFAULTS.hoverCloseDelay, min: 0, max: 2000, step: 10, unit: "ms" })
     return out
   }
-  readonly property var settingsSchema: svc.coreSettingsSchema.concat(svc.hostSettingsSchema || [])
+  readonly property var settingsSchema: svc.coreSettingsSchema
+    .concat(Settings.moduleFields(svc.modules), svc.hostSettingsSchema || [])
   // The system modules, for the modules field's help.
   readonly property string systemNote: {
     if (!svc.systemModules || svc.systemModules.length === 0) return ""

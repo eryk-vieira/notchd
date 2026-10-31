@@ -57,6 +57,24 @@ function sections(schema, page) {
   return out
 }
 
+// The settings fields loaded modules declare (NotchModule.settings), with
+// their keys under the module's id, on the General page under its title
+// unless they say otherwise. `modules`: [{ moduleId, title, settings }].
+function moduleFields(modules) {
+  var out = []
+  Array.prototype.forEach.call(modules || [], function(m) {
+    if (!m || !m.moduleId) return
+    Array.prototype.forEach.call(m.settings || [], function(f) {
+      var field = Object.assign({}, f)
+      if (f.key) field.key = m.moduleId + "." + f.key
+      if (!field.page) field.page = "general"
+      if (!field.section) field.section = m.title || m.moduleId
+      out.push(field)
+    })
+  })
+  return out
+}
+
 // A list value as a plain array of strings. Values that went through a
 // Repeater model arrive as sequences, which Array.isArray rejects.
 function toList(value) {

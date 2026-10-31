@@ -2,7 +2,7 @@
 
 ![notchd in its four states: compact, peek, OSD and expanded](docs/images/hero.webp)
 
-A dynamic notch for Wayland desktops, built with Quickshell. It hangs from an edge of the focused screen (the top by default) and shows modules: media, OSD, script activities, or anything you write. You can have several notches, each with its own modules and place, and one on every monitor.
+A dynamic notch for Wayland desktops, built with Quickshell. It hangs from an edge of the focused screen (the top by default) and shows modules: media, OSD, script activities, system resources, or anything you write. You can have several notches, each with its own modules and place, and one on every monitor.
 
 It is a **notch framework, not a shell**. Modules show what the system is already doing; they never take over a system service. The notch is not a notification daemon, a launcher or a lock screen, so it sits on top of whatever desktop you already have.
 
@@ -36,6 +36,17 @@ The drop is stored as `position`, which you can also set by hand: `{"edge": "lef
 A hanging notch covers the windows under it. `reserveSpace: true` keeps windows clear of it instead: the compositor reserves a strip as deep as the closed notch, along the whole of its edge on its home monitor, or on every monitor it may hang on while it follows focus (layer-shell can only reserve whole edges). At rest that is the thin lip; while a module is active, a compact notch's height. It grows at once and shrinks as soon as the notch has collapsed, so windows move when music starts or stops or an activity comes and goes, not for peeks: volume, brightness and the expanded notch open over windows. It does nothing in `"bar"` style.
 
 `workspaces` limits where the closed notch shows, e.g. `[1, 2, 3]` (ids or names). When the focused screen shows another workspace, the closed notch moves to a screen that shows one of them, or hides if none does; in `"bar"` style the bar indicator hides on those screens. Peeks and the open notch still show, whatever the workspace, so the volume OSD never goes missing. Reserved space follows too: a screen showing a workspace without the notch reserves nothing, so switching a screen between the two moves its windows. It needs a compositor adapter that knows workspaces (Hyprland today).
+
+## Modules
+
+| Id | Shows |
+|---|---|
+| `media` | what's playing over MPRIS: artwork, title, progress and controls; peeks on a new track |
+| `activities` | whatever scripts push over IPC: a deploy, a build, a download (see [docs/ipc.md](docs/ipc.md#activities)) |
+| `resources` | CPU, memory and the disk holding `/`: a bar each, expanded, and their percentages in the closed notch. One that runs short (90 % or more; the CPU for about 10 s in a row) turns red and peeks once. `"resources": { "compact": "short" }` (settings: General › Resources › Closed notch) keeps them out of the closed notch until one runs short. Linux only. Not loaded by default: add it to `modules` |
+| `osd` | volume and brightness, Omarchy host only (see [hosts/omarchy](hosts/omarchy/README.md)) |
+
+To write your own, see [docs/modules.md](docs/modules.md).
 
 ## Several notches
 
@@ -76,7 +87,7 @@ The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/no
 | `workspaces` | every one | workspaces the closed notch shows on; see above; *per notch* |
 | `notches` | one notch | `[{ "id", ...per-notch keys }]`; see [Several notches](#several-notches) |
 
-Hosts add their own keys; the standalone host, for example, adds `topOffset` and `theme`. A key missing from the file falls back to its default.
+Hosts add their own keys; the standalone host, for example, adds `topOffset` and `theme`. A module's own settings live under its id, `resources` for example. A key missing from the file falls back to its default.
 
 ## Settings
 

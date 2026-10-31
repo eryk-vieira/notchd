@@ -42,6 +42,8 @@ ShellRoot {
     { name: "notch-light", page: "notch", theme: root.light, bar: true, fields: root.omarchyFields },
     { name: "notch-end-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields, scrollTo: "end" },
     { name: "general-dark", page: "general", theme: root.dark, bar: true, fields: root.omarchyFields },
+    { name: "general-resources-light", page: "general", theme: root.light, bar: true, fields: root.omarchyFields,
+      config: { modules: ["media", "activities", "resources"] } },
     { name: "appearance-omarchy-dark", page: "appearance", theme: root.dark, bar: true, fields: root.omarchyFields },
     { name: "notch-hanging-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { compactStyle: "notch", position: { edge: "left", offset: 0.3 } }, scrollTo: "end" },
@@ -98,7 +100,20 @@ ShellRoot {
   DemoService { id: activitySvc; tag: "activity"; defaultModules: ["activities"] }
   DemoService { id: osdSvc; tag: "osd"; defaultModules: ["osd"] }
   DemoService { id: openSvc; tag: "open"; defaultModules: ["media", "activities"] }
-  readonly property var demoServices: [mediaSvc, activitySvc, osdSvc, openSvc]
+  DemoService { id: resourcesSvc; tag: "resources"; defaultModules: ["resources"] }
+  DemoService { id: resourcesOpenSvc; tag: "resources-open"; defaultModules: ["resources"] }
+  readonly property var demoServices: [mediaSvc, activitySvc, osdSvc, openSvc, resourcesSvc, resourcesOpenSvc]
+
+  // Demo values instead of this machine's: memory short, the rest fine.
+  function demoResources(m) {
+    var gib = 1024 * 1024 * 1024
+    m.sampling = false
+    m.cpu = 0.34
+    m.cores = 16
+    m.memory = { used: 29.1 * gib, total: 31.2 * gib, fraction: 29.1 / 31.2 }
+    m.disk = { used: 412 * gib, total: 931 * gib, fraction: 412 / 931 }
+    m.pressure = { cpu: { hot: false, streak: 0 }, memory: { hot: true, streak: 1 }, disk: { hot: false, streak: 0 } }
+  }
 
   // Once the modules are up: an activity on two of them, the volume OSD
   // held open, the last one pinned open.
@@ -112,6 +127,9 @@ ShellRoot {
       openSvc.moduleById("activities").push(deploy)
       osdSvc.moduleById("osd").show(JSON.stringify({ icon: "volume", value: "62", duration: "600000" }))
       openSvc.open()
+      root.demoResources(resourcesSvc.moduleById("resources"))
+      root.demoResources(resourcesOpenSvc.moduleById("resources"))
+      resourcesOpenSvc.open()
     }
   }
 
@@ -168,6 +186,8 @@ ShellRoot {
       MockScreen { svc: activitySvc; caption: "activities, compact" }
       MockScreen { svc: osdSvc; caption: "osd, peek" }
       MockScreen { svc: openSvc; caption: "expanded" }
+      MockScreen { svc: resourcesSvc; caption: "resources, compact (memory short)" }
+      MockScreen { svc: resourcesOpenSvc; caption: "resources, expanded" }
     }
   }
 
@@ -182,6 +202,7 @@ ShellRoot {
     svc.setConfigValue("compactStyle", cfg.compactStyle)
     svc.setConfigValue("position", cfg.position)
     svc.setConfigValue("notches", cfg.notches)
+    svc.setConfigValue("modules", cfg.modules)
     svc.settingsNotch = root.scenario.notch || 0
     for (var i = 0; i < root.demoServices.length; i++)
       root.demoServices[i].setConfigValue("position", root.scenario.edge ? { edge: root.scenario.edge } : undefined)

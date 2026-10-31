@@ -56,6 +56,21 @@ Item {
   property Component verticalPeek: null
   property Component expanded: null
 
+  // Settings fields of its own, in the settings schema's format (see
+  // NotchService.coreSettingsSchema) with `key` relative to the module: they
+  // are stored under its id ("resources": { "compact": "short" }) and show
+  // on the General page, under the module's title, while it is loaded.
+  property var settings: []
+
+  // A setting's value: the config's, else the field's default.
+  function setting(key) {
+    var v = notch ? notch.configValue(moduleId + "." + key) : undefined
+    if (v !== undefined) return v
+    for (var i = 0; i < settings.length; i++)
+      if (settings[i].key === key) return settings[i]["default"]
+    return undefined
+  }
+
   function requestPeek(ms) {
     if (notch) notch.requestPeek(module, ms === undefined ? 2500 : ms)
   }

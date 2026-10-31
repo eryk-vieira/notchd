@@ -102,3 +102,23 @@ test('storedValue removes the key when an edit picks the default', () => {
   assert.equal(Settings.storedValue({}, 'x'), 'x');
   assert.equal(Settings.storedValue({ default: 'top' }, undefined), undefined);
 });
+
+test('moduleFields puts a module\'s fields under its id, on General under its title', () => {
+  const fields = plain(Settings.moduleFields([
+    { moduleId: 'resources', title: 'Resources', settings: [
+      { key: 'compact', type: 'choice', default: 'always' },
+      { key: 'disk', type: 'string', page: 'extra', section: 'Disk' },
+      { type: 'note', label: 'Linux only' }
+    ] },
+    { moduleId: 'media', title: 'Now playing', settings: [] },
+    { moduleId: 'bare', settings: [{ key: 'x', type: 'boolean' }] }
+  ]));
+  assert.deepEqual(fields.map((f) => [f.key, f.page, f.section]), [
+    ['resources.compact', 'general', 'Resources'],
+    ['resources.disk', 'extra', 'Disk'],
+    [undefined, 'general', 'Resources'],
+    ['bare.x', 'general', 'bare']
+  ]);
+  assert.equal(fields[0].default, 'always');
+  assert.deepEqual(plain(Settings.moduleFields(undefined)), []);
+});

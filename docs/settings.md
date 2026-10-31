@@ -31,7 +31,7 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 
 ## Several notches
 
-The window edits one notch at a time, `NotchService.settingsNotch` (its index), picked at the top of the Notches page (`notch`), which holds every field for a notch's own keys: name, modules, compact style, position, workspaces... Those fields take that notch's key: `position.edge` at the top level, `notches.1.position.edge` in a list, with the top-level value it inherits as the field's default. Picking that value removes the notch's own key, so it inherits again. The General page has what applies to every notch: the hover delays and, unless they name another page, the host's fields. The gear in an expanded notch opens the window on that notch's page.
+The window edits one notch at a time, `NotchService.settingsNotch` (its index), picked at the top of the Notches page (`notch`), which holds every field for a notch's own keys: name, modules, compact style, position, workspaces... Those fields take that notch's key: `position.edge` at the top level, `notches.1.position.edge` in a list, with the top-level value it inherits as the field's default. Picking that value removes the notch's own key, so it inherits again. The General page has what applies to every notch: the hover delays, the loaded modules' own fields (`NotchModule.settings`, under each module's title, keys under its id; `Settings.moduleFields`) and, unless they name another page, the host's fields. The gear in an expanded notch opens the window on that notch's page.
 
 ## Pages
 

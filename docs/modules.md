@@ -25,6 +25,22 @@ NotchModule {
 }
 ```
 
+A module that is `active` but has no `compact` view right now leaves the closed notch at rest and still shows when expanded: the `resources` module, set to `"short"`, binds `compact` to null until a resource runs short.
+
+## Settings
+
+A module lists fields of its own in `settings`, in the settings schema's format (see [settings.md](settings.md)) with `key` relative to the module, and reads them with `setting(key)`: the config's value, else the field's default. They are stored under the module's id and show on the General page, under the module's title, while some notch loads it.
+
+```qml
+settings: [
+  { key: "compact", type: "choice", label: "Closed notch", default: "always",
+    options: [{ value: "always", label: "Always" }, { value: "short", label: "When running short" }] }
+]
+readonly property bool alwaysCompact: m.setting("compact") !== "short"   // config: "resources": { "compact": "short" }
+```
+
+A module's settings apply to every notch, since it loads once. Pick an id that isn't a config key (`modules`, `position`, `theme`...).
+
 ## The scope rule
 
 A module **shows** state, it does not **own** it. A notifications module mirrors toasts; it does not register as the notification server. The one exception today is the Omarchy `osd` module, which takes the `osd` IPC target from the stock OSD plugin (and says so in its README).
@@ -35,7 +51,7 @@ A module **shows** state, it does not **own** it. A notifications module mirrors
 - Colors come from the theme tokens (`Theme.foreground`, `Theme.muted`, `Theme.line`, …), never hard-coded or ad-hoc alphas. See [theming.md](theming.md).
 - Views are Components that size themselves through `implicitWidth`/`implicitHeight`; the notch springs to fit. Expanded views get a fixed width.
 - `notch` (set by the service) is the `NotchService`; read state from it, never from another module's internals. A module may show in several notches at once, so the service answers for all of them: `notch.expanded` (some notch is open) and `notch.peeking(module)` (some notch shows that module's peek). Each notch picks the vertical views on a side edge itself.
-- Views never rotate. On a side edge the notch runs down the edge for `verticalCompact` and `verticalPeek`; `peek` (for a module without a `verticalPeek`) and `expanded` keep their layout and the notch grows sideways to hold them. Give a side-edge view when a module has something narrow to show: the built-ins stack artwork over the equalizer (media), an icon over a progress bar (activities), and stand the OSD's bar up.
+- Views never rotate. On a side edge the notch runs down the edge for `verticalCompact` and `verticalPeek`; `peek` (for a module without a `verticalPeek`) and `expanded` keep their layout and the notch grows sideways to hold them. Give a side-edge view when a module has something narrow to show: the built-ins stack artwork over the equalizer (media), an icon over a progress bar (activities), each short resource's icon over its number (resources), and stand the OSD's bar up.
 
 ## Which view shows when
 

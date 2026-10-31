@@ -83,7 +83,9 @@ ShellRoot {
       { name: "a notch kept on a screen stays there and a peek also shows where you work", run: root.peekBesideHomedNotch },
       { name: "an OSD peek shows once, on the focused screen only", run: root.osdPeekOnFocusedScreen },
       { name: "a system module no notch lists loads and always peeks, never over a notch", run: root.systemModuleAlwaysShows },
-      { name: "a notch's settings all sit on one page, under its picker", run: root.notchSettingsOnOnePage }
+      { name: "a notch's settings all sit on one page, under its picker", run: root.notchSettingsOnOnePage },
+      { name: "resources read the system", run: root.resourcesRead },
+      { name: "resources show closed by default, or only once one runs short", run: root.resourcesCompactWhenShort }
     ]
     Qt.callLater(root.next)
   }
@@ -774,6 +776,60 @@ ShellRoot {
     multi.closeSettings()
     multi.settingsNotch = 0
     multi.replaceConfig({})
+    root.done()
+  }
+
+  NotchService {
+    id: resourced
+    ipcTarget: "notchd-qmltest-resources"
+    configPath: root.dir + "/resources.json"
+    compositor: twoScreens
+    defaultModules: ["resources"]
+  }
+
+  // FileView on /proc (whose files report no size) and df's output both
+  // reach the module: a CPU figure needs two samples, 2 s apart.
+  function resourcesRead() {
+    var m = resourced.moduleById("resources")
+    root.check(!!m, "the module did not load")
+    root.steps([[2600, function() {
+      root.check(m.cpu !== null && m.cpu >= 0 && m.cpu <= 1, "cpu: " + m.cpu)
+      root.check(m.cores > 0, "cores: " + m.cores)
+      root.check(!!m.memory && m.memory.total > 0, "memory: " + JSON.stringify(m.memory))
+      root.check(!!m.disk && m.disk.total > 0, "disk: " + JSON.stringify(m.disk))
+      root.check(m.active && !!m.expanded, "no expanded view")
+    }]], function() { root.done() })
+  }
+
+  // By default the closed notch always shows the three. With `compact` at
+  // "short" it rests while every resource is fine; one running short peeks
+  // once and takes the compact slot until it drops back. The setting is on
+  // the General page, under the module's id.
+  function resourcesCompactWhenShort() {
+    var m = resourced.moduleById("resources")
+    var notch = resourced.notches[0]
+    m.sampling = false
+    m.pressure = ({})
+    resourced.replaceConfig({})
+    m.record("memory", 0.5)
+    root.check(notch.compactModule === m && m.compactRows.length === 3, "not shown by default")
+    var field = resourced.settingsSchema.filter(function(f) { return f.key === "resources.compact" })[0]
+    root.check(!!field && field.page === "general" && field.section === "Resources", "field: " + JSON.stringify(field))
+
+    resourced.setConfigValue("resources.compact", "short")
+    root.check(notch.compactModule === null, "the notch shows resources with nothing short")
+    m.record("memory", 0.95)
+    root.check(notch.compactModule === m && m.compactRows.length === 1, "memory short, no compact view")
+    root.check(m.peekId === "memory" && resourced.peeking(m), "memory short, no peek")
+    resourced.dismissPeek(null)
+    m.record("memory", 0.96)
+    root.check(!resourced.peeking(m), "peeked again while still short")
+    m.record("memory", 0.8)
+    root.check(notch.compactModule === null, "still compact after memory dropped")
+    m.record("cpu", 0.99)
+    root.check(notch.compactModule === null, "one CPU burst counted as short")
+    resourced.replaceConfig({})
+    m.sampling = true
     root.done()
   }
 }
