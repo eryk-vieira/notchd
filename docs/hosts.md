@@ -26,7 +26,7 @@ A host reads its own config keys from `service.config`.
 
 ## NotchSurface
 
-The overlay that draws the notch.
+The layer-shell overlay that puts the notch on screen: it picks the screen, places a `NotchCard` (the notch itself, which also renders offscreen) under the bar and routes the pointer.
 
 | Property | Meaning |
 |---|---|
