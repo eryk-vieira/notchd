@@ -1,0 +1,10 @@
+{
+  "compactStyle": "bar",
+  "modules": [
+    "osd",
+    "media",
+    "activities"
+  ],
+  "hoverOpenDelay": 120,
+  "hoverCloseDelay": 300
+}

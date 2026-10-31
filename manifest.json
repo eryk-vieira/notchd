@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "eryk.notch",
+  "name": "Notch",
+  "version": "0.2.0",
+  "author": "eryk",
+  "description": "A dynamic notch under the clock: media, volume/brightness OSD, and pluggable modules",
+  "kinds": ["service", "overlay", "bar-widget"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "overlay": "Notch.qml",
+    "barWidget": "BarIndicator.qml"
+  },
+  "barWidget": {
+    "displayName": "Notch",
+    "description": "The notch's compact state in the bar (compactStyle \"bar\"); hover to drop the notch",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "center"
+  }
+}
