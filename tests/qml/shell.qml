@@ -65,7 +65,8 @@ ShellRoot {
       { name: "leaving the notch before it opens forgets the screen", run: root.hoverLeaveForgetsScreen },
       { name: "peeks and the open notch never move windows", run: root.reserveIgnoresOpenNotch },
       { name: "reserved space grows at once and shrinks after the delay", run: root.reserveGrowsAndShrinks },
-      { name: "one module ending as another starts keeps the space", run: root.reserveBridgesModules }
+      { name: "one module ending as another starts keeps the space", run: root.reserveBridgesModules },
+      { name: "the space shrinks as the notch closes, not seconds later", run: root.reserveShrinksPromptly }
     ]
     Qt.callLater(root.next)
   }
@@ -242,6 +243,31 @@ ShellRoot {
       [500, function() {}]
     ], function() {
       root.check(reserve.lowest === compact, "dipped to " + reserve.lowest + " between modules, compact is " + compact)
+      root.done()
+    })
+  }
+
+  // Bug: when the last module ended, windows stayed clear of a notch that
+  // was already back to its lip for 4 s (the default shrink delay). The
+  // space now goes once the notch has collapsed.
+  ReservedSpace {
+    id: defaultReserve
+    svc: cardSvc
+    notchCard: card
+  }
+
+  function reserveShrinksPromptly() {
+    var rest = Math.ceil(card.restHeight)
+    root.steps([
+      [0, function() { root.closeAs(true) }],
+      [450, function() {
+        root.check(defaultReserve.space > rest, "compact did not grow the space: " + defaultReserve.space)
+        root.closeAs(false)
+      }],
+      [600, function() {}]
+    ], function() {
+      root.check(defaultReserve.space === rest,
+                 "still " + defaultReserve.space + " px 600 ms after the notch closed; the lip is " + rest)
       root.done()
     })
   }

@@ -23,6 +23,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Fixed
 
+- With `reserveSpace`, windows took 4 s to reclaim the space after the last module ended; they now do as the notch finishes collapsing (400 ms).
 - Media artwork, and its placeholder, vanished entirely under Qt's software renderer; it now shows with square corners there.
 
 ### Removed

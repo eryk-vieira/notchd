@@ -4,7 +4,9 @@ import "State.js" as State
 // How much of the top edge windows leave to the closed notch (reserveSpace):
 // the rest lip, or a compact notch while a module shows one. It follows the
 // closed notch only, so peeks (the volume OSD) and the expanded notch never
-// move windows. It grows at once and shrinks after `shrinkDelay`.
+// move windows. It grows at once and shrinks after `shrinkDelay`: as the
+// notch finishes collapsing, so windows never cover it on the way and one
+// module ending as another starts (`clear` then `push`) moves them once.
 // NotchSurface turns `space` into an exclusive zone per screen.
 Item {
   id: reserve
@@ -12,7 +14,8 @@ Item {
 
   property var svc: null
   property NotchCard notchCard: null
-  property int shrinkDelay: 4000
+  // NotchCard's height animation (380 ms), plus a little.
+  property int shrinkDelay: 400
 
   // In px; 0 reserves nothing.
   property int space: 0
