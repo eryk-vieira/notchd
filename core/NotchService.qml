@@ -257,7 +257,7 @@ Item {
       if (screens.length > 1)
         out.push({ page: "general", section: "Position", key: key("position.screen"), type: "choice",
                    label: "Screen", default: inherited("position.screen", ""),
-                   help: "Where the notch stays. Following focus, it moves to the screen you work on. On a screen of its own, it stays there, and a peek shows both there and on the screen you work on. On every screen, each screen has its own copy, and a peek shows on the focused one.",
+                   help: "Where the notch stays. Following focus, it moves to the screen you work on. On a screen of its own, it stays there, peeks included; on a screen without a notch that shows it, a peek appears at the top. On every screen, each screen has its own copy, and a peek shows on the focused one.",
                    options: [{ value: "", label: "Follow focus" }, { value: "all", label: "Every screen" }].concat(screens.map(function(s) {
                      return { value: s.name, label: s.name }
                    })) })
@@ -338,6 +338,17 @@ Item {
       notchId: modelData
     }
   }
+  // A notch of its own at the top of every screen, hidden until it shows a
+  // peek where no notch with that module does (State.needsVisitor).
+  Notch {
+    id: visitorNotch
+    // Through `owner`, as above.
+    svc: notchVariants.owner
+    visitor: true
+    notchId: ""
+  }
+  readonly property var visitor: visitorNotch
+
   // The notches, in config order.
   readonly property var notches: {
     var list = notchVariants.instances.slice()
@@ -348,7 +359,7 @@ Item {
   readonly property var copies: {
     var out = []
     for (var i = 0; i < svc.notches.length; i++) out = out.concat(svc.notches[i].copies)
-    return out
+    return out.concat(visitorNotch.copies)
   }
   // The first notch's first copy: what a single-notch view (the visual
   // tests, the README image) draws.
@@ -387,13 +398,24 @@ Item {
     return svc.copies.some(function(c) { return c.mode === "peek" && c.peekModule === module })
   }
 
-  // A module's peek goes to every notch that shows the module, on the copy
-  // on the focused screen of one that has a copy per screen.
+  // A module's peek goes to every notch that shows the module (on the copy
+  // on the focused screen of one that has a copy per screen), and to the
+  // visitor when none of them peeks on the focused screen: the volume shows
+  // where you work, once, and a notch kept on another screen stays there.
   function requestPeek(module, ms) {
-    for (var i = 0; i < svc.notches.length; i++) svc.notches[i].requestPeek(module, ms)
+    var places = []
+    for (var i = 0; i < svc.notches.length; i++) {
+      var n = svc.notches[i]
+      if (!n.hasModule(module)) continue
+      places.push(n.peekPlace())
+      n.requestPeek(module, ms)
+    }
+    var focused = svc.compositor ? svc.compositor.focusedScreenName : ""
+    if (State.needsVisitor(places, focused)) visitorNotch.requestPeek(module, ms)
   }
   function dismissPeek(module) {
     for (var i = 0; i < svc.notches.length; i++) svc.notches[i].dismissPeek(module)
+    visitorNotch.dismissPeek(module)
   }
 
   // Without a notch named, open and toggle act on the first notch and close
@@ -495,6 +517,9 @@ Item {
             })
           }
         }),
+        // The visitor's copies that show something.
+        visitor: visitorNotch.copies.filter(function(c) { return c.mode === "peek" || c.mode === "expanded" })
+          .map(function(c) { return { screen: c.screenName, mode: c.mode, peek: c.peekModule ? c.peekModule.moduleId : null } }),
         modules: svc.modules.map(function(m) { return { id: m.moduleId, active: m.active, priority: m.priority } })
       })
     }

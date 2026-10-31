@@ -3,11 +3,10 @@ import "State.js" as State
 
 // A notch on screen: one copy of a Notch, with the state the pointer and
 // peeks change (hover, pin, peek, drag) and so its own mode. A notch that
-// moves has one copy, and this picks its screen; the others have one copy
-// per screen (`fixedScreen`). For a notch kept on a screen, the copies on
-// the other screens are guests: hidden while closed, they show its peeks
-// and the open notch where you work. NotchCard draws a copy and NotchWindow
-// puts it on its screen.
+// moves, or stays on its home, has one copy, and this picks its screen; one
+// on every screen has a copy per screen (`fixedScreen`). The visitor's
+// copies are guests: hidden while closed, they only show peeks. NotchCard
+// draws a copy and NotchWindow puts it on its screen.
 Item {
   id: copy
   visible: false
@@ -120,9 +119,8 @@ Item {
   }
   // The screen the config's position names, where the closed notch stays.
   readonly property string homeScreen: copy.placement.screen === "all" ? copy.fixedScreen : copy.placement.screen
-  // A copy of a notch kept on a screen, on a screen where it doesn't hang:
-  // it only shows peeks and the open notch.
-  readonly property bool guest: !!copy.owner && copy.owner.homed && copy.fixedScreen !== copy.owner.hostScreen
+  // A copy of the visitor: it only shows peeks and the open notch.
+  readonly property bool guest: !!copy.owner && copy.owner.visitor
   // The screen the copy wants, "" when it doesn't show the closed notch. A
   // copy on its own screen stays there, a guest only while open; the one
   // that moves goes where State.notchScreen says.
@@ -145,11 +143,9 @@ Item {
 
   // The screens that keep windows clear of the closed notch (reserveSpace):
   // a copy on its own screen reserves there while it may hang there, a
-  // guest nowhere; the copy where a notch kept on a screen hangs and the one
-  // that moves as State.reserveScreens says.
+  // guest nowhere; the one copy as State.reserveScreens says.
   readonly property var reservedScreens: {
     if (copy.guest) return []
-    if (copy.owner && copy.owner.homed) return State.reserveScreens(copy.screenStates, copy.homeScreen)
     if (copy.fixedScreen !== "") {
       var own = copy.stateOf(copy.fixedScreen)
       return own && own.allowed ? [copy.fixedScreen] : []

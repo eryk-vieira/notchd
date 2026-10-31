@@ -610,44 +610,54 @@ ShellRoot {
   }
 
   // Bug: the notch kept on the ultrawide (position.screen) showing music
-  // left it when the volume changed on the laptop screen; the first fix
-  // kept the volume on the ultrawide, out of sight. Now the notch stays and
-  // shows it, and so does a copy on the focused screen, gone once the peek
-  // is over.
+  // left it when the volume changed on the laptop screen. Now it stays and
+  // shows the volume there; on the laptop screen, where no notch with the
+  // OSD hangs, the visitor shows it once at the top, however many notches
+  // kept elsewhere have the module.
   function peekBesideHomedNotch() {
-    var notch = null
+    var music = null, side = null
+    var visitor = multi.visitor
     root.steps([
       [0, function() {
-        multi.replaceConfig({ modules: ["activities"], position: { screen: "A" } })
+        multi.replaceConfig({ modules: ["activities"], position: { screen: "A" },
+                              notches: [{}, { id: "side", position: { edge: "left", screen: "A" } }] })
         twoScreens.focusedScreenName = "B"
       }],
       [100, function() {
-        notch = multi.notches[0]
-        var home = notch.copyOn("A"), guest = notch.copyOn("B")
-        root.check(notch.homed && notch.copies.length === 2, "a notch kept on A should have a copy per screen")
-        root.check(!home.guest && home.screenName === "A" && !home.offWorkspace, "the copy on A does not hang there")
-        root.check(guest.guest && guest.offWorkspace, "the copy on B shows while closed")
-        root.check(JSON.stringify(guest.reservedScreens) === "[]", "the copy on B reserves " + JSON.stringify(guest.reservedScreens))
+        music = multi.notchById("main"); side = multi.notchById("side")
+        root.check(music.copies.length === 1 && music.copies[0].screenName === "A", "the notch kept on A is not one copy on A")
+        root.check(visitor.copies.length === 2 && visitor.copyOn("B").offWorkspace, "the visitor shows while nothing peeks")
         root.push("music", false)
         root.push("volume", true)
       }],
       [100, function() {
-        var home = notch.copyOn("A"), guest = notch.copyOn("B")
-        root.check(guest.mode === "peek" && guest.screenName === "B" && !guest.offWorkspace,
-                   "no peek on the focused screen: " + guest.mode)
-        root.check(home.mode === "peek" && home.screenName === "A", "the notch on A shows " + home.mode + " on " + home.screenName)
+        root.check(music.copies[0].mode === "peek" && music.copies[0].screenName === "A",
+                   "the notch on A shows " + music.copies[0].mode + " on " + music.copies[0].screenName)
+        root.check(side.copies[0].mode === "peek" && side.copies[0].screenName === "A", "the side notch left A")
+        var guest = visitor.copyOn("B")
+        root.check(guest.mode === "peek" && !guest.offWorkspace && guest.edge === "top",
+                   "no peek at the top of B: " + guest.mode + " on " + guest.edge)
+        root.check(visitor.copyOn("A").mode !== "peek", "the visitor also peeked on A, where the notches are")
+        root.check(JSON.stringify(guest.reservedScreens) === "[]", "the visitor reserves " + JSON.stringify(guest.reservedScreens))
         multi.dismissPeek(null)
       }],
       [100, function() {
-        var home = notch.copyOn("A"), guest = notch.copyOn("B")
-        root.check(home.mode === "compact" && !home.offWorkspace, "after the peek the notch on A shows " + home.mode)
-        root.check(guest.offWorkspace, "the copy on B stays after the peek")
+        root.check(music.copies[0].mode === "compact", "after the peek the notch on A shows " + music.copies[0].mode)
+        root.check(visitor.copyOn("B").offWorkspace, "the visitor stays after the peek")
         twoScreens.focusedScreenName = "A"
         root.push("again", true)
       }],
       [100, function() {
-        root.check(notch.copyOn("A").mode === "peek", "focused on its own screen, the notch does not peek")
-        root.check(notch.copyOn("B").mode !== "peek", "the copy on B peeks with focus on A")
+        root.check(visitor.copyOn("A").mode !== "peek" && visitor.copyOn("B").mode !== "peek",
+                   "the visitor peeked with focus where the notches are")
+        multi.dismissPeek(null)
+        // A notch that follows focus peeks on B itself: no visitor.
+        multi.setConfigValue("notches.1.position.screen", "")
+        twoScreens.focusedScreenName = "B"
+        root.push("follow", true)
+      }],
+      [100, function() {
+        root.check(visitor.copyOn("B").mode !== "peek", "the visitor peeked beside a notch that follows focus")
         multi.dismissPeek(null)
         multi.moduleById("activities").clear("")
       }]

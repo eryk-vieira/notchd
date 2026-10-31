@@ -8,39 +8,44 @@ import "Position.js" as Position
 // where it hangs and how. NotchService makes one per notch; it shows as
 // copies (NotchCopy), which hold the state the pointer and peeks change,
 // while this holds what they share:
-//   following focus      one copy, which moves
-//   kept on a screen     a copy per screen; the one where it hangs (its
-//                        home, or where `workspaces` sends it) shows the
-//                        closed notch, the others only peeks and the open
-//                        notch, so a peek shows where you work without
-//                        moving it
+//   following focus      one copy, which moves to the focused screen
+//   kept on a screen     one copy, which stays where it hangs (its home, or
+//                        where `workspaces` sends it), peeks included
 //   on every screen      ("all", and bar style) a copy per screen, each a
 //                        notch of its own
+//
+// The service also makes one `visitor`: no config of its own, every module,
+// a copy per screen at the top, each hidden until it shows a peek on a
+// screen where no notch with that module does (State.needsVisitor).
 Item {
   id: notch
   visible: false
 
   property var svc: null
   property string notchId: ""
+  // The visitor, rather than a notch of the config.
+  property bool visitor: false
 
   // ---------------------------------------------------------------- config
   // The resolved entry (Config.notches); keeps the last one while the id is
   // on its way out.
   readonly property var spec: notch.svc ? notch.svc.notchSpec(notch.notchId) : null
   readonly property int index: notch.spec ? notch.spec.index : 0
-  readonly property var moduleIds: notch.spec ? notch.spec.moduleIds : []
+  readonly property var moduleIds: notch.visitor ? (notch.svc ? notch.svc.moduleIds : [])
+    : notch.spec ? notch.spec.moduleIds : []
   readonly property string configuredStyle: notch.spec ? notch.spec.compactStyle : Config.DEFAULTS.compactStyle
   // Where the compact state lives: "bar" (in the host's bar indicator; the
   // notch only drops out to peek or expand) or "notch" (hanging from its
   // edge all the time). One notch at most gets the bar (State.compactStyles).
-  readonly property string compactStyle: notch.svc ? notch.svc.compactStyleAt(notch.index) : "notch"
+  readonly property string compactStyle: notch.svc && !notch.visitor ? notch.svc.compactStyleAt(notch.index) : "notch"
   // Keep windows out of the strip the closed notch hangs into (compactStyle
   // "notch" only); NotchSurface reserves it.
   readonly property bool reserveSpace: !!notch.spec && notch.spec.reserveSpace
   // Workspaces the closed notch hangs on (ids or names); null: every one.
   readonly property var workspaces: notch.spec ? notch.spec.workspaces : null
   // The configured position, { edge, offset, screen } (Position.js).
-  readonly property var position: Position.resolve(notch.spec ? notch.spec.position : undefined)
+  readonly property var position: Position.resolve(notch.visitor ? { screen: Position.ALL_SCREENS }
+    : notch.spec ? notch.spec.position : undefined)
   // Where it is: bar style locks it to the middle of the bar.
   readonly property var placement: Position.effective(notch.position, notch.compactStyle, notch.svc ? notch.svc.barEdge : "top")
   readonly property string edge: notch.placement.edge
@@ -94,16 +99,10 @@ Item {
       list.push({ name: screens[i].name, allowed: notch.showsOn(screens[i]) })
     return list
   }
-  // Where a notch kept on a screen hangs closed: its home, else where its
-  // workspaces send it (State.notchScreen); "" for nowhere, or not kept.
-  readonly property string hostScreen: !notch.homed ? "" : State.notchScreen({
-    screens: notch.screenStates, focused: notch.focusedScreenName, open: false, home: notch.placement.screen
-  })
 
   // ---------------------------------------------------------------- copies
   // Screen names, one copy each; [""] for the one copy that moves.
-  readonly property bool perScreen: notch.everyScreen || notch.homed
-  readonly property var copyScreens: notch.perScreen
+  readonly property var copyScreens: notch.everyScreen
     ? (notch.svc ? notch.svc.screens : []).map(function(s) { return s.name }) : [""]
 
   Variants {
@@ -121,7 +120,7 @@ Item {
   // The copy on a screen; the one copy, for a notch that moves.
   function copyOn(screenName) {
     var list = notch.copies
-    if (!notch.perScreen) return list.length > 0 ? list[0] : null
+    if (!notch.everyScreen) return list.length > 0 ? list[0] : null
     for (var i = 0; i < list.length; i++) if (list[i].fixedScreen === screenName) return list[i]
     return null
   }
@@ -135,14 +134,18 @@ Item {
 
   // ----------------------------------------------------------------- peeks
   // A module's peek, if this notch shows the module: on the focused copy,
-  // and on the one where a notch kept on a screen hangs (State.peekCopies).
+  // or the one copy wherever it is.
   function requestPeek(module, ms) {
     if (!notch.hasModule(module)) return
-    var names = State.peekCopies(notch.copyScreens, notch.focusedScreenName, notch.hostScreen)
-    for (var i = 0; i < names.length; i++) {
-      var copy = notch.copyOn(names[i])
-      if (copy) copy.requestPeek(module, ms)
-    }
+    var copy = notch.focusedCopy()
+    if (copy) copy.requestPeek(module, ms)
+  }
+  // How it peeks, for State.needsVisitor: on the focused screen, or, kept
+  // on a screen, where it is.
+  function peekPlace() {
+    if (!notch.homed) return { kind: notch.everyScreen ? "all" : "follow" }
+    var copy = notch.copies.length > 0 ? notch.copies[0] : null
+    return { kind: "homed", screen: copy ? copy.screenName : notch.placement.screen }
   }
   function dismissPeek(module) {
     for (var i = 0; i < notch.copies.length; i++) notch.copies[i].dismissPeek(module)

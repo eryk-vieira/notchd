@@ -91,8 +91,6 @@ test('notchScreen: closed, the focused screen if allowed, else the first allowed
 });
 
 test('notchScreen: open, the screen it was opened from, else the focused one', () => {
-  assert.equal(State.notchScreen({ screens: [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: true }],
-                                   focused: 'eDP-1', home: 'DP-1', open: true }), 'eDP-1');
   const screens = [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: false }];
   assert.equal(State.notchScreen({ screens, focused: 'eDP-1', open: true }), 'eDP-1');
   assert.equal(State.notchScreen({ screens, focused: 'eDP-1', open: true, override: 'DP-1' }), 'DP-1');
@@ -145,16 +143,32 @@ test('reserveZones: the deepest reserve per screen edge, never the sum', () => {
 });
 
 // Bug: with the notch kept on the ultrawide (position.screen) showing
-// music, changing the volume while working on the laptop screen took the
-// notch over there; then (first fix) the volume stayed on the ultrawide,
-// out of sight. The volume shows where you work, and the notch kept on its
-// screen stays and shows it too.
-test('peekCopies: the focused copy, plus the notch kept on another screen', () => {
-  const copies = ['DP-1', 'eDP-1'];
-  assert.deepEqual(plain(State.peekCopies(copies, 'eDP-1', 'DP-1')), ['eDP-1', 'DP-1']);
-  assert.deepEqual(plain(State.peekCopies(copies, 'DP-1', 'DP-1')), ['DP-1']);
-  // A notch on every screen (no host) peeks on the focused one only.
-  assert.deepEqual(plain(State.peekCopies(copies, 'eDP-1', '')), ['eDP-1']);
-  assert.deepEqual(plain(State.peekCopies([''], 'eDP-1', '')), ['']);
-  assert.deepEqual(plain(State.peekCopies([], 'eDP-1', 'DP-1')), []);
+// music, changing the volume while working on the laptop screen moved the
+// notch over there. A notch with a home screen now stays where it hangs,
+// peeks included.
+test('notchScreen: open, a notch with a home screen stays where it hangs', () => {
+  const screens = [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: true }];
+  assert.equal(State.notchScreen({ screens, focused: 'eDP-1', home: 'DP-1', open: true }), 'DP-1');
+  // Its home's workspace leaves it out: it opens where it hangs instead.
+  const busy = [{ name: 'DP-1', allowed: false }, { name: 'eDP-1', allowed: true }, { name: 'HDMI-A-1', allowed: true }];
+  assert.equal(State.notchScreen({ screens: busy, focused: 'HDMI-A-1', home: 'DP-1', open: true }), 'HDMI-A-1');
+  // Hanging nowhere, it opens on its home.
+  const none = [{ name: 'DP-1', allowed: false }, { name: 'eDP-1', allowed: false }];
+  assert.equal(State.notchScreen({ screens: none, focused: 'eDP-1', home: 'DP-1', open: true }), 'DP-1');
+  // Opened by the pointer on another screen, it stays there.
+  assert.equal(State.notchScreen({ screens, focused: 'DP-1', home: 'DP-1', open: true, override: 'eDP-1' }), 'eDP-1');
+});
+
+// The volume must show where you work: on a screen where no notch with the
+// OSD hangs, it shows once at the top, not once per notch kept elsewhere.
+test('needsVisitor: only when no notch with the module peeks on the focused screen', () => {
+  const homedOnDp = { kind: 'homed', screen: 'DP-1' };
+  assert.equal(State.needsVisitor([homedOnDp], 'eDP-1'), true);
+  assert.equal(State.needsVisitor([homedOnDp, { kind: 'homed', screen: 'HDMI-A-1' }], 'eDP-1'), true);
+  assert.equal(State.needsVisitor([homedOnDp], 'DP-1'), false);
+  assert.equal(State.needsVisitor([homedOnDp, { kind: 'homed', screen: 'eDP-1' }], 'eDP-1'), false);
+  assert.equal(State.needsVisitor([homedOnDp, { kind: 'follow' }], 'eDP-1'), false);
+  assert.equal(State.needsVisitor([{ kind: 'all' }], 'eDP-1'), false);
+  assert.equal(State.needsVisitor([], 'eDP-1'), true);
+  assert.equal(State.needsVisitor([homedOnDp], ''), false);
 });

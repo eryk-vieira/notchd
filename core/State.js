@@ -82,9 +82,10 @@ function workspaceAllowed(list, ws) {
 // peeks or is expanded, `home` the screen the config's position names.
 // Closed, it shows on its home screen if allowed there, else on the focused
 // screen if allowed there, else on the first screen that is. Open, it shows
-// where the pointer opened it, else on the focused screen, whatever the
-// workspace. (A notch with a home screen has a copy per screen instead, so
-// it opens without moving: see peekCopies.)
+// where the pointer opened it; else a notch with a home screen opens where
+// it hangs closed (a peek never takes it off its screen: needsVisitor shows
+// it where you work), and one without on the focused screen, whatever the
+// workspace.
 function notchScreen(s) {
   var screens = s.screens || []
   function find(name) {
@@ -92,16 +93,18 @@ function notchScreen(s) {
     return null
   }
   var focused = find(s.focused) || screens[0] || null
-  if (s.open) {
-    var over = s.override ? find(s.override) : null
-    if (over) return over.name
-    return focused ? focused.name : ""
-  }
   var home = s.home ? find(s.home) : null
-  if (home && home.allowed) return home.name
-  if (focused && focused.allowed) return focused.name
-  for (var i = 0; i < screens.length; i++) if (screens[i].allowed) return screens[i].name
-  return ""
+  function closed() {
+    if (home && home.allowed) return home.name
+    if (focused && focused.allowed) return focused.name
+    for (var i = 0; i < screens.length; i++) if (screens[i].allowed) return screens[i].name
+    return ""
+  }
+  if (!s.open) return closed()
+  var over = s.override ? find(s.override) : null
+  if (over) return over.name
+  if (home) return closed() || home.name
+  return focused ? focused.name : ""
 }
 
 // The screens that keep windows clear of the closed notch (reserveSpace),
@@ -138,17 +141,18 @@ function peekCopy(copies, focused) {
   return copies.indexOf(focused) !== -1 ? focused : copies[0]
 }
 
-// The copies of a notch that show a peek, by screen name: the one on the
-// focused screen (peekCopy), and the notch where it hangs (`host`, the
-// screen of a notch kept on one screen; "" for none) if that is another.
-// So a peek shows where you work without moving a notch kept elsewhere,
-// which shows it too.
-function peekCopies(copies, focused, host) {
-  var first = peekCopy(copies, focused)
-  if (first === null) return []
-  var out = [first]
-  if (host && host !== first && copies.indexOf(host) !== -1) out.push(host)
-  return out
+// Whether a peek also needs the visitor: a notch of its own at the top of
+// the focused screen, shown once, just for the peek. `peeks` are the notches
+// that show the module, as { kind, screen }: kind "all" (a copy on every
+// screen) and "follow" (it moves to the focused screen) always peek there;
+// "homed" (kept on a screen) peeks on `screen`, where it hangs. With no
+// notch peeking on the focused screen, the visitor does; never with the
+// focused screen unknown.
+function needsVisitor(peeks, focused) {
+  if (!focused) return false
+  for (var i = 0; i < (peeks || []).length; i++)
+    if (peeks[i].kind !== "homed" || peeks[i].screen === focused) return false
+  return true
 }
 
 // What windows leave free per screen edge, from every notch copy's reserve
