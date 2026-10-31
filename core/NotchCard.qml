@@ -66,6 +66,8 @@ Item {
     : card.mode === "expanded" ? Theme.space(18) : card.mode === "peek" ? Theme.space(8) : card.compactPadBottom
   readonly property real cornerRadius: !card.roomy ? 0
     : Theme.space(card.mode === "expanded" ? 26 : card.mode === "peek" ? 16 : 12)
+  // The lip shown at rest, nothing active.
+  readonly property real restHeight: Theme.space(5)
   // The concave flare into the bar, drawn outside the card's own width.
   readonly property real shoulder: Theme.space(10)
 
@@ -89,7 +91,7 @@ Item {
     id: restView
     Item {
       implicitWidth: Theme.space(120)
-      implicitHeight: Theme.space(5)
+      implicitHeight: card.restHeight
     }
   }
 

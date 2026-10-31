@@ -36,7 +36,7 @@ The layer-shell overlay that puts the notch on screen: it picks the screen, plac
 | `barHeight`, `barOnTop`, `barHidden` | the host's bar, so the notch hangs under it |
 | `layerNamespace` | layer-shell namespace |
 
-With the config's `reserveSpace` on (and `compactStyle` `"notch"`), it also maps one empty window per screen, namespace `<layerNamespace>-reserve`, holding an exclusive zone as deep as the tallest compact view seen. It sits on the overlay layer, so the compositor stacks it under the bar's own zone; a host bar needs a normal exclusive zone for the strip to land where the notch hangs.
+With the config's `reserveSpace` on (and `compactStyle` `"notch"`), it also maps one empty window per screen, namespace `<layerNamespace>-reserve`, holding an exclusive zone as deep as the closed notch (`ReservedSpace.qml`: the rest lip, or the tallest compact view seen while a module is active; it grows at once and shrinks after a delay). It sits on the overlay layer, so the compositor stacks it under the bar's own zone; a host bar needs a normal exclusive zone for the strip to land where the notch hangs.
 
 Give the service and the adapter ids that differ from these property names (`service`, `compositorLoader`): `svc: svc` inside the surface reads as the surface's own property.
 

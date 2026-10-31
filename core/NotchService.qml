@@ -205,7 +205,7 @@ Item {
     if (svc.compactStyle === "notch")
       out.push({ page: "general", section: "Layout", key: "reserveSpace", type: "boolean",
                  label: "Keep windows clear", default: Config.DEFAULTS.reserveSpace,
-                 help: "Windows stay below the closed notch instead of under it. They lose that strip across the whole screen; peeks and the open notch still cover them." })
+                 help: "Windows stay below the closed notch instead of under it, across the whole screen: a sliver at rest, more while a module is active. Peeks and the open notch still cover them." })
     if (svc.compositor && svc.compositor.supportsWorkspaces)
       out.push({ page: "general", section: "Layout", key: "workspaces", type: "workspaces",
                  label: "Workspaces",

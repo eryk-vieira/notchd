@@ -44,13 +44,26 @@ test('mode: peek beats expanded unless pinned, then compact, then rest', () => {
   assert.equal(State.mode({}), 'rest');
 });
 
-test('reservedSpace: only when enabled in notch style, never below the baseline', () => {
-  const on = { enabled: true, compactStyle: 'notch', baseline: 36, tallest: 0 };
+test('reservedSpace: only when enabled in notch style; compact never below the baseline', () => {
+  const on = { enabled: true, compactStyle: 'notch', compact: true, baseline: 36, tallest: 0, rest: 5 };
   assert.equal(State.reservedSpace(on), 36);
   assert.equal(State.reservedSpace({ ...on, tallest: 41.2 }), 42);
   assert.equal(State.reservedSpace({ ...on, tallest: 20 }), 36);
   assert.equal(State.reservedSpace({ ...on, enabled: false }), 0);
   assert.equal(State.reservedSpace({ ...on, compactStyle: 'bar' }), 0);
+});
+
+test('reservedSpace: at rest, only the lip', () => {
+  const rest = { enabled: true, compactStyle: 'notch', compact: false, baseline: 36, tallest: 50, rest: 5.4 };
+  assert.equal(State.reservedSpace(rest), 6);
+  assert.equal(State.reservedSpace({ ...rest, compactStyle: 'bar' }), 0);
+});
+
+test('reserveStep: grow or drop now, shrink later, nothing when equal', () => {
+  assert.equal(State.reserveStep(6, 33), 'now');
+  assert.equal(State.reserveStep(33, 0), 'now');
+  assert.equal(State.reserveStep(33, 6), 'later');
+  assert.equal(State.reserveStep(33, 33), 'none');
 });
 
 test('workspaceAllowed matches ids or names; no list or no workspace allows', () => {

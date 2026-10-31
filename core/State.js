@@ -42,12 +42,26 @@ function mode(s) {
 
 // How far windows are kept from the notch's edge (the layer-shell exclusive
 // zone), in px; 0 reserves nothing. Only a notch that hangs there when
-// closed (compactStyle "notch") needs it. It is the tallest compact view
-// seen (`tallest`), never less than `baseline`, so windows move once rather
-// than every time a module comes and goes.
+// closed (compactStyle "notch") needs it. It follows the closed notch, not
+// what is on screen: peeks and the expanded notch open over the windows.
+// `compact`: a module shows a compact view; then the tallest compact view
+// seen (`tallest`), never less than `baseline`, so a module whose view
+// changes size doesn't move windows each time. Otherwise the rest lip
+// (`rest`).
 function reservedSpace(s) {
   if (!s.enabled || s.compactStyle !== "notch") return 0
+  if (!s.compact) return Math.ceil(Number(s.rest) || 0)
   return Math.ceil(Math.max(Number(s.baseline) || 0, Number(s.tallest) || 0))
+}
+
+// When the reserved space moves from `held` to `target`: "now" to grow (the
+// notch must not cover windows) or to drop it altogether, "later" to shrink
+// (one module ending as another starts moves windows once, not twice),
+// "none" when nothing changes (a pending shrink is cancelled).
+function reserveStep(held, target) {
+  if (target === held) return "none"
+  if (target > held || target === 0) return "now"
+  return "later"
 }
 
 // Whether the notch hangs on a workspace. `list` is the config's

@@ -62,7 +62,10 @@ ShellRoot {
     root.cases = [
       { name: "workspace chips store a real list", run: root.workspaceChipsList },
       { name: "compact height ignores peek and expanded transitions", run: root.compactHeightTransitions },
-      { name: "leaving the notch before it opens forgets the screen", run: root.hoverLeaveForgetsScreen }
+      { name: "leaving the notch before it opens forgets the screen", run: root.hoverLeaveForgetsScreen },
+      { name: "peeks and the open notch never move windows", run: root.reserveIgnoresOpenNotch },
+      { name: "reserved space grows at once and shrinks after the delay", run: root.reserveGrowsAndShrinks },
+      { name: "one module ending as another starts keeps the space", run: root.reserveBridgesModules }
     ]
     Qt.callLater(root.next)
   }
@@ -121,7 +124,8 @@ ShellRoot {
     id: cardSvc
     property string mode: "compact"
     readonly property string compactStyle: "notch"
-    readonly property var compactModule: fakeModule
+    readonly property bool reserveSpace: true
+    property var compactModule: fakeModule
     readonly property var peekModule: fakeModule
     readonly property var expandedModules: []
     function togglePinned(screenName) {}
@@ -166,5 +170,79 @@ ShellRoot {
     root.check(service.mode !== "expanded", "opened without waiting for the hover delay")
     root.check(service.screenOverride === "", "kept screen " + service.screenOverride)
     root.done()
+  }
+
+  // ------------------------------------------------------ reserved space
+  // The space follows the closed notch, so the volume OSD (a peek) and the
+  // expanded notch open over windows without moving them; it grows at once
+  // and shrinks after a delay.
+  ReservedSpace {
+    id: reserve
+    svc: cardSvc
+    notchCard: card
+    shrinkDelay: 300
+    property int lowest: 0
+    property int highest: 0
+    function watch() { lowest = space; highest = space }
+    onSpaceChanged: { lowest = Math.min(lowest, space); highest = Math.max(highest, space) }
+  }
+
+  // Closed notch: compact (a module active) or rest.
+  function closeAs(compact) {
+    cardSvc.compactModule = compact ? fakeModule : null
+    cardSvc.mode = compact ? "compact" : "rest"
+  }
+
+  function reserveIgnoresOpenNotch() {
+    var settle = 450
+    var compact = 0
+    root.steps([
+      [0, function() { root.closeAs(true) }],
+      [settle, function() { compact = reserve.space; reserve.watch(); cardSvc.mode = "peek" }],
+      [settle, function() { cardSvc.mode = "expanded" }],
+      [settle, function() { cardSvc.mode = "compact" }],
+      [settle, function() {
+        root.check(reserve.lowest === compact && reserve.highest === compact,
+                   "compact: moved between " + reserve.lowest + " and " + reserve.highest + ", closed is " + compact)
+        root.closeAs(false)
+      }],
+      [settle * 2, function() { reserve.watch(); cardSvc.mode = "peek" }],  // the OSD, from rest
+      [settle, function() { cardSvc.mode = "rest" }],
+      [settle, function() {}]
+    ], function() {
+      root.check(reserve.space === Math.ceil(card.restHeight), "rest reserves " + reserve.space + ", the lip is " + card.restHeight)
+      root.check(reserve.lowest === reserve.highest, "a peek from rest moved it between " + reserve.lowest + " and " + reserve.highest)
+      root.done()
+    })
+  }
+
+  function reserveGrowsAndShrinks() {
+    var rest = Math.ceil(card.restHeight)
+    var compact = 0
+    root.steps([
+      [0, function() { root.closeAs(false) }],
+      [450, function() {
+        root.check(reserve.space === rest, "rest reserves " + reserve.space)
+        root.closeAs(true)
+        compact = reserve.space
+        root.check(compact > rest, "did not grow at once: " + compact)
+        root.closeAs(false)
+      }],
+      [150, function() { root.check(reserve.space === compact, "shrank before the delay: " + reserve.space) }],
+      [350, function() { root.check(reserve.space === rest, "did not shrink after the delay: " + reserve.space) }]
+    ], function() { root.done() })
+  }
+
+  function reserveBridgesModules() {
+    var compact = 0
+    root.steps([
+      [0, function() { root.closeAs(true) }],
+      [450, function() { compact = reserve.space; reserve.watch(); root.closeAs(false) }],
+      [100, function() { root.closeAs(true) }],
+      [500, function() {}]
+    ], function() {
+      root.check(reserve.lowest === compact, "dipped to " + reserve.lowest + " between modules, compact is " + compact)
+      root.done()
+    })
   }
 }

@@ -17,8 +17,9 @@ import "State.js" as State
 // is just the notch, so everything else stays click-through.
 //
 // With reserveSpace on, a second, empty window per screen holds a layer-shell
-// exclusive zone as deep as a compact notch, so windows tile below it. The
-// compositor stacks it under the host bar's own zone, where the notch hangs.
+// exclusive zone as deep as the closed notch (ReservedSpace), so windows tile
+// below it. The compositor stacks it under the host bar's own zone, where the
+// notch hangs.
 Item {
   id: root
 
@@ -71,20 +72,11 @@ Item {
   readonly property bool pinned: !!root.svc && root.svc.pinned
 
   // ------------------------------------------------------- reserved space
-  // A media compact view's height (18) plus the card's compact padding.
-  readonly property real compactBaseline: Theme.space(18) + card.compactPadTop + card.compactPadBottom
-  // The tallest compact view shown so far; reset when the theme rescales.
-  property real tallestCompact: 0
-  onCompactBaselineChanged: root.tallestCompact = 0
-  readonly property int reservedSpace: State.reservedSpace({
-    enabled: !!root.svc && root.svc.reserveSpace,
-    compactStyle: root.svc ? root.svc.compactStyle : "",
-    baseline: root.compactBaseline,
-    tallest: root.tallestCompact
-  })
-
-  readonly property real compactHeight: card.compactHeight
-  onCompactHeightChanged: if (root.compactHeight > root.tallestCompact) root.tallestCompact = root.compactHeight
+  ReservedSpace {
+    id: reserve
+    svc: root.svc
+    notchCard: card
+  }
 
   // Every screen the closed notch may hang on, not just the one it is on: it
   // follows focus, and reserving only there would reflow both screens on
@@ -93,16 +85,16 @@ Item {
   // top like the notch: with the host's bar at the bottom, both sit at the
   // screen edge.
   Variants {
-    model: root.reservedSpace > 0 ? Quickshell.screens : []
+    model: reserve.space > 0 ? Quickshell.screens : []
     PanelWindow {
       required property var modelData
       screen: modelData
       visible: !root.svc || root.svc.showsOn(modelData)
       anchors { top: true; left: true; right: true }
-      implicitHeight: root.reservedSpace
+      implicitHeight: reserve.space
       color: "transparent"
       exclusionMode: ExclusionMode.Normal
-      exclusiveZone: root.reservedSpace
+      exclusiveZone: reserve.space
       // Overlay, so it is arranged after the bar (top layer) and stacks
       // under it rather than pushing the bar down.
       WlrLayershell.namespace: root.layerNamespace + "-reserve"
