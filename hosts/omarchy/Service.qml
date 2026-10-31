@@ -15,6 +15,7 @@ NotchService {
   ipcTarget: "eryk.notchd"
   logName: "eryk.notchd"
   barStyleAvailable: true
+  barEdge: svc.shell && svc.shell.bar ? String(svc.shell.bar.position || "top") : "top"
   compositor: hyprland
   defaultModules: ["osd", "media", "activities"]
   hostModules: ({

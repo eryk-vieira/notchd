@@ -58,6 +58,39 @@ NotchModule {
     }
   }
 
+  // Side edge: the icon, and the progress as a bar filling upwards.
+  verticalCompact: Component {
+    Column {
+      id: verticalRow
+      readonly property var item: acts.items.length > 0 ? acts.items[acts.items.length - 1] : null
+      readonly property bool hasProgress: !!item && item.progress >= 0
+      spacing: Theme.space(6)
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        textFormat: Text.PlainText
+        text: verticalRow.item ? verticalRow.item.icon : ""
+        color: Theme.accent
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.body
+      }
+      Item {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: verticalRow.hasProgress
+        width: Theme.space(4)
+        height: Theme.space(28)
+        Rectangle { anchors.fill: parent; radius: width / 2; color: Theme.line }
+        Rectangle {
+          anchors.bottom: parent.bottom
+          width: parent.width
+          height: parent.height * (verticalRow.hasProgress ? verticalRow.item.progress / 100 : 0)
+          radius: width / 2
+          color: Theme.accent
+          Behavior on height { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+        }
+      }
+    }
+  }
+
   barView: Component {
     Row {
       readonly property var item: acts.items.length > 0 ? acts.items[acts.items.length - 1] : null

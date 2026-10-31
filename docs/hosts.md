@@ -18,25 +18,26 @@ The single source of truth: config, modules, mode, peeks, hover, IPC.
 | `configPath` | absolute path of the JSON config (watched, live); defaults to `$XDG_CONFIG_HOME/notchd/config.json` |
 | `hostModules` | `{ id: url }` of modules the host ships; they win over built-ins |
 | `barStyleAvailable` | whether the host has a bar indicator for `compactStyle: "bar"` |
+| `barEdge` | the screen edge the host's bar is on (`"top"`, `"bottom"`, `"left"`, `"right"`); in `"bar"` style the notch hangs from the middle of it |
 | `compositor` | a compositor adapter; the surface uses it unless given its own, and the `workspaces` setting needs one that knows workspaces |
 | `defaultModules` | modules to load when the config lists none |
 | `hostSettingsSchema` | settings-window fields for the host's own config keys (see [settings.md](settings.md)) |
 | `hostSettingsPages` | extra settings-window pages, or new labels/icons for the core ones |
 
-A host reads its own config keys from `service.config`. A bar indicator asks `service.showsOn(screen)` whether the closed notch belongs on its monitor's workspace.
+A host reads its own config keys from `service.config`. `service.edge` and `service.vertical` say where the notch is (`Position.js` has the rules). A bar indicator asks `service.showsOn(screen)` whether the closed notch belongs on its monitor's workspace.
 
 ## NotchSurface
 
-The layer-shell overlay that puts the notch on screen: it picks the screen, places a `NotchCard` (the notch itself, which also renders offscreen) under the bar and routes the pointer.
+The layer-shell overlay that puts the notch on screen: it picks the screen, places a `NotchCard` (the notch itself, which also renders offscreen) on its edge, off the bar where they share one, and routes the pointer. It also moves the notch when it is dragged (`NotchCard` reports the drag, `Position.dragTarget` picks the edge and offset) and stores the drop as `position`.
 
 | Property | Meaning |
 |---|---|
 | `svc` | the service |
 | `compositor` | a compositor adapter (see `core/GenericCompositor.qml` for the contract); defaults to the service's |
-| `barHeight`, `barOnTop`, `barHidden` | the host's bar, so the notch hangs under it |
+| `barHeight`, `barHidden` | the host's bar (its thickness, 0 for none), so the notch hangs off it where they share an edge and keeps clear of it elsewhere; its edge is the service's `barEdge` |
 | `layerNamespace` | layer-shell namespace |
 
-With the config's `reserveSpace` on (and `compactStyle` `"notch"`), it also maps one empty window per screen, namespace `<layerNamespace>-reserve`, holding an exclusive zone as deep as the closed notch (`ReservedSpace.qml`: the rest lip, or the tallest compact view seen while a module is active; it grows at once and shrinks once the notch has collapsed, 400 ms later). It sits on the overlay layer, so the compositor stacks it under the bar's own zone; a host bar needs a normal exclusive zone for the strip to land where the notch hangs.
+With the config's `reserveSpace` on (and `compactStyle` `"notch"`), it also maps one empty window per screen, namespace `<layerNamespace>-reserve`, holding an exclusive zone on the notch's edge, as deep as the closed notch (`ReservedSpace.qml`: the rest lip, or the deepest compact view seen while a module is active; it grows at once and shrinks once the notch has collapsed, 400 ms later). It sits on the overlay layer, so the compositor stacks it inside the bar's own zone; a host bar needs a normal exclusive zone for the strip to land where the notch hangs. Moving the notch to another edge replaces these windows: a mapped layer surface keeps its first anchors.
 
 Give the service and the adapter ids that differ from these property names (`service`, `compositorLoader`): `svc: svc` inside the surface reads as the surface's own property.
 

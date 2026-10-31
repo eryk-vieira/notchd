@@ -1,30 +1,34 @@
 #!/usr/bin/env bash
-# Renders the settings window's scenarios (tests/visual/shell.qml) with Qt's
-# offscreen backend and copies the PNGs to build/visual/ (or $1). Fails if a
-# scenario is missing or the QML logged a warning, so it doubles as a load
-# check of the core. Needs quickshell and dbus-run-session; no display, no
-# running shell.
+# Renders the scenarios of tests/visual/shell.qml (the settings window, the
+# notch on each edge) with Qt's offscreen backend and copies the PNGs to
+# build/visual/ (or $1). Fails if a scenario is missing or the QML logged a
+# warning, so it doubles as a load check of the core. The media module plays
+# tests/visual/demo-player.py's track. Needs quickshell, dbus-run-session,
+# ImageMagick, python-dbus and python-gobject; no display, no running shell.
 set -euo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 out=${1:-"$root/build/visual"}
 
-command -v quickshell >/dev/null 2>&1 || { echo "quickshell is required" >&2; exit 1; }
+for tool in quickshell magick dbus-run-session python3; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }
+done
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/notchd-visual.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
-mkdir -- "$scratch/config" "$scratch/shots"
+mkdir -- "$scratch/config" "$scratch/shots" "$scratch/demo"
 ln -s -- "$root/core" "$scratch/config/core"
+ln -s -- "$root/hosts" "$scratch/config/hosts"
 ln -s -- "$root/tests/visual/shell.qml" "$scratch/config/shell.qml"
 
-# Cut off from the session, so nothing here touches its sockets (isolated.sh).
-mkdir -- "$scratch/runtime"
-NOTCHD_VISUAL_DIR="$scratch/shots" "$root/scripts/isolated.sh" "$scratch/runtime" \
-  timeout 30 quickshell -p "$scratch/config" --no-color > "$scratch/log" 2>&1 || true
+# Cut off from the session, so nothing here touches its sockets, with the
+# demo player as the only MPRIS player (with-demo-player.sh).
+NOTCHD_VISUAL_DIR="$scratch/shots" "$root/scripts/with-demo-player.sh" "$scratch/demo" "$scratch/log" \
+  timeout 40 quickshell -p "$scratch/config" --no-color || true
 
 # Only Quickshell's own log lines count; the offscreen backend's lack of
 # window masks is expected.
-problems=$(grep -E '^\s*(WARN|ERROR)' "$scratch/log" | grep -vE 'window masks' || true)
+problems=$(grep -E '^\s*(WARN|ERROR)' "$scratch/log" | grep -vE 'window masks|outside of the config folder' || true)
 if [[ -n $problems ]]; then
   echo "QML warnings while rendering:" >&2
   echo "$problems" >&2

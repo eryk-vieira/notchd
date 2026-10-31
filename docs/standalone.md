@@ -22,7 +22,7 @@ Differences from the Omarchy host:
 
 | Key | Default | |
 |---|---|---|
-| `topOffset` | `0` | gap above the notch, such as your bar's height |
+| `topOffset` | `0` | room at the top of the screen, such as your bar's height: a notch on the top edge hangs below it, one on a side edge stays below it |
 | `theme` | `{}` | any of `foreground`, `background`, `accent`, `fontFamily`, `spacingScale` |
 
 All of these keys except `spacingScale` are in the settings window too.

@@ -126,6 +126,15 @@ NotchModule {
     }
   }
 
+  // Side edge: artwork above the equalizer.
+  verticalCompact: Component {
+    Column {
+      spacing: Theme.space(8)
+      Art { anchors.horizontalCenter: parent.horizontalCenter; size: Theme.space(16); radius: Theme.space(4) }
+      Equalizer { anchors.horizontalCenter: parent.horizontalCenter; barHeight: Theme.space(12) }
+    }
+  }
+
   barView: Component {
     Row {
       spacing: Theme.space(6)

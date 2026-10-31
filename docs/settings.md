@@ -9,19 +9,19 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | Key | |
 |---|---|
 | `key` | config key; dotted for nested objects (`theme.accent`) |
-| `type` | `choice`, `integer`, `boolean`, `string`, `color`, `modules`, `workspaces` or `note` (text only, no key) |
+| `type` | `choice`, `integer`, `number`, `boolean`, `string`, `color`, `modules`, `workspaces` or `note` (text only, no key) |
 | `label`, `help` | title and description |
 | `page` | sidebar page id; `general` when absent |
 | `section` | heading the field sits under, within its page; sections keep the order their first field appears in |
-| `default` | value shown while the key is absent |
+| `default` | value shown while the key is absent; picking it removes the key |
 | `options` | `[{ value, label, preview }]`, for `choice` |
-| `display` | `"cards"` shows a `choice` as picture cards instead of segments |
-| `min`, `max`, `step`, `unit` | for `integer` (a slider) |
+| `display` | `"cards"` shows a `choice` as picture cards instead of segments; `"percent"` shows a 0..1 `number` as 0 to 100 % |
+| `min`, `max`, `step`, `unit` | for `integer` and `number` (a slider; a `number`'s step may be a fraction) |
 
 | Type | Control |
 |---|---|
 | `choice` | `SegmentedControl`, or `CardChoice` with `display: "cards"` |
-| `integer` | `SliderControl` |
+| `integer`, `number` | `SliderControl` |
 | `boolean` | `Toggle` |
 | `string`, `color` | `TextControl` (a color adds a swatch and is validated) |
 | `modules` | `ModuleList` |
@@ -34,18 +34,18 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 
 ## Card pictures
 
-An option's `preview` is the url of a QML file whose root is a `CardPreview` (`core/settings/CardPreview.qml`). Draw it with theme colors; its `selected` property follows the card. The compact-style pictures in `core/settings/previews/` are examples.
+An option's `preview` is the url of a QML file whose root is a `CardPreview` (`core/settings/CardPreview.qml`). Draw it with theme colors; its `selected` property follows the card and `value` is its option's value, so one file can draw every option. The pictures in `core/settings/previews/` are examples; `Edge.qml` draws all four edges.
 
 ## Adding a control
 
-Every control takes `field` (the schema entry) and `value` (the config value, or the default while the key is absent) and emits `edited(value)`; `undefined` removes the key. `SettingRow.qml` picks the control by type: add the component there, and to the tables above. Controls that need the width of the page (cards, lists) go under the title instead of beside it; `SettingRow.wide` decides.
+Every control takes `field` (the schema entry) and `value` (the config value, or the default while the key is absent) and emits `edited(value)`; `undefined` removes the key, and `SettingRow` turns the field's default into `undefined` (`Settings.storedValue`), so the config never stores a default. `SettingRow.qml` picks the control by type: add the component there, and to the tables above. Controls that need the width of the page (cards, lists) go under the title instead of beside it; `SettingRow.wide` decides.
 
 ## Layout of the code
 
 | File | |
 |---|---|
 | `SettingsWindow.qml` | window, sidebar, page content |
-| `Settings.js` | pages, sections and list edits; pure, tested in `tests/settings.test.mjs` |
+| `Settings.js` | pages, sections, list edits and slider steps; pure, tested in `tests/settings.test.mjs` |
 | `SettingRow.qml` | one field: text and the control for its type |
 | `Label.qml`, `Icon.qml`, `Button.qml`, `NavItem.qml` | building blocks |
 | `*Control.qml`, `CardChoice.qml`, `Toggle.qml`, `ModuleList.qml`, `WorkspaceChips.qml` | the controls |

@@ -48,15 +48,16 @@ test('withValue removing a key under a missing parent changes nothing', () => {
 
 test('resolve falls back to defaults for missing or bad keys', () => {
   const r = plain(Config.resolve({}, ['media']));
-  assert.deepEqual(r, { moduleIds: ['media'], hoverOpenDelay: 120, hoverCloseDelay: 300, compactStyle: 'bar', reserveSpace: false, workspaces: null });
+  assert.deepEqual(r, { moduleIds: ['media'], hoverOpenDelay: 120, hoverCloseDelay: 300, compactStyle: 'bar', reserveSpace: false, draggable: true, workspaces: null });
 });
 
 test('resolve reads and clamps the core keys', () => {
   const r = plain(Config.resolve(
-    { modules: ['osd', 3], hoverOpenDelay: -50, hoverCloseDelay: 'x', compactStyle: 'notch', reserveSpace: true, workspaces: [1, 'code'] }, []));
-  assert.deepEqual(r, { moduleIds: ['osd', '3'], hoverOpenDelay: 0, hoverCloseDelay: 0, compactStyle: 'notch', reserveSpace: true, workspaces: [1, 'code'] });
+    { modules: ['osd', 3], hoverOpenDelay: -50, hoverCloseDelay: 'x', compactStyle: 'notch', reserveSpace: true, draggable: false, workspaces: [1, 'code'] }, []));
+  assert.deepEqual(r, { moduleIds: ['osd', '3'], hoverOpenDelay: 0, hoverCloseDelay: 0, compactStyle: 'notch', reserveSpace: true, draggable: false, workspaces: [1, 'code'] });
   assert.equal(Config.resolve({ compactStyle: 'weird' }, []).compactStyle, 'bar');
   assert.equal(Config.resolve({ reserveSpace: 'yes' }, []).reserveSpace, false);
+  assert.equal(Config.resolve({ draggable: 'no' }, []).draggable, true);
   assert.equal(Config.resolve({ workspaces: [] }, []).workspaces, null);
   assert.equal(Config.resolve({ workspaces: 3 }, []).workspaces, null);
   assert.deepEqual(plain(Config.resolve({ workspaces: [2, '', null, 'x'] }, []).workspaces), [2, 'x']);

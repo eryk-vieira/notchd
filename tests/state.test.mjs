@@ -44,6 +44,12 @@ test('mode: peek beats expanded unless pinned, then compact, then rest', () => {
   assert.equal(State.mode({}), 'rest');
 });
 
+test('mode: a dragged notch stays closed whatever else is going on', () => {
+  const m = mod('media', 50);
+  assert.equal(State.mode({ dragging: true, hovered: true, pinned: true, peekModule: m, compactModule: m }), 'compact');
+  assert.equal(State.mode({ dragging: true, hovered: true, peekModule: m }), 'rest');
+});
+
 test('reservedSpace: only when enabled in notch style; compact never below the baseline', () => {
   const on = { enabled: true, compactStyle: 'notch', compact: true, baseline: 36, tallest: 0, rest: 5 };
   assert.equal(State.reservedSpace(on), 36);

@@ -4,6 +4,7 @@ import Quickshell.Io
 import "settings"
 import "Config.js" as Config
 import "State.js" as State
+import "Position.js" as Position
 import "settings/Settings.js" as Settings
 
 // The notch's single source of truth: config, modules, mode, peeks, hover and
@@ -33,6 +34,9 @@ Item {
   // Whether the host has a bar indicator that can hold the compact state.
   // Without one, compactStyle is always "notch".
   property bool barStyleAvailable: false
+  // The screen edge the host's bar is on ("top", "bottom", "left", "right").
+  // In compactStyle "bar" the notch hangs from it.
+  property string barEdge: "top"
   // Prefix for log lines.
   property string logName: svc.ipcTarget
   // A compositor adapter (HyprlandCompositor, GenericCompositor, ...): which
@@ -75,8 +79,8 @@ Item {
   property int hoverOpenDelay: Config.DEFAULTS.hoverOpenDelay
   property int hoverCloseDelay: Config.DEFAULTS.hoverCloseDelay
   // Where the compact state lives: "bar" (in the host's bar indicator; the
-  // notch only drops out to peek or expand) or "notch" (hanging under the
-  // top edge all the time).
+  // notch only drops out to peek or expand) or "notch" (hanging from its
+  // edge all the time).
   property string configuredStyle: Config.DEFAULTS.compactStyle
   readonly property string compactStyle: svc.barStyleAvailable && svc.configuredStyle === "bar" ? "bar" : "notch"
   // Keep windows out of the strip a closed notch hangs into (compactStyle
@@ -84,6 +88,16 @@ Item {
   property bool reserveSpace: Config.DEFAULTS.reserveSpace
   // Workspaces the closed notch hangs on (ids or names); null: every one.
   property var workspaces: null
+  // The configured position, { edge, offset } (Position.js).
+  property var position: Position.resolve(undefined)
+  // Where the notch is: bar style locks it to the middle of the bar.
+  readonly property var placement: Position.effective(svc.position, svc.compactStyle, svc.barEdge)
+  readonly property string edge: svc.placement.edge
+  readonly property bool vertical: Position.isVertical(svc.edge)
+  // Whether the notch can be dragged to another edge; never in bar style,
+  // where it belongs to the bar.
+  property bool draggable: Config.DEFAULTS.draggable
+  readonly property bool canDrag: svc.draggable && svc.compactStyle === "notch"
 
   // Whether the closed notch hangs on `screen`, by the workspace it shows.
   // Bindings that call it follow workspace switches.
@@ -104,6 +118,8 @@ Item {
     svc.configuredStyle = r.compactStyle
     svc.reserveSpace = r.reserveSpace
     svc.workspaces = r.workspaces
+    svc.position = Position.resolve(cfg.position)
+    svc.draggable = r.draggable
   }
 
   function loadConfig(text) {
@@ -205,7 +221,25 @@ Item {
     if (svc.compactStyle === "notch")
       out.push({ page: "general", section: "Layout", key: "reserveSpace", type: "boolean",
                  label: "Keep windows clear", default: Config.DEFAULTS.reserveSpace,
-                 help: "Windows stay below the closed notch instead of under it, across the whole screen: a sliver at rest, more while a module is active. Peeks and the open notch still cover them." })
+                 help: "Windows keep clear of the closed notch instead of going under it, along its whole edge: a sliver at rest, more while a module is active. Peeks and the open notch still cover them." })
+    if (svc.compactStyle === "notch") {
+      out.push({ page: "general", section: "Position", key: "position.edge", type: "choice", display: "cards",
+                 label: "Edge", default: "top",
+                 help: "The screen edge the notch hangs from. On a side edge, an active module without a vertical view shows a dot.",
+                 options: ["top", "bottom", "left", "right"].map(function(e) {
+                   return { value: e, label: e.charAt(0).toUpperCase() + e.slice(1),
+                            preview: Qt.resolvedUrl("settings/previews/Edge.qml") }
+                 }) })
+      out.push({ page: "general", section: "Position", key: "position.offset", type: "number", display: "percent",
+                 label: "Along the edge", default: 0.5, min: 0, max: 1, step: 0.01,
+                 help: "Where on the edge: 0 % is its left (or top) end, 50 % the middle." })
+      out.push({ page: "general", section: "Position", key: "draggable", type: "boolean",
+                 label: "Drag to move", default: Config.DEFAULTS.draggable,
+                 help: "Hold the notch for a moment, then drag it to any edge of the screen; it snaps to the nearest one, and to the middle when close to it. A quick click only pins it." })
+    } else {
+      out.push({ page: "general", section: "Position", type: "note", label: "Follows the bar",
+                 help: "With the compact state in the bar, the notch drops out of the middle of the bar. Pick the hanging notch to place it on any edge." })
+    }
     if (svc.compositor && svc.compositor.supportsWorkspaces)
       out.push({ page: "general", section: "Layout", key: "workspaces", type: "workspaces",
                  label: "Workspaces",
@@ -339,8 +373,18 @@ Item {
   onPinnedChanged: if (pinned) svc.dismissPeek()
   onModeChanged: if (mode !== "expanded" && mode !== "peek") svc.screenOverride = ""
 
-  Timer { id: openTimer; interval: svc.hoverOpenDelay; onTriggered: svc.hovered = true }
+  Timer { id: openTimer; interval: svc.hoverOpenDelay; onTriggered: if (!svc.dragging) svc.hovered = true }
   Timer { id: closeTimer; interval: svc.hoverCloseDelay; onTriggered: svc.hovered = false }
+
+  // While the notch is dragged it stays closed (State.mode) and nothing
+  // opens it; dropping it leaves it closed until the pointer comes back.
+  property bool dragging: false
+  function setDragging(on) {
+    svc.dragging = on
+    openTimer.stop()
+    svc.pinned = false
+    svc.hovered = false
+  }
 
   function open() { svc.pinned = true }
   function close() { svc.pinned = false; svc.hovered = false }
@@ -350,7 +394,7 @@ Item {
   }
 
   // ------------------------------------------------------------------ mode
-  readonly property string mode: State.mode({ peekModule: svc.peekModule, pinned: svc.pinned,
+  readonly property string mode: State.mode({ peekModule: svc.peekModule, pinned: svc.pinned, dragging: svc.dragging,
                                              hovered: svc.hovered, compactModule: svc.compactModule })
 
   // ------------------------------------------------------------------- IPC
@@ -360,6 +404,8 @@ Item {
     function open(): void { svc.open() }
     function close(): void { svc.close() }
     function settings(): void { svc.settingsOpen = !svc.settingsOpen }
+    // Back to the middle of the top edge, after a drag that went astray.
+    function recenter(): void { svc.setConfigValue("position", undefined) }
     // Change one config key, as the settings window does. `value` is JSON
     // ("200", "\"notch\"", "[\"media\"]"); empty resets the key to its default.
     function set(key: string, value: string): string {
@@ -383,6 +429,8 @@ Item {
         compactStyle: svc.compactStyle,
         reserveSpace: svc.reserveSpace,
         workspaces: svc.workspaces,
+        position: svc.placement,
+        draggable: svc.canDrag,
         peek: svc.peekModule ? svc.peekModule.moduleId : null,
         modules: svc.modules.map(function(m) { return { id: m.moduleId, active: m.active, priority: m.priority } })
       })

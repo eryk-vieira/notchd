@@ -2,7 +2,7 @@
 
 ![notchd in its four states: compact, peek, OSD and expanded](docs/images/hero.webp)
 
-A dynamic notch for Wayland desktops, built with Quickshell. It hangs from the top edge of the focused screen and shows modules: media, OSD, script activities, or anything you write.
+A dynamic notch for Wayland desktops, built with Quickshell. It hangs from an edge of the focused screen (the top by default) and shows modules: media, OSD, script activities, or anything you write.
 
 It is a **notch framework, not a shell**. Modules show what the system is already doing; they never take over a system service. The notch is not a notification daemon, a launcher or a lock screen, so it sits on top of whatever desktop you already have.
 
@@ -27,9 +27,13 @@ Over a fullscreen app only peeks show.
 `compactStyle` in the config sets where compact lives:
 
 - `"bar"`: in the host's bar indicator. The notch only drops out to peek or expand. Only hosts with a bar indicator support it; that is only the Omarchy host today.
-- `"notch"`: compact hangs from the top edge all the time, Mac style.
+- `"notch"`: compact hangs from its edge all the time, Mac style.
 
-A hanging notch covers the top of the windows under it. `reserveSpace: true` keeps windows below it instead: the compositor reserves a strip as deep as the closed notch, across the whole width of every screen (layer-shell can only reserve whole edges). At rest that is the thin lip; while a module is active, a compact notch's height. It grows at once and shrinks as soon as the notch has collapsed, so windows move when music starts or stops or an activity comes and goes, not for peeks: volume, brightness and the expanded notch open over windows. It does nothing in `"bar"` style.
+Hold the hanging notch for a moment, then drag it to move it (a quick click only pins it open): it closes as it is picked up, jumps to the screen edge nearest the pointer as you go, sits with its middle under the pointer, snaps to the middle of an edge when close to it, and stays where you drop it. `draggable: false` turns dragging off, and `recenter` over IPC puts it back at the top.
+
+The drop is stored as `position`, which you can also set by hand: `{"edge": "left", "offset": 0.3}`. `edge` is `"top"` (the default), `"bottom"`, `"left"` or `"right"`; `offset` runs from 0 (the left or top end) to 1, 0.5 being the middle of the stretch the bar leaves free. On a side edge peeks and the expanded notch keep their layout and the notch grows sideways; the closed notch runs down the edge with each module's vertical view (media: artwork over the equalizer; activities: icon over a progress bar) and the volume and brightness OSD stands its bar up. A module without a vertical view shows a dot. In `"bar"` style the notch stays in the middle of the bar, wherever the bar is.
+
+A hanging notch covers the windows under it. `reserveSpace: true` keeps windows clear of it instead: the compositor reserves a strip as deep as the closed notch, along the whole of its edge on every screen (layer-shell can only reserve whole edges). At rest that is the thin lip; while a module is active, a compact notch's height. It grows at once and shrinks as soon as the notch has collapsed, so windows move when music starts or stops or an activity comes and goes, not for peeks: volume, brightness and the expanded notch open over windows. It does nothing in `"bar"` style.
 
 `workspaces` limits where the closed notch shows, e.g. `[1, 2, 3]` (ids or names). When the focused screen shows another workspace, the closed notch moves to a screen that shows one of them, or hides if none does; in `"bar"` style the bar indicator hides on those screens. Peeks and the open notch still show on the focused screen, so the volume OSD never goes missing. Reserved space follows too: a screen showing a workspace without the notch reserves nothing, so switching a screen between the two moves its windows. It needs a compositor adapter that knows workspaces (Hyprland today).
 
@@ -43,14 +47,16 @@ The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/no
 | `compactStyle` | `"bar"` | see above |
 | `hoverOpenDelay` | `120` | ms |
 | `hoverCloseDelay` | `300` | ms |
-| `reserveSpace` | `false` | keep windows below the closed notch (`"notch"` style); see above |
+| `position` | top, middle | `{ "edge", "offset" }`: where the hanging notch sits (`"notch"` style); see above |
+| `draggable` | `true` | drag the hanging notch to move it (`"notch"` style) |
+| `reserveSpace` | `false` | keep windows clear of the closed notch (`"notch"` style); see above |
 | `workspaces` | every one | workspaces the closed notch shows on; see above |
 
 Hosts add their own keys; the standalone host, for example, adds `topOffset` and `theme`. A key missing from the file falls back to its default.
 
 ## Settings
 
-The gear in the expanded notch (or the `settings` IPC method) opens the settings window: a sidebar of pages, and on each page its fields grouped by section. Every change applies at once and is written back to the config file; there is no Apply button. Clearing a field removes the key, so it goes back to its default. Ctrl+Tab cycles pages; Esc closes.
+The gear in the expanded notch (or the `settings` IPC method) opens the settings window: a sidebar of pages, and on each page its fields grouped by section. Every change applies at once and is written back to the config file; there is no Apply button. Clearing a field, or picking its default, removes the key. Ctrl+Tab cycles pages; Esc closes.
 
 ## IPC
 

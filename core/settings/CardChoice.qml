@@ -49,7 +49,11 @@ Flow {
             anchors.margins: 1
             active: !!card.modelData.preview
             source: card.modelData.preview || ""
-            onLoaded: (item as CardPreview).selected = Qt.binding(function() { return card.isSelected })
+            onLoaded: {
+              var preview = item as CardPreview
+              preview.value = card.modelData.value
+              preview.selected = Qt.binding(function() { return card.isSelected })
+            }
           }
         }
 

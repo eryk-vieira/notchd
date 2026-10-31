@@ -3,7 +3,8 @@ import qs.Commons
 import "../../core"
 
 // Omarchy host: the notch overlay. Finds the service, then hands the core
-// surface Omarchy's bar geometry; the Hyprland adapter comes with the service.
+// surface Omarchy's bar size (the service knows its edge); the Hyprland
+// adapter comes with the service.
 Item {
   id: root
 
@@ -30,9 +31,10 @@ Item {
     layerNamespace: "eryk-notchd"
     barHeight: {
       var size = root.bar ? Math.max(0, Number(root.bar.barSize) || 0) : 0
-      return size > 0 ? size : Style.bar.sizeHorizontal
+      if (size > 0) return size
+      var vertical = !!root.bar && (root.bar.position === "left" || root.bar.position === "right")
+      return vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
     }
-    barOnTop: !root.bar || String(root.bar.position || "top") === "top"
     barHidden: !!(root.bar && root.bar.barHidden)
   }
 }

@@ -15,6 +15,8 @@ NotchModule {
 
   compact: Component { Text { text: "hi"; color: Theme.foreground } }
   barView: Component { Text { text: "hi"; color: Theme.foreground } }  // optional, for the bar
+  verticalCompact: Component { Text { text: "h\ni"; color: Theme.foreground } }  // optional, for a side edge
+  verticalPeek: Component { Text { text: "h\ne\ny"; color: Theme.foreground } }  // optional, for a side edge
   peek: Component { Text { text: "hello!"; color: Theme.foreground } }
   expanded: Component { Text { text: "details"; color: Theme.foreground } }
 
@@ -31,7 +33,8 @@ A module **shows** state, it does not **own** it. A notifications module mirrors
 - Sizes go through `Theme.space(px)` and text through `Theme.font.*`, so the module follows the host's density and fonts.
 - Colors come from the theme tokens (`Theme.foreground`, `Theme.muted`, `Theme.line`, …), never hard-coded or ad-hoc alphas. See [theming.md](theming.md).
 - Views are Components that size themselves through `implicitWidth`/`implicitHeight`; the notch springs to fit. Expanded views get a fixed width.
-- `notch` (set by the service) is the `NotchService`; read state from it, never from another module's internals.
+- `notch` (set by the service) is the `NotchService`; read state from it, never from another module's internals. `notch.edge` (`"top"`, `"bottom"`, `"left"`, `"right"`) and `notch.vertical` say where the notch hangs.
+- Views never rotate. On a side edge the notch runs down the edge for `verticalCompact` and `verticalPeek`; `peek` (for a module without a `verticalPeek`) and `expanded` keep their layout and the notch grows sideways to hold them. Give a side-edge view when a module has something narrow to show: the built-ins stack artwork over the equalizer (media), an icon over a progress bar (activities), and stand the OSD's bar up.
 
 ## Which view shows when
 
@@ -39,6 +42,8 @@ A module **shows** state, it does not **own** it. A notifications module mirrors
 |---|---|
 | `compact` | the module is the highest-priority active one with a compact view, and compactStyle is `"notch"` |
 | `barView` | as `compact`, in the host's bar indicator (compactStyle `"bar"`); falls back to `compact` |
+| `verticalCompact` | as `compact`, with the notch on a side edge (`notch.vertical`): narrow and tall. Without one the notch shows a dot there |
+| `verticalPeek` | as `peek`, on a side edge: narrow and tall. Without one, `peek` shows there |
 | `peek` | the module called `requestPeek(ms)` and won: a pinned notch never peeks, hover only lets `urgentPeek` modules through, and a peek on screen is not cut short by a lower-priority one |
 | `expanded` | the notch is expanded and the module is active; every active module's view stacks, highest priority first |
 

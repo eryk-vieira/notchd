@@ -82,3 +82,23 @@ test('toggleWorkspace keeps numbers as numbers and clears to undefined', () => {
   assert.deepEqual(plain(Settings.toggleWorkspace(undefined, 'code')), ['code']);
   assert.equal(Settings.toggleWorkspace([1], 1), undefined);
 });
+
+test('snapToStep snaps to the step from min, clamps, and drops float noise', () => {
+  assert.equal(Settings.snapToStep(0.351, 0, 1, 0.01), 0.35);
+  assert.equal(Settings.snapToStep(0.1 + 0.2, 0, 1, 0.01), 0.3);
+  assert.equal(Settings.snapToStep(1.4, 0, 1, 0.01), 1);
+  assert.equal(Settings.snapToStep(-3, 0, 1, 0.01), 0);
+  assert.equal(Settings.snapToStep(124, 0, 1000, 10), 120);
+  assert.equal(Settings.snapToStep(7, 5, 100, 10), 5);
+  assert.equal(Settings.snapToStep(7, 0, 100, 0), 7);
+});
+
+test('storedValue removes the key when an edit picks the default', () => {
+  const field = { key: 'position.edge', default: 'top' };
+  assert.equal(Settings.storedValue(field, 'top'), undefined);
+  assert.equal(Settings.storedValue(field, 'left'), 'left');
+  assert.equal(Settings.storedValue({ default: 0.5 }, 0.5), undefined);
+  assert.equal(Settings.storedValue({ default: false }, false), undefined);
+  assert.equal(Settings.storedValue({}, 'x'), 'x');
+  assert.equal(Settings.storedValue({ default: 'top' }, undefined), undefined);
+});

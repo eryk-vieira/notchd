@@ -16,6 +16,8 @@ FloatingWindow {
   id: win
 
   property var svc: null
+  // The page's scroller (the visual tests scroll it to reach lower fields).
+  readonly property alias pageView: flick
 
   title: "notchd settings"
   color: Theme.background

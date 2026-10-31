@@ -7,7 +7,8 @@ var DEFAULTS = {
   hoverOpenDelay: 120,
   hoverCloseDelay: 300,
   compactStyle: "bar",
-  reserveSpace: false
+  reserveSpace: false,
+  draggable: true
 }
 
 // A config file's text as an object. Anything but a JSON object is an error;
@@ -87,6 +88,7 @@ function resolve(cfg, defaultModules) {
     hoverCloseDelay: delay(cfg.hoverCloseDelay, DEFAULTS.hoverCloseDelay),
     compactStyle: cfg.compactStyle === "notch" ? "notch" : DEFAULTS.compactStyle,
     reserveSpace: cfg.reserveSpace === true,
+    draggable: cfg.draggable !== false,
     workspaces: workspaceList(cfg.workspaces)
   }
 }

@@ -29,7 +29,7 @@ ShellRoot {
     hostSettingsSchema: [
       { page: "general", section: "Layout", key: "topOffset", type: "integer", label: "Top offset",
         default: 0, min: 0, max: 120, step: 1, unit: "px",
-        help: "Gap above the notch, e.g. your bar's height." },
+        help: "Room at the top of the screen, e.g. your bar's height." },
       { page: "appearance", section: "Colors", key: "theme.foreground", type: "color", label: "Foreground", default: "#cacccc" },
       { page: "appearance", section: "Colors", key: "theme.background", type: "color", label: "Background", default: "#101315" },
       { page: "appearance", section: "Colors", key: "theme.accent", type: "color", label: "Accent",

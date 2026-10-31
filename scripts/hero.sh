@@ -25,29 +25,15 @@ done
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/notchd-hero.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
-mkdir -- "$scratch/config" "$scratch/out"
+mkdir -- "$scratch/config" "$scratch/out" "$scratch/demo"
 ln -s -- "$root/core" "$scratch/config/core"
 ln -s -- "$root/hosts" "$scratch/config/hosts"
 ln -s -- "$root/tests/visual/hero.qml" "$scratch/config/shell.qml"
 
-# The demo track's cover: a sunset gradient with a sun and a horizon line.
-magick -size 512x512 gradient:'#ffb36b'-'#6b3fd6' \
-  -fill '#ffe2a8' -draw 'circle 256,300 256,190' \
-  -fill '#2a1f4a' -draw 'rectangle 0,330 512,512' \
-  -fill '#ff7a8a' -draw 'rectangle 0,326 512,334' \
-  "$scratch/cover.png"
-
-# Cut off from the session (see isolated.sh), with the demo player as the
-# only MPRIS player on the private bus.
-mkdir -- "$scratch/runtime"
-"$root/scripts/isolated.sh" "$scratch/runtime" bash -c '
-  python3 "$1" "$2" & player=$!
-  sleep 0.5
-  NOTCHD_VISUAL_DIR="$3" NOTCHD_HERO_FILE="$3/hero.png" \
-    timeout 30 quickshell -p "$4" --no-color > "$5" 2>&1 || true
-  kill "$player" 2>/dev/null || true
-' _ "$root/tests/visual/demo-player.py" "$scratch/cover.png" "$scratch/out" "$scratch/config" "$scratch/log" \
-  > "$scratch/bus.log" 2>&1   # the private bus's own chatter
+# Cut off from the session, with the demo player as the only MPRIS player.
+NOTCHD_VISUAL_DIR="$scratch/out" NOTCHD_HERO_FILE="$scratch/out/hero.png" \
+  "$root/scripts/with-demo-player.sh" "$scratch/demo" "$scratch/log" \
+  timeout 30 quickshell -p "$scratch/config" --no-color || true
 
 # Only Quickshell's own log lines; GLib/AT-SPI chatter about the private bus
 # starts with "** (" and is not ours.

@@ -1,13 +1,15 @@
 import QtQuick
 import QtQuick.Layouts
 import ".."
+import "Settings.js" as Settings
 
 // One field of the schema: title and help on the left, the control on the
 // right. Controls that need room (cards, module lists) go under the text
 // instead. A `note` has no control at all.
 //
 // Every control takes `field` and `value` (the effective value: config or
-// default) and emits `edited(value)`; `undefined` removes the key.
+// default) and emits `edited(value)`; `undefined` removes the key, and so
+// does the field's default.
 ColumnLayout {
   id: row
 
@@ -23,6 +25,7 @@ ColumnLayout {
     switch (row.field.type) {
       case "choice": return row.field.display === "cards" ? cardsControl : segmentedControl
       case "integer": return sliderControl
+      case "number": return sliderControl
       case "boolean": return toggleControl
       case "string": return textControl
       case "color": return textControl
@@ -33,7 +36,7 @@ ColumnLayout {
     }
   }
 
-  function edit(v) { if (row.svc) row.svc.setConfigValue(row.field.key, v) }
+  function edit(v) { if (row.svc) row.svc.setConfigValue(row.field.key, Settings.storedValue(row.field, v)) }
 
   spacing: Theme.space(12)
 

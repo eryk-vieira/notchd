@@ -6,17 +6,35 @@ import QtQuick.Shapes
 // (layer-shell window, input mask, screen choice). Being a plain Item, it
 // also renders offscreen, which is how tests/visual and the README image
 // show the real thing.
+//
+// It hangs from one screen edge (`edge`) and thinks in two axes: *along*
+// the edge and *depth* away from it. The outline is drawn for the top edge
+// and turned onto the others; the content never turns.
 Item {
   id: card
 
   property var svc: null
-  // Width the notch may grow to (the screen, less some margin).
-  property real maxWidth: Theme.space(1200)
+  // The screen edge it hangs from: "top", "bottom", "left" or "right".
+  property string edge: card.svc && card.svc.edge ? card.svc.edge : "top"
+  readonly property bool vertical: card.edge === "left" || card.edge === "right"
+  // Whether it can be dragged: held for `holdToDrag` ms, a press picks it up
+  // and moving then drags it; a quick click never moves it. The card only
+  // reports the drag (in its window's coordinates); whoever places it
+  // decides where it goes.
+  property bool draggable: false
+  property int holdToDrag: 250
+  readonly property bool dragging: pressArea.dragging
+  signal dragStarted()
+  signal dragMoved(point scenePosition)
+  signal dragEnded()
 
   // The pointer is on the card. Here, not on an item beside it, so the
   // controls inside the views (which take hover themselves) never hide it.
   readonly property bool hovered: hover.hovered
   HoverHandler { id: hover }
+  // Size the notch may grow to (the screen, less some margin).
+  property real maxWidth: Theme.space(1200)
+  property real maxHeight: Theme.space(1200)
 
   // ------------------------------------------------------------------ mode
   readonly property string svcMode: card.svc ? card.svc.mode : "rest"
@@ -25,12 +43,18 @@ Item {
   readonly property string mode: (card.barStyle && (card.svcMode === "rest" || card.svcMode === "compact"))
     ? "hidden" : card.svcMode
 
+  // On a side edge, compact shows the module's `verticalCompact` (a module
+  // without one gets a dot) and peek its `verticalPeek`, if it has one.
+  readonly property var peekModule: card.svc ? card.svc.peekModule : null
+  readonly property bool verticalPeek: card.vertical && !!card.peekModule && !!card.peekModule.verticalPeek
   readonly property Component modeComponent: {
     if (!card.svc) return restView
-    if (card.mode === "peek" && card.svc.peekModule) return card.svc.peekModule.peek
+    if (card.mode === "peek" && card.peekModule)
+      return card.verticalPeek ? card.peekModule.verticalPeek : card.peekModule.peek
     if (card.mode === "expanded") return expandedView
-    if (card.mode === "compact" && card.svc.compactModule && card.svc.compactModule.compact)
-      return card.svc.compactModule.compact
+    var m = card.svc.compactModule
+    if (card.mode === "compact" && m && m.compact)
+      return !card.vertical ? m.compact : (m.verticalCompact || dotView)
     return restView
   }
 
@@ -38,12 +62,20 @@ Item {
   // outline springs to its size.
   property Component shownComponent: null
   // The mode the shown content belongs to; it trails `mode` by the fade, so
-  // it matches targetHeight while `mode` may already have moved on. Both
+  // it matches targetDepth while `mode` may already have moved on. Both
   // change in one step; `swapping` is true in between, when they don't match.
   property string shownMode: ""
+  // Whether the shown content was laid out for a side edge; it trails
+  // `vertical` the same way.
+  property bool shownVertical: false
   property bool swapping: false
   onModeComponentChanged: swapAnim.restart()
-  Component.onCompleted: { card.shownComponent = card.modeComponent; card.shownMode = card.mode }
+  onVerticalChanged: swapAnim.restart()
+  Component.onCompleted: {
+    card.shownComponent = card.modeComponent
+    card.shownMode = card.mode
+    card.shownVertical = card.vertical
+  }
 
   SequentialAnimation {
     id: swapAnim
@@ -53,6 +85,7 @@ Item {
         card.swapping = true
         card.shownComponent = card.modeComponent
         card.shownMode = card.mode
+        card.shownVertical = card.vertical
         card.swapping = false
       }
     }
@@ -60,43 +93,81 @@ Item {
   }
 
   // -------------------------------------------------------------- geometry
+  // Padding by axis: `padSide` at both ends along the edge, `padNear` on the
+  // edge's side, `padFar` on the open side (which has the round corners).
   readonly property bool roomy: card.mode === "peek" || card.mode === "compact" || card.mode === "expanded"
-  readonly property real padX: !card.roomy ? 0 : Theme.space(card.mode === "expanded" ? 20 : 14)
+  readonly property real padSide: !card.roomy ? 0 : Theme.space(card.mode === "expanded" ? 20 : 14)
   // Compact stays close to a bar's height: it hangs there all the time.
-  readonly property real compactPadTop: Theme.space(4)
-  readonly property real compactPadBottom: Theme.space(6)
-  readonly property real padTop: !card.roomy ? 0
-    : card.mode === "expanded" ? Theme.space(14) : card.mode === "peek" ? Theme.space(6) : card.compactPadTop
-  readonly property real padBottom: !card.roomy ? 0
-    : card.mode === "expanded" ? Theme.space(18) : card.mode === "peek" ? Theme.space(8) : card.compactPadBottom
+  readonly property real compactPadNear: Theme.space(4)
+  readonly property real compactPadFar: Theme.space(6)
+  readonly property real padNear: !card.roomy ? 0
+    : card.mode === "expanded" ? Theme.space(14) : card.mode === "peek" ? Theme.space(6) : card.compactPadNear
+  readonly property real padFar: !card.roomy ? 0
+    : card.mode === "expanded" ? Theme.space(18) : card.mode === "peek" ? Theme.space(8) : card.compactPadFar
   readonly property real cornerRadius: !card.roomy ? 0
     : Theme.space(card.mode === "expanded" ? 26 : card.mode === "peek" ? 16 : 12)
-  // The lip shown at rest, nothing active.
-  readonly property real restHeight: Theme.space(5)
-  // The concave flare into the bar, drawn outside the card's own width.
+  // The lip shown at rest, nothing active: its depth and length.
+  readonly property real restDepth: Theme.space(5)
+  readonly property real restLength: Theme.space(120)
+  // The concave flare into the edge, drawn outside the card at both ends.
   readonly property real shoulder: Theme.space(10)
 
-  readonly property real targetWidth: Math.min(card.maxWidth, (content.item ? (content.item as Item).implicitWidth : 0) + card.padX * 2)
-  readonly property real targetHeight: (content.item ? (content.item as Item).implicitHeight : 0) + card.padTop + card.padBottom
-  // Height of the closed notch while it shows a compact view, else 0. The
+  // The padding the card uses. Rest, compact and vertical peek views run
+  // along the edge, so on a side edge the padding turns with it. Other peek
+  // and expanded views stay wide on every edge, so on a side edge they keep
+  // their padding by screen axis: `padSide` left and right, `padFar` above
+  // and below.
+  readonly property bool turnedPadding: !card.vertical || card.mode === "rest" || card.mode === "compact"
+    || (card.mode === "peek" && card.verticalPeek)
+  readonly property real alongPad: card.turnedPadding ? card.padSide : card.padFar
+  readonly property real nearPad: card.turnedPadding ? card.padNear : card.padSide
+  readonly property real farPad: card.turnedPadding ? card.padFar : card.padSide
+
+  readonly property real contentWidth: content.item ? (content.item as Item).implicitWidth : 0
+  readonly property real contentHeight: content.item ? (content.item as Item).implicitHeight : 0
+  readonly property real targetAlong: Math.min(card.vertical ? card.maxHeight : card.maxWidth,
+    (card.vertical ? card.contentHeight : card.contentWidth) + card.alongPad * 2)
+  readonly property real targetDepth: Math.min(card.vertical ? card.maxWidth : card.maxHeight,
+    (card.vertical ? card.contentWidth : card.contentHeight) + card.nearPad + card.farPad)
+  // Depth of the closed notch while it shows a compact view, else 0. The
   // padding follows `mode` at once (the outline springs while the content
   // fades), so this adds the compact padding itself.
-  readonly property real compactHeight: !card.swapping && card.shownMode === "compact" && content.item
-    ? (content.item as Item).implicitHeight + card.compactPadTop + card.compactPadBottom : 0
+  readonly property real compactDepth: !card.swapping && card.shownMode === "compact"
+    && card.shownVertical === card.vertical && content.item
+    ? (card.vertical ? card.contentWidth : card.contentHeight) + card.compactPadNear + card.compactPadFar : 0
 
-  width: card.targetWidth
-  height: card.targetHeight
-  // The width springs past its target; the height settles without
+  // The length springs past its target; the depth settles without
   // overshoot so a shrinking notch never dips below zero.
-  Behavior on width { NumberAnimation { duration: 460; easing.type: Easing.OutBack; easing.overshoot: 1.1 } }
-  Behavior on height { NumberAnimation { duration: 380; easing.type: Easing.OutQuint } }
+  property real along: card.targetAlong
+  property real depth: card.targetDepth
+  Behavior on along { NumberAnimation { duration: 460; easing.type: Easing.OutBack; easing.overshoot: 1.1 } }
+  Behavior on depth { NumberAnimation { duration: 380; easing.type: Easing.OutQuint } }
+
+  width: card.vertical ? card.depth : card.along
+  height: card.vertical ? card.along : card.depth
 
   // ----------------------------------------------------------------- views
   Component {
     id: restView
     Item {
-      implicitWidth: Theme.space(120)
-      implicitHeight: card.restHeight
+      implicitWidth: card.vertical ? card.restDepth : card.restLength
+      implicitHeight: card.vertical ? card.restLength : card.restDepth
+    }
+  }
+
+  // Compact on a side edge for a module without a `verticalCompact`.
+  Component {
+    id: dotView
+    Item {
+      implicitWidth: Theme.space(6)
+      implicitHeight: Theme.space(24)
+      Rectangle {
+        anchors.centerIn: parent
+        width: Theme.space(6)
+        height: width
+        radius: width / 2
+        color: Theme.accent
+      }
     }
   }
 
@@ -169,15 +240,25 @@ Item {
   }
 
   // --------------------------------------------------------------- drawing
-  // One outline: concave shoulders flaring into the bar, rounded bottom.
+  // One outline, drawn for the top edge (x along, y depth): concave
+  // shoulders flaring into the edge, rounded far side. `transform` turns it
+  // onto the card's edge.
   Shape {
     id: outline
-    anchors.fill: parent
+    width: outline.w
+    height: outline.h
     preferredRendererType: Shape.CurveRenderer
-    readonly property real w: Math.max(0, card.width)
-    readonly property real h: Math.max(0, card.height)
+    readonly property real w: Math.max(0, card.along)
+    readonly property real h: Math.max(0, card.depth)
     readonly property real s: Math.min(card.shoulder, h / 2)
     readonly property real r: Math.min(Math.max(card.cornerRadius, card.roomy ? 0 : h / 2), h / 2, w / 2)
+    // (x, y) -> top: (x, y), bottom: (x, h - y), left: (y, x), right: (h - y, x).
+    transform: Matrix4x4 {
+      matrix: card.edge === "bottom" ? Qt.matrix4x4(1, 0, 0, 0,  0, -1, 0, outline.h,  0, 0, 1, 0,  0, 0, 0, 1)
+        : card.edge === "left" ? Qt.matrix4x4(0, 1, 0, 0,  1, 0, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1)
+        : card.edge === "right" ? Qt.matrix4x4(0, -1, 0, outline.h,  1, 0, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1)
+        : Qt.matrix4x4()
+    }
 
     ShapePath {
       fillColor: Theme.background
@@ -193,8 +274,8 @@ Item {
       PathLine { x: -card.shoulder; y: 0 }
     }
 
-    // Hairline on the sides and bottom only, so the notch reads against
-    // dark windows without drawing a seam where it meets the bar.
+    // Hairline on the open sides only, so the notch reads against dark
+    // windows without drawing a seam where it meets the edge.
     ShapePath {
       fillColor: "transparent"
       strokeColor: card.roomy ? Theme.line : "transparent"
@@ -211,20 +292,41 @@ Item {
   }
 
   // Click toggles pinned; controls inside the views take their own clicks.
+  // Held long enough (pressAndHold, cancelled by moving first), the press
+  // picks the notch up instead, and the release drops it rather than
+  // counting as a click.
   MouseArea {
+    id: pressArea
+    property bool dragging: false
     anchors.fill: parent
-    cursorShape: Qt.PointingHandCursor
-    onClicked: if (card.svc) card.svc.togglePinned("")
+    cursorShape: pressArea.dragging ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+    pressAndHoldInterval: card.holdToDrag
+    // Accepting it (the default) also stops the release from clicking; not
+    // draggable, a long press still pins.
+    onPressAndHold: function(mouse) {
+      if (!card.draggable) { mouse.accepted = false; return }
+      pressArea.dragging = true
+      card.dragStarted()
+    }
+    onPositionChanged: function(mouse) {
+      if (pressArea.dragging) card.dragMoved(pressArea.mapToItem(null, mouse.x, mouse.y))
+    }
+    onReleased: if (pressArea.dragging) { pressArea.dragging = false; card.dragEnded() }
+    onCanceled: if (pressArea.dragging) { pressArea.dragging = false; card.dragEnded() }
+    onClicked: if (card.svc && !pressArea.dragging) card.svc.togglePinned("")
   }
 
   Item {
     anchors.fill: parent
     clip: true
 
+    // Against the edge past `nearPad`, centered along it.
     Loader {
       id: content
-      anchors.horizontalCenter: parent.horizontalCenter
-      y: card.padTop
+      x: Math.round(card.edge === "left" ? card.nearPad
+        : card.edge === "right" ? card.width - card.nearPad - width : (card.width - width) / 2)
+      y: Math.round(card.edge === "top" ? card.nearPad
+        : card.edge === "bottom" ? card.height - card.nearPad - height : (card.height - height) / 2)
       sourceComponent: card.shownComponent
     }
   }

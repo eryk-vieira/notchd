@@ -32,8 +32,10 @@ function canPeek(module, s) {
   return true
 }
 
-// "peek" | "expanded" | "compact" | "rest".
+// "peek" | "expanded" | "compact" | "rest". Being dragged, the notch stays
+// closed: the pointer is on it, but it is moving it, not opening it.
 function mode(s) {
+  if (s.dragging) return s.compactModule ? "compact" : "rest"
   if (s.peekModule && !s.pinned) return "peek"
   if (s.pinned || s.hovered) return "expanded"
   if (s.compactModule) return "compact"

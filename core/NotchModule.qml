@@ -5,14 +5,19 @@ import QtQuick
 // NotchService.hostModules). List its id in the config's "modules" to load it.
 //
 // The notch shows, by state:
-//   rest      nothing active: a small lip at the top edge (hidden in bar style)
-//   compact   the highest-priority active module's `compact` view under the
-//             top edge, or its `barView` in the host's bar (compactStyle "bar")
-//   peek      a module's `peek` view, for a few seconds, after requestPeek()
+//   rest      nothing active: a small lip at its edge (hidden in bar style)
+//   compact   the highest-priority active module's `compact` view against
+//             its edge (`verticalCompact` on a side edge, else a dot), or its
+//             `barView` in the host's bar (compactStyle "bar")
+//   peek      a module's `peek` view (`verticalPeek` on a side edge, if it
+//             has one), for a few seconds, after requestPeek()
 //   expanded  on hover or click: the `expanded` view of every active module
 //
 // Views are Components so the notch can create them only while shown. They
-// can refer to the module's own properties by its id.
+// can refer to the module's own properties by its id. Views never rotate:
+// on a side edge the notch runs down the edge for `verticalCompact` and
+// `verticalPeek`, and grows sideways to hold the other views, which keep
+// their layout. `notch.edge` and `notch.vertical` say where it is.
 Item {
   id: module
   visible: false
@@ -37,7 +42,13 @@ Item {
   // Compact view sized for the bar strip (compactStyle "bar"); falls back to
   // `compact` when unset.
   property Component barView: null
+  // Compact view for a side edge (left/right): narrow and tall. Without one,
+  // the notch shows a dot there while the module is active.
+  property Component verticalCompact: null
   property Component peek: null
+  // Peek view for a side edge: narrow and tall, like a volume bar standing
+  // up. Without one, `peek` shows there, the notch growing sideways.
+  property Component verticalPeek: null
   property Component expanded: null
 
   function requestPeek(ms) {

@@ -133,3 +133,18 @@ function toggleWorkspace(picked, w) {
   else list.splice(at, 1)
   return list.length > 0 ? sortWorkspaces(list) : undefined
 }
+
+// A slider value: `v` snapped to `step` from `min` and kept within
+// [min, max], without float noise (0.35, not 0.35000000000000003).
+function snapToStep(v, min, max, step) {
+  step = Number(step) > 0 ? Number(step) : 1
+  var snapped = min + Math.round((v - min) / step) * step
+  var decimals = (String(step).split(".")[1] || "").length
+  return Math.max(min, Math.min(max, Number(snapped.toFixed(decimals))))
+}
+
+// What a control's edit writes: undefined (remove the key) when it equals
+// the field's default, so the config never stores defaults.
+function storedValue(field, value) {
+  return field && field["default"] !== undefined && value === field["default"] ? undefined : value
+}

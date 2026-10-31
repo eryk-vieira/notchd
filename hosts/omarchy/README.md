@@ -3,7 +3,7 @@
 notchd as an Omarchy shell plugin. The repository root is the plugin folder: `manifest.json` there points at the QML in this directory. It adds three things to the core:
 
 - **Bar indicator** (`BarIndicator.qml`): compact lives in the bar, right after the clock (`compactStyle: "bar"`, the default). Hovering it drops the notch on that monitor, and clicking pins it. It hides on monitors showing a workspace left out of `workspaces`.
-- **`osd` module** (`modules/osd.qml`): volume, brightness, mic and keyboard light. It owns the `osd` IPC target that every `omarchy osd` call uses, so the stock OSD must stay disabled: `omarchy plugin disable omarchy.osd`. Undo it with `omarchy plugin enable omarchy.osd`.
+- **`osd` module** (`modules/osd.qml`): volume, brightness, mic and keyboard light. With the notch on a side edge its bar stands up. It owns the `osd` IPC target that every `omarchy osd` call uses, so the stock OSD must stay disabled: `omarchy plugin disable omarchy.osd`. Undo it with `omarchy plugin enable omarchy.osd`.
 - **Omarchy's theme**: `Service.qml` maps `qs.Commons` `Color`/`Style` onto the core's `Theme`, so the notch follows theme switches and `[font] base-size`.
 
 ## Install

@@ -78,6 +78,67 @@ NotchModule {
     function ping(): string { return "ok" }
   }
 
+  // Side edge: the bar stands up, the value above it and the icon below.
+  verticalPeek: Component {
+    Column {
+      spacing: Theme.space(10)
+
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: osd.hasProgress
+        // Fixed width so it doesn't shift as the number changes.
+        width: Theme.space(38)
+        horizontalAlignment: Text.AlignHCenter
+        textFormat: Text.PlainText
+        text: osd.message
+        color: Theme.foreground
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.bodySmall
+      }
+
+      Item {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: osd.hasProgress
+        width: Theme.space(6)
+        height: Theme.space(140)
+        Rectangle {
+          anchors.fill: parent
+          radius: width / 2
+          color: Qt.rgba(Theme.foreground.r, Theme.foreground.g, Theme.foreground.b, 0.18)
+        }
+        Rectangle {
+          anchors.bottom: parent.bottom
+          width: parent.width
+          height: parent.height * osd.fraction
+          radius: width / 2
+          color: Theme.accent
+          Behavior on height { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+        }
+      }
+
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        textFormat: Text.PlainText
+        text: osd.icon
+        color: Theme.foreground
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.heading
+      }
+
+      // A message without a bar (mic muted, keyboard light...): beneath the
+      // icon, as is.
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: !osd.hasProgress && text !== ""
+        textFormat: Text.PlainText
+        text: osd.message
+        color: Theme.foreground
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.bodySmall
+      }
+    }
+  }
+
   peek: Component {
     Row {
       spacing: Theme.space(12)
