@@ -58,7 +58,7 @@ A hanging notch covers the windows under it. `reserveSpace: true` keeps windows 
 - Notches that share an edge reserve the deepest of them (`reserveSpace`), not the sum.
 - `id` names a notch for IPC (`openNotch jobs`); without one the first is `main` and the others `notch-2`, `notch-3`...
 
-In the settings window, pick the notch to set up at the top of the General and Modules pages; Add notch puts a new one on a free edge, and removing all but one puts its keys back at the top level.
+In the settings window, pick the notch to set up at the top of the Notches page, which has everything that notch has of its own (modules, compact style, position, workspaces); Add notch puts a new one on a free edge, and removing all but one puts its keys back at the top level.
 
 ## Config
 

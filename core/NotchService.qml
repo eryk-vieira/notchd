@@ -189,8 +189,8 @@ Item {
   //   id, label
   //   icon       Nerd Font code point (or glyph string)
   readonly property var corePages: [
+    { id: "notch", label: "Notches", icon: 0xF0A66 },       // nf-md-puzzle_outline
     { id: "general", label: "General", icon: 0xF0493 },     // nf-md-cog
-    { id: "modules", label: "Modules", icon: 0xF0A66 },     // nf-md-puzzle_outline
     { id: "appearance", label: "Appearance", icon: 0xF0E0C } // nf-md-palette_outline
   ]
   readonly property var settingsPages: Settings.mergePages(svc.corePages, svc.hostSettingsPages)
@@ -209,9 +209,10 @@ Item {
   //   display    "cards" shows a choice as picture cards instead of segments
   //   min, max, step, unit   for "integer"
   //
-  // A notch's own keys are those of the notch the window edits
-  // (settingsNotch): in a list, "notches.<index>.<key>", whose default is the
-  // top-level key it inherits.
+  // A notch's own keys sit on the "notch" page, under its picker, and are
+  // those of the notch the window edits (settingsNotch): in a list,
+  // "notches.<index>.<key>", whose default is the top-level key it inherits.
+  // "general" has what applies to every notch.
   readonly property var coreSettingsSchema: {
     var out = []
     var n = svc.settingsNotchObject
@@ -225,21 +226,26 @@ Item {
     var style = n ? n.compactStyle : "notch"
     var several = svc.notches.length > 1
 
-    out.push({ page: "general", section: "Notch", key: "notches", type: "notches", label: "Notches",
-               help: several ? "Pick the notch to set up here and on the Modules page. Each has its own modules and place."
+    out.push({ page: "notch", section: "Notch", key: "notches", type: "notches", label: "Notches",
+               help: several ? "Pick the notch to set up below. Each has its own modules and place."
                              : "Add a notch to show other modules somewhere else, each with its own place." })
     if (prefix !== "")
-      out.push({ page: "general", section: "Notch", key: key("id"), type: "string", label: "Name",
+      out.push({ page: "notch", section: "Notch", key: key("id"), type: "string", label: "Name",
                  default: Config.defaultNotchId(n.index),
                  help: "What IPC calls it: openNotch, closeNotch and toggleNotch take it." })
+    out.push({ page: "notch", section: "Modules", key: key("modules"), type: "modules", label: "Loaded modules",
+               default: inherited("modules", svc.defaultModules),
+               help: (several ? "What this notch shows. A module may show in several notches. Their order breaks ties in the expanded view."
+                              : "Switched-on modules load. Their order breaks ties in the expanded view.")
+                     + svc.systemNote })
     // The bar holds one notch's compact state; another notch can't pick it
     // until that one hangs.
     var barOwner = svc.barNotch
     if (svc.barStyleAvailable && barOwner && n && barOwner !== n) {
-      out.push({ page: "general", section: "Layout", type: "note", label: "Compact style: hanging",
+      out.push({ page: "notch", section: "Layout", type: "note", label: "Compact style: hanging",
                  help: "The bar holds the compact state of " + barOwner.notchId + ", so this notch hangs from its edge. Set " + barOwner.notchId + " to the hanging notch to give the bar to this one." })
     } else if (svc.barStyleAvailable) {
-      out.push({ page: "general", section: "Layout", key: key("compactStyle"), type: "choice", display: "cards",
+      out.push({ page: "notch", section: "Layout", key: key("compactStyle"), type: "choice", display: "cards",
                  label: "Compact style", default: inherited("compactStyle", Config.DEFAULTS.compactStyle),
                  help: several ? "Where an active module lives when the notch is closed. The bar holds one notch at a time."
                                : "Where an active module lives when the notch is closed.",
@@ -250,37 +256,37 @@ Item {
     }
     // Only a notch that hangs below the edge while closed has a strip to keep.
     if (style === "notch")
-      out.push({ page: "general", section: "Layout", key: key("reserveSpace"), type: "boolean",
+      out.push({ page: "notch", section: "Layout", key: key("reserveSpace"), type: "boolean",
                  label: "Keep windows clear", default: inherited("reserveSpace", Config.DEFAULTS.reserveSpace),
                  help: "Windows keep clear of the closed notch instead of going under it, along its whole edge: a sliver at rest, more while a module is active. Peeks and the open notch still cover them." })
     if (style === "notch") {
-      out.push({ page: "general", section: "Position", key: key("position.edge"), type: "choice", display: "cards",
+      out.push({ page: "notch", section: "Position", key: key("position.edge"), type: "choice", display: "cards",
                  label: "Edge", default: inherited("position.edge", "top"),
                  help: "The screen edge the notch hangs from. On a side edge, an active module without a vertical view shows a dot.",
                  options: ["top", "bottom", "left", "right"].map(function(e) {
                    return { value: e, label: e.charAt(0).toUpperCase() + e.slice(1),
                             preview: Qt.resolvedUrl("settings/previews/Edge.qml") }
                  }) })
-      out.push({ page: "general", section: "Position", key: key("position.offset"), type: "number", display: "percent",
+      out.push({ page: "notch", section: "Position", key: key("position.offset"), type: "number", display: "percent",
                  label: "Along the edge", default: inherited("position.offset", 0.5), min: 0, max: 1, step: 0.01,
                  help: "Where on the edge: 0 % is its left (or top) end, 50 % the middle." })
       var screens = svc.screens
       if (screens.length > 1)
-        out.push({ page: "general", section: "Position", key: key("position.screen"), type: "choice",
+        out.push({ page: "notch", section: "Position", key: key("position.screen"), type: "choice",
                    label: "Screen", default: inherited("position.screen", ""),
                    help: "Where the notch stays. Following focus, it moves to the screen you work on. On a screen of its own, it stays there, peeks included; on a screen without a notch that shows it, a peek appears at the top. On every screen, each screen has its own copy, and a peek shows on the focused one.",
                    options: [{ value: "", label: "Follow focus" }, { value: "all", label: "Every screen" }].concat(screens.map(function(s) {
                      return { value: s.name, label: s.name }
                    })) })
-      out.push({ page: "general", section: "Position", key: key("draggable"), type: "boolean",
+      out.push({ page: "notch", section: "Position", key: key("draggable"), type: "boolean",
                  label: "Drag to move", default: inherited("draggable", Config.DEFAULTS.draggable),
                  help: "Hold the notch for a moment, then drag it to any edge of the screen; it snaps to the nearest one, and to the middle when close to it. A quick click only pins it." })
     } else {
-      out.push({ page: "general", section: "Position", type: "note", label: "Follows the bar",
+      out.push({ page: "notch", section: "Position", type: "note", label: "Follows the bar",
                  help: "With the compact state in the bar, the notch drops out of the middle of the bar, on every screen. Pick the hanging notch to place it on any edge." })
     }
     if (svc.compositor && svc.compositor.supportsWorkspaces)
-      out.push({ page: "general", section: "Layout", key: key("workspaces"), type: "workspaces",
+      out.push({ page: "notch", section: "Layout", key: key("workspaces"), type: "workspaces",
                  label: "Workspaces", default: inherited("workspaces", undefined),
                  help: "Where the closed notch (or its bar indicator) shows; none picked means every workspace. Peeks and the open notch show on any." })
     out.push({ page: "general", section: "Hover", key: "hoverOpenDelay", type: "integer", label: "Open delay",
@@ -291,14 +297,6 @@ Item {
                help: several ? "How long it stays open after the pointer leaves. For every notch."
                              : "How long it stays open after the pointer leaves.",
                default: Config.DEFAULTS.hoverCloseDelay, min: 0, max: 2000, step: 10, unit: "ms" })
-    if (several)
-      out.push({ page: "modules", section: "Notch", key: "notches", type: "notches", label: "Notches",
-                 help: "Pick the notch whose modules to set." })
-    out.push({ page: "modules", section: several ? "Modules" : "", key: key("modules"), type: "modules", label: "Loaded modules",
-               default: inherited("modules", svc.defaultModules),
-               help: (several ? "What this notch shows. A module may show in several notches. Their order breaks ties in the expanded view."
-                              : "Switched-on modules load. Their order breaks ties in the expanded view.")
-                     + svc.systemNote })
     return out
   }
   readonly property var settingsSchema: svc.coreSettingsSchema.concat(svc.hostSettingsSchema || [])
@@ -315,14 +313,17 @@ Item {
 
   property bool settingsOpen: false
   // The page the window shows; kept here so it survives closing the window.
-  property string settingsPage: "general"
+  property string settingsPage: "notch"
   // The notch the window edits, by index.
   property int settingsNotch: 0
   readonly property var settingsNotchObject: svc.notches.length > 0
     ? svc.notches[Math.max(0, Math.min(svc.settingsNotch, svc.notches.length - 1))] : null
-  // `index`: the notch to edit, if given.
+  // `index`: the notch to edit, if given; the window then shows its page.
   function openSettings(index) {
-    if (typeof index === "number") svc.settingsNotch = index
+    if (typeof index === "number") {
+      svc.settingsNotch = index
+      svc.settingsPage = "notch"
+    }
     svc.settingsOpen = true
   }
   function closeSettings() { svc.settingsOpen = false }

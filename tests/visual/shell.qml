@@ -38,18 +38,19 @@ ShellRoot {
   // to scroll the page to its end. Or, with `edge`, the notch on
   // that edge instead of the settings window.
   readonly property var scenarios: [
+    { name: "notch-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields },
+    { name: "notch-light", page: "notch", theme: root.light, bar: true, fields: root.omarchyFields },
+    { name: "notch-end-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields, scrollTo: "end" },
     { name: "general-dark", page: "general", theme: root.dark, bar: true, fields: root.omarchyFields },
-    { name: "general-light", page: "general", theme: root.light, bar: true, fields: root.omarchyFields },
-    { name: "modules-dark", page: "modules", theme: root.dark, bar: true, fields: root.omarchyFields },
     { name: "appearance-omarchy-dark", page: "appearance", theme: root.dark, bar: true, fields: root.omarchyFields },
-    { name: "general-notch-dark", page: "general", theme: root.dark, bar: true, fields: root.omarchyFields,
+    { name: "notch-hanging-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { compactStyle: "notch", position: { edge: "left", offset: 0.3 } }, scrollTo: "end" },
-    { name: "general-notches-dark", page: "general", theme: root.dark, bar: true, fields: root.omarchyFields,
+    { name: "notches-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { notches: [{}, { id: "jobs", modules: ["activities"], position: { edge: "bottom", screen: "all" } }] },
       notch: 1 },
-    { name: "modules-notches-light", page: "modules", theme: root.light, bar: true, fields: root.omarchyFields,
+    { name: "notches-end-light", page: "notch", theme: root.light, bar: true, fields: root.omarchyFields,
       config: { notches: [{}, { id: "jobs", modules: ["activities"], position: { edge: "bottom" } }] },
-      notch: 1 },
+      notch: 1, scrollTo: "end" },
     { name: "general-standalone-dark", page: "general", theme: root.dark, bar: false, fields: root.standaloneFields },
     { name: "appearance-standalone-light", page: "appearance", theme: root.light, bar: false, fields: root.standaloneFields },
     { name: "edge-top", edge: "top", theme: root.dark },
@@ -78,7 +79,7 @@ ShellRoot {
     configPath: root.outDir + "/config.json"
     barStyleAvailable: root.scenario ? !!root.scenario.bar : false
     hostSettingsSchema: root.scenario && root.scenario.fields ? root.scenario.fields : []
-    settingsPage: root.scenario && root.scenario.page ? root.scenario.page : "general"
+    settingsPage: root.scenario && root.scenario.page ? root.scenario.page : "notch"
   }
 
   SettingsWindow { id: win; svc: svc }

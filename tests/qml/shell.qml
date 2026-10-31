@@ -82,7 +82,8 @@ ShellRoot {
       { name: "only the first notch asking for the bar gets it", run: root.oneBarNotch },
       { name: "a notch kept on a screen stays there and a peek also shows where you work", run: root.peekBesideHomedNotch },
       { name: "an OSD peek shows once, on the focused screen only", run: root.osdPeekOnFocusedScreen },
-      { name: "a system module no notch lists loads and always peeks, never over a notch", run: root.systemModuleAlwaysShows }
+      { name: "a system module no notch lists loads and always peeks, never over a notch", run: root.systemModuleAlwaysShows },
+      { name: "a notch's settings all sit on one page, under its picker", run: root.notchSettingsOnOnePage }
     ]
     Qt.callLater(root.next)
   }
@@ -748,5 +749,31 @@ ShellRoot {
         multi.systemModules = []
       }]
     ], function() { root.done() })
+  }
+
+  // A notch's keys were split between General and Modules, each with its own
+  // picker. Every field for the picked notch's keys sits on the "notch" page,
+  // under a single picker; the other pages only have keys for every notch.
+  function notchSettingsOnOnePage() {
+    multi.replaceConfig({ notches: [{ modules: ["activities"] }, { id: "side", position: { edge: "bottom" } }] })
+    multi.settingsNotch = 1
+    var schema = multi.settingsSchema
+    var pickers = schema.filter(function(f) { return f.type === "notches" })
+    root.check(pickers.length === 1 && pickers[0].page === "notch", "pickers: " + JSON.stringify(pickers.map(function(f) { return f.page })))
+    var notchPage = schema.filter(function(f) { return f.page === "notch" })
+    root.check(notchPage.length > 0 && notchPage[0].type === "notches", "the picker is not first on the notch page")
+    schema.forEach(function(f) {
+      var own = !!f.key && f.key.indexOf("notches.") === 0
+      if (own) root.check(f.page === "notch", f.key + " is on " + f.page)
+      else if (f.key && f.key !== "notches") root.check(f.page !== "notch", f.key + " applies to every notch but is on the notch page")
+    })
+    root.check(schema.some(function(f) { return f.key === "notches.1.modules" }), "the notch's modules are missing")
+    multi.settingsPage = "general"
+    multi.openSettings(0)
+    root.check(multi.settingsPage === "notch", "the gear opened " + multi.settingsPage)
+    multi.closeSettings()
+    multi.settingsNotch = 0
+    multi.replaceConfig({})
+    root.done()
   }
 }

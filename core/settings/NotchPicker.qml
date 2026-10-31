@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import ".."
 
 // `notches` field: a chip per notch, the one the window edits raised;
-// picking another shows its keys on the General and Modules pages. Add makes
+// picking another shows its keys below it, on the Notches page. Add makes
 // a new notch (NotchService.addNotch) and picks it; Remove takes the picked
 // one out, and with one left the config goes back to its top-level keys.
 // The list is edited through the service rather than `edited(value)`: a new
