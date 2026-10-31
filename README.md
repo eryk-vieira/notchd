@@ -140,4 +140,4 @@ The CLI depends on the host: `omarchy-shell eryk.notchd ...` on Omarchy, `qs -p 
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The Omarchy host's `osd` module adapts code from Omarchy, which is also MIT; the notice is in the same file.
+MIT, see [LICENSE](LICENSE). The Omarchy host's `osd` module adapts code from Omarchy, which is also MIT; see [NOTICE](NOTICE).
