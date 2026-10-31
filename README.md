@@ -137,3 +137,7 @@ state            mode, current peek, modules
 For an array, put a space before the bracket: `set modules ' ["media","activities"]'`. Quickshell's CLI reads an argument that starts with `[` as a comma-separated list.
 
 The CLI depends on the host: `omarchy-shell eryk.notchd ...` on Omarchy, `qs -p hosts/standalone ipc call notchd ...` standalone.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The Omarchy host's `osd` module adapts code from Omarchy, which is also MIT; the notice is in the same file.
