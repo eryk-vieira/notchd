@@ -66,7 +66,8 @@ Item {
   readonly property var builtinModules: ({
     media: Qt.resolvedUrl("modules/media.qml"),
     activities: Qt.resolvedUrl("modules/activities.qml"),
-    resources: Qt.resolvedUrl("modules/resources.qml")
+    resources: Qt.resolvedUrl("modules/resources.qml"),
+    timer: Qt.resolvedUrl("modules/timer.qml")
   })
 
   function moduleUrl(id) {
@@ -542,6 +543,12 @@ Item {
     function clear(id: string): string {
       var m = svc.moduleById("activities")
       return m ? m.clear(id) : "activities module not loaded"
+    }
+    // The timer module: "25m", "3m Tea", "pomodoro", "toggle", "+5m",
+    // "skip", "stop"; see modules/timer.qml.
+    function timer(command: string): string {
+      var m = svc.moduleById("timer")
+      return m ? m.command(command) : "timer module not loaded"
     }
     function state(): string {
       return JSON.stringify({

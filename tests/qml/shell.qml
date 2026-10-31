@@ -85,7 +85,9 @@ ShellRoot {
       { name: "a system module no notch lists loads and always peeks, never over a notch", run: root.systemModuleAlwaysShows },
       { name: "a notch's settings all sit on one page, under its picker", run: root.notchSettingsOnOnePage },
       { name: "resources read the system", run: root.resourcesRead },
-      { name: "resources show closed by default, or only once one runs short", run: root.resourcesCompactWhenShort }
+      { name: "resources show closed by default, or only once one runs short", run: root.resourcesCompactWhenShort },
+      { name: "a timer counts down closed, peeks when it ends and goes back to rest", run: root.timerRunsAndEnds },
+      { name: "timer commands: pomodoro phases, pause, errors and its settings", run: root.timerCommands }
     ]
     Qt.callLater(root.next)
   }
@@ -830,6 +832,58 @@ ShellRoot {
     root.check(notch.compactModule === null, "one CPU burst counted as short")
     resourced.replaceConfig({})
     m.sampling = true
+    root.done()
+  }
+
+  NotchService {
+    id: timed
+    ipcTarget: "notchd-qmltest-timer"
+    configPath: root.dir + "/timer.json"
+    compositor: twoScreens
+    defaultModules: ["timer"]
+  }
+
+  // Idle, the notch rests and the timer only offers its quick starts when
+  // open. Started, it takes the compact slot with the time left; at the end
+  // it peeks (urgent, so even over the open notch) and says so until stopped.
+  function timerRunsAndEnds() {
+    var m = timed.moduleById("timer")
+    var notch = timed.notches[0]
+    timed.replaceConfig({ timer: { notify: false } })
+    root.check(!!m && m.active && notch.compactModule === null, "idle timer is in the closed notch")
+    root.check(m.command("2s Tea") === "ok", "start refused")
+    root.check(notch.compactModule === m && m.status === "running", "running timer not in the closed notch")
+    root.check(m.clock === "0:02", "clock: " + m.clock)
+    timed.dismissPeek(null)
+    root.steps([[2600, function() {
+      root.check(m.status === "done", "not done after its time: " + m.status)
+      root.check(timed.peeking(m), "no peek at the end")
+      root.check(notch.compactModule === m && m.doneText === "Time's up", "done text: " + m.doneText)
+      timed.dismissPeek(null)
+      root.check(m.command("stop") === "ok", "stop refused")
+      root.check(notch.compactModule === null, "stopped timer still in the closed notch")
+    }]], function() { timed.replaceConfig({}); root.done() })
+  }
+
+  function timerCommands() {
+    var m = timed.moduleById("timer")
+    timed.replaceConfig({ timer: { notify: false, focus: 50 } })
+    root.check(m.command("pause") === "no timer running", "pause while idle: " + m.command("pause"))
+    root.check(m.command("soon").indexOf("usage") === 0, "a bad command was accepted")
+    m.command("pomodoro")
+    root.check(m.countdown.phase === "focus" && m.countdown.duration === 50 * 60000, "focus setting ignored: " + JSON.stringify(m.countdown))
+    m.command("toggle")
+    root.check(m.status === "paused", "toggle did not pause")
+    var left = m.remaining
+    m.command("+5m")
+    root.check(m.remaining === left + 5 * 60000, "added time lost while paused")
+    m.command("skip")
+    root.check(m.countdown.phase === "short" && m.status === "running", "skip: " + JSON.stringify(m.countdown))
+    var keys = timed.settingsSchema.filter(function(f) { return f.section === "Timer" }).map(function(f) { return f.key })
+    root.check(keys.indexOf("timer.focus") !== -1 && keys.indexOf("timer.notify") !== -1, "settings: " + keys)
+    m.command("stop")
+    timed.dismissPeek(null)
+    timed.replaceConfig({})
     root.done()
   }
 }

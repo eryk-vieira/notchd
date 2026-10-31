@@ -31,9 +31,10 @@ core/                 the framework: no desktop-specific code
   State.js            mode, peek and screen rules (pure JS)
   Position.js         edge and offset: where the notch sits (pure JS)
   Resources.js        /proc and df parsing, when a resource runs short (pure JS)
+  Countdown.js        timer and pomodoro: durations, commands, the countdown (pure JS)
   ReservedSpace.qml   how much of its edge windows leave to the closed notch
   *Compositor.qml     compositor adapters (Hyprland, generic)
-  modules/            built-in modules: media, activities, resources
+  modules/            built-in modules: media, activities, resources, timer
   settings/           the settings window, its controls and Settings.js
 hosts/
   omarchy/            Omarchy shell plugin entry points and the osd module

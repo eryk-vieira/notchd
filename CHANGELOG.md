@@ -6,6 +6,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
+- `timer` module: a countdown or a pomodoro, started from the expanded notch or with `timer 25m`, `timer pomodoro`, `timer toggle`, `timer +5m`, `timer stop` over IPC. The closed notch shows the time left; at the end it peeks, even over the open notch, and sends a desktop notification. Its lengths, rounds, auto-start and notification are in settings (General › Timer). Not loaded by default.
 - `resources` module: CPU, memory and the disk holding `/`, each with a bar and how much is used in the expanded notch, and their percentages in the closed notch. One that runs short (90 % or more; the CPU for about 10 s in a row, so a burst doesn't count) turns red and peeks once. `resources.compact: "short"` (settings: General › Resources › Closed notch) keeps them out of the closed notch until one runs short. Not loaded by default.
 - Modules can have settings of their own (`NotchModule.settings`, read with `setting(key)`): stored under the module's id, shown on the General page under its title while it is loaded.
 - Notches never sit on each other: on the same edge of a monitor they go side by side, each as near its `offset` as the others let it, and make room when one grows. An open notch grows over its neighbors, which hide until it closes.

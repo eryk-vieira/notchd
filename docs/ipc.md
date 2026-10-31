@@ -14,6 +14,7 @@ Every host exposes the same methods on its `ipcTarget`. The CLI depends on the h
 | `open`, `toggle` | pin the first notch open on the focused monitor, or flip it |
 | `close` | close every notch |
 | `openNotch <id>`, `closeNotch <id>`, `toggleNotch <id>` | the same for one notch, by its `id` (`main`, `notch-2`...) |
+| `timer <command>` | the `timer` module: start, pause or stop a countdown or a pomodoro (below) |
 | `settings` | open or close the settings window |
 | `recenter` | put every notch back in the middle of the top edge, following focus (removes each `position`) |
 | `set <key> <json>` | change one config key, as the settings window does; an empty value resets it |
@@ -50,3 +51,26 @@ omarchy-shell eryk.notchd clear deploy
 | `sticky` | keep the item in compact/expanded until it is cleared; without it, the item only peeks |
 | `peek` | `false` updates without popping open |
 | `duration` | peek length in ms |
+
+## Timer
+
+The `timer` module takes one argument, quoted when it has spaces:
+
+| Command | |
+|---|---|
+| `25m`, `90s`, `1h30m`, `1:30`, `25` (minutes) | start a countdown |
+| `"3m Tea"` | with a label |
+| `pomodoro` | start a pomodoro (lengths and rounds in settings: General › Timer) |
+| `toggle` (or nothing) | pause or resume; a pomodoro waiting for its next phase starts it |
+| `pause`, `resume` | |
+| `+5m` | add time |
+| `skip` | a pomodoro's next phase; a countdown stops |
+| `stop` | |
+
+```sh
+omarchy-shell eryk.notchd timer "3m Tea"
+omarchy-shell eryk.notchd timer pomodoro
+omarchy-shell eryk.notchd timer toggle
+```
+
+It answers `ok`, `no timer running`, the usage, or `timer module not loaded` when no notch lists `timer`.

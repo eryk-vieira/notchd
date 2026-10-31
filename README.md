@@ -2,7 +2,7 @@
 
 ![notchd in its four states: compact, peek, OSD and expanded](docs/images/hero.webp)
 
-A dynamic notch for Wayland desktops, built with Quickshell. It hangs from an edge of the focused screen (the top by default) and shows modules: media, OSD, script activities, system resources, or anything you write. You can have several notches, each with its own modules and place, and one on every monitor.
+A dynamic notch for Wayland desktops, built with Quickshell. It hangs from an edge of the focused screen (the top by default) and shows modules: media, OSD, script activities, system resources, a timer, or anything you write. You can have several notches, each with its own modules and place, and one on every monitor.
 
 It is a **notch framework, not a shell**. Modules show what the system is already doing; they never take over a system service. The notch is not a notification daemon, a launcher or a lock screen, so it sits on top of whatever desktop you already have.
 
@@ -44,6 +44,7 @@ A hanging notch covers the windows under it. `reserveSpace: true` keeps windows 
 | `media` | what's playing over MPRIS: artwork, title, progress and controls; peeks on a new track |
 | `activities` | whatever scripts push over IPC: a deploy, a build, a download (see [docs/ipc.md](docs/ipc.md#activities)) |
 | `resources` | CPU, memory and the disk holding `/`: a bar each, expanded, and their percentages in the closed notch. One that runs short (90 % or more; the CPU for about 10 s in a row) turns red and peeks once. `"resources": { "compact": "short" }` (settings: General › Resources › Closed notch) keeps them out of the closed notch until one runs short. Linux only. Not loaded by default: add it to `modules` |
+| `timer` | a countdown or a pomodoro, started from the expanded notch (5, 15, 25 min, Pomodoro) or with `timer 25m` over [IPC](docs/ipc.md#timer). The closed notch shows the time left; at the end it peeks, even over the open notch, and sends a desktop notification. A pomodoro runs its focus rounds and short breaks, then a long break, and stops. Settings: General › Timer (lengths, rounds, starting each phase on its own, the notification). Not loaded by default |
 | `osd` | volume and brightness, Omarchy host only (see [hosts/omarchy](hosts/omarchy/README.md)) |
 
 To write your own, see [docs/modules.md](docs/modules.md).

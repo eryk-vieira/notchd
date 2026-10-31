@@ -102,7 +102,12 @@ ShellRoot {
   DemoService { id: openSvc; tag: "open"; defaultModules: ["media", "activities"] }
   DemoService { id: resourcesSvc; tag: "resources"; defaultModules: ["resources"] }
   DemoService { id: resourcesOpenSvc; tag: "resources-open"; defaultModules: ["resources"] }
-  readonly property var demoServices: [mediaSvc, activitySvc, osdSvc, openSvc, resourcesSvc, resourcesOpenSvc]
+  DemoService { id: timerSvc; tag: "timer"; defaultModules: ["timer"] }
+  DemoService { id: pomodoroSvc; tag: "pomodoro"; defaultModules: ["timer"] }
+  DemoService { id: timerIdleSvc; tag: "timer-idle"; defaultModules: ["timer"] }
+  DemoService { id: timerDoneSvc; tag: "timer-done"; defaultModules: ["timer"] }
+  readonly property var demoServices: [mediaSvc, activitySvc, osdSvc, openSvc, resourcesSvc, resourcesOpenSvc,
+                                       timerSvc, pomodoroSvc, timerIdleSvc, timerDoneSvc]
 
   // Demo values instead of this machine's: memory short, the rest fine.
   function demoResources(m) {
@@ -130,6 +135,14 @@ ShellRoot {
       root.demoResources(resourcesSvc.moduleById("resources"))
       root.demoResources(resourcesOpenSvc.moduleById("resources"))
       resourcesOpenSvc.open()
+      timerSvc.moduleById("timer").run({ action: "start", ms: 18 * 60000 + 42000, label: "Tea" })
+      pomodoroSvc.moduleById("timer").countdown = { status: "running", kind: "pomodoro", phase: "focus", round: 2, rounds: 4,
+                                                    label: "Focus", duration: 25 * 60000, endsAt: Date.now() + 18 * 60000 + 56000 }
+      pomodoroSvc.open()
+      timerIdleSvc.open()
+      var done = timerDoneSvc.moduleById("timer")
+      done.countdown = { status: "done", kind: "timer", label: "Tea", duration: 3 * 60000 }
+      done.requestPeek(600000)
     }
   }
 
@@ -188,6 +201,10 @@ ShellRoot {
       MockScreen { svc: openSvc; caption: "expanded" }
       MockScreen { svc: resourcesSvc; caption: "resources, compact (memory short)" }
       MockScreen { svc: resourcesOpenSvc; caption: "resources, expanded" }
+      MockScreen { svc: timerSvc; caption: "timer, compact" }
+      MockScreen { svc: pomodoroSvc; caption: "timer, expanded (pomodoro)" }
+      MockScreen { svc: timerIdleSvc; caption: "timer, expanded (idle)" }
+      MockScreen { svc: timerDoneSvc; caption: "timer, peek (time's up)" }
     }
   }
 
