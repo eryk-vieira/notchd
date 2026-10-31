@@ -1,6 +1,6 @@
 # notchd
 
-![notchd in its four states: compact, peek, OSD and expanded](docs/images/hero.png)
+![notchd in its four states: compact, peek, OSD and expanded](docs/images/hero.webp)
 
 A dynamic notch for Wayland desktops, built with Quickshell. It hangs from the top edge of the focused screen and shows modules: media, OSD, script activities, or anything you write.
 

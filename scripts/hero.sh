@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
-# Renders the README image (docs/images/hero.png, or $1) from
+# Renders the README image (docs/images/hero.webp, or $1) from
 # tests/visual/hero.qml: the real notch in four states, offscreen, on a
 # private D-Bus where the only media player is tests/visual/demo-player.py.
+#
+# The tiles show WALLPAPER, by default Omarchy's Gruvbox "The Backwater"
+# (the wallpaper is not in the repo; only the rendered image is). Without
+# it they fall back to a gradient.
 # Needs quickshell, ImageMagick, python-dbus, python-gobject and
 # JetBrainsMono Nerd Font.
 set -euo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-out=${1:-"$root/docs/images/hero.png"}
+out=${1:-"$root/docs/images/hero.webp"}
+wallpaper=${WALLPAPER:-"${OMARCHY_PATH:-/usr/share/omarchy}/themes/gruvbox/backgrounds/1-the-backwater.jpg"}
+if [[ ! -r $wallpaper ]]; then
+  echo "wallpaper not found ($wallpaper); using a gradient. Set WALLPAPER=<image>." >&2
+  wallpaper=""
+fi
+export NOTCHD_HERO_WALLPAPER=$wallpaper
 
 for tool in quickshell magick dbus-run-session python3; do
   command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }
@@ -50,6 +60,7 @@ fi
 [[ -s "$scratch/out/hero.png" ]] || { echo "no image; log:" >&2; cat "$scratch/log" >&2; exit 1; }
 
 mkdir -p -- "$(dirname -- "$out")"
-# Strip metadata and compress; the image is committed.
-magick "$scratch/out/hero.png" -strip -define png:compression-level=9 "$out"
+# WebP: the painted wallpaper makes a PNG weigh ~1.7 MB; at quality 90 this
+# is ~400 KB with text as crisp. The image is committed.
+magick "$scratch/out/hero.png" -strip -quality 90 "$out"
 echo "hero image: $out"

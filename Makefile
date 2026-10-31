@@ -25,9 +25,10 @@ test:
 visual:
 	scripts/visual-test.sh
 
-# The README image, docs/images/hero.png: the real notch offscreen, with a
-# demo media player on a private D-Bus. Rerun after a visual change to the
-# notch and commit the image.
+# The README image, docs/images/hero.webp: the real notch offscreen, with a
+# demo media player on a private D-Bus, over Omarchy's Gruvbox wallpaper
+# (WALLPAPER=<image> for another). Rerun after a visual change to the notch
+# and commit the image.
 hero:
 	scripts/hero.sh
 

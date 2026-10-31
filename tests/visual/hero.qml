@@ -1,21 +1,26 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Shapes
 import Quickshell
 import "core"
 
-// The README image (docs/images/hero.png): the real NotchCard in four
+// The README image (docs/images/hero.webp): the real NotchCard in four
 // states, each driven by its own NotchService with demo data, over a mock
-// desktop. scripts/hero.sh runs it offscreen on a private D-Bus with
-// demo-player.py, so the media module shows a fictional track.
+// desktop in Omarchy's Gruvbox theme. scripts/hero.sh runs it offscreen on a
+// private D-Bus with demo-player.py, so the media module shows a fictional
+// track, and passes the wallpaper (a gradient stands in without one).
 ShellRoot {
   id: root
 
   readonly property string outDir: Quickshell.env("NOTCHD_VISUAL_DIR")
   readonly property string outFile: Quickshell.env("NOTCHD_HERO_FILE") || (root.outDir + "/hero.png")
+  readonly property string wallpaper: Quickshell.env("NOTCHD_HERO_WALLPAPER")
+  readonly property color sceneColor: "#1e1e1e"
 
-  // Rendered at 2x so it stays sharp on high-density screens.
+  // Omarchy's Gruvbox colors, rendered at 2x so the image stays sharp on
+  // high-density screens.
   readonly property var palette: ({
-    foreground: "#c8cbd4", background: "#121318", accent: "#8fbfa8",
+    foreground: "#d4be98", background: "#282828", accent: "#7daea3", danger: "#ea6962",
     fontFamily: "JetBrainsMono Nerd Font", spacingScale: 2,
     fontCaption: 20, fontBodySmall: 22, fontBody: 24, fontHeading: 32, fontDisplay: 64
   })
@@ -41,20 +46,26 @@ ShellRoot {
     property var svc: null
     readonly property int barHeight: Theme.space(26)
 
-    radius: Theme.space(14)
+    readonly property real cornerRadius: Theme.space(14)
+
     clip: true
-    border.width: 1
-    border.color: Theme.line
     gradient: Gradient {
-      GradientStop { position: 0.0; color: "#2a2f45" }
-      GradientStop { position: 0.55; color: "#3d3354" }
-      GradientStop { position: 1.0; color: "#6b4a5e" }
+      GradientStop { position: 0.0; color: "#3c3836" }
+      GradientStop { position: 1.0; color: "#504945" }
     }
-    // A soft glow, so the wallpaper isn't flat.
-    Rectangle {
-      width: screen.width * 0.9; height: width; radius: width / 2
-      x: screen.width * 0.45; y: screen.height * 0.25
-      color: Theme.alpha("#e8a26b", 0.16)
+    // The wallpaper at the tile's width, pinned to the top, so each tile
+    // reads as the top of a screen.
+    Image {
+      id: wallpaper
+      visible: root.wallpaper !== ""
+      anchors.top: parent.top
+      anchors.horizontalCenter: parent.horizontalCenter
+      width: screen.width
+      height: implicitWidth > 0 ? Math.max(screen.height, screen.width * implicitHeight / implicitWidth) : screen.height
+      source: root.wallpaper !== "" ? "file://" + root.wallpaper : ""
+      sourceSize.width: 2400
+      fillMode: Image.PreserveAspectCrop
+      verticalAlignment: Image.AlignTop
     }
 
     Rectangle {
@@ -103,6 +114,35 @@ ShellRoot {
       x: Math.round((screen.width - width) / 2)
       y: screen.barHeight
     }
+
+    // Rounded corners. The software renderer can't round-clip an image, so
+    // each corner is painted over in the scene color, then outlined.
+    Repeater {
+      model: 4
+      Shape {
+        required property int index
+        readonly property real r: screen.cornerRadius
+        width: r; height: r
+        x: index % 2 === 0 ? 0 : screen.width - r
+        y: index < 2 ? 0 : screen.height - r
+        rotation: [0, 90, 270, 180][index]
+        ShapePath {
+          fillColor: root.sceneColor
+          strokeColor: "transparent"
+          startX: 0; startY: 0
+          PathLine { x: screen.cornerRadius; y: 0 }
+          PathArc { x: 0; y: screen.cornerRadius; radiusX: screen.cornerRadius; radiusY: screen.cornerRadius; direction: PathArc.Counterclockwise }
+          PathLine { x: 0; y: 0 }
+        }
+      }
+    }
+    Rectangle {
+      anchors.fill: parent
+      radius: screen.cornerRadius
+      color: "transparent"
+      border.width: 1
+      border.color: Theme.line
+    }
   }
 
   component Caption: ColumnLayout {
@@ -138,7 +178,7 @@ ShellRoot {
       readonly property int gap: Theme.space(20)
       width: Theme.space(1000)
       height: column.implicitHeight + pad * 2
-      color: "#0d0e12"
+      color: root.sceneColor
 
       ColumnLayout {
         id: column
