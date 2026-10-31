@@ -95,8 +95,11 @@ NotchModule {
   }
   Process { id: notifier }
 
+  // Wakes as the shown second turns (Countdown.untilChange), about once a
+  // second: a fixed 250 ms redrew the notch four times for each change.
+  // `check` moves `now`, which sets the next interval.
   Timer {
-    interval: 250
+    interval: Countdown.untilChange(t.countdown, t.now)
     repeat: true
     running: t.status === "running"
     onTriggered: t.check()

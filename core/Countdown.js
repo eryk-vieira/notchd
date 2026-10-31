@@ -113,6 +113,17 @@ function remaining(s, now) {
   return 0
 }
 
+// Milliseconds until the clock `format` shows changes (5 ms past it, so the
+// rounded-up second has turned), which also lands on the end; 1 once the
+// time is up. Not running, nothing changes: 1000. The module wakes only
+// then: every wake-up redraws the notch.
+function untilChange(s, now) {
+  if (!s || s.status !== "running") return 1000
+  var left = s.endsAt - now
+  if (left <= 0) return 1
+  return (left % 1000 || 1000) + 5
+}
+
 // How far along, 0 to 1.
 function progress(s, now) {
   if (!s || !s.duration) return 0

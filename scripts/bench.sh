@@ -2,7 +2,7 @@
 # Measures what notchd costs: CPU, wakeups and memory of the standalone host
 # on your real Wayland session, scenario by scenario (idle, a timer running,
 # music playing; closed and open), next to an empty Quickshell as the floor.
-# A second notch shows on your screen while it runs (about two minutes).
+# A second notch shows on your screen while it runs (about three minutes).
 #
 #   scripts/bench.sh [out]     # out: build/bench.md by default
 #   BENCH_SECONDS=20 scripts/bench.sh
@@ -66,7 +66,9 @@ if [[ ${1:-} == --inner ]]; then
   for step in "$@"; do
     case $step in
       "sample "*) sample "$qs_pid" "${step#sample }" ;;
-      *) read -ra call <<< "$step"; qs -p "$dir" ipc call notchd "${call[@]}" >/dev/null; sleep 2 ;;
+      # Long enough for a peek a command shows (a timer's start: 2.5 s) to
+      # end and the notch to settle, so the sample sees the steady state.
+      *) read -ra call <<< "$step"; qs -p "$dir" ipc call notchd "${call[@]}" >/dev/null; sleep 4 ;;
     esac
   done
   kill "$qs_pid" 2>/dev/null || true

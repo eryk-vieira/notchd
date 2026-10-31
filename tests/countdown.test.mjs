@@ -105,3 +105,20 @@ test('pomodoroConfig fills in the defaults', () => {
   assert.equal(C.pomodoroConfig({ focus: 50, rounds: 0 }).focus, 50 * MIN);
   assert.equal(C.pomodoroConfig({ rounds: 0 }).rounds, 4);
 });
+
+// The module wakes when the clock it shows changes, not four times a
+// second: each wake-up redraws the notch's window.
+test('untilChange: the time until the shown second changes, and the end itself', () => {
+  const now = 1000000;
+  const s = C.start(now, 2500, '');
+  assert.equal(C.format(C.remaining(s, now)), '0:03');
+  assert.equal(C.untilChange(s, now), 505);
+  assert.equal(C.format(C.remaining(s, now + 505)), '0:02');
+  assert.equal(C.untilChange(s, now + 505), 1000);
+  assert.equal(C.untilChange(s, now + 1505), 1000);
+  assert.ok(now + 1505 + 1000 >= s.endsAt, 'the last wake-up is at or past the end');
+  assert.equal(C.untilChange(C.start(now, 2 * MIN, ''), now), 1005);
+  assert.equal(C.untilChange(s, s.endsAt + 50), 1, 'past the end it wakes at once');
+  assert.equal(C.untilChange(C.pause(s, now), now), 1000);
+  assert.equal(C.untilChange(C.IDLE, now), 1000);
+});
