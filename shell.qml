@@ -25,6 +25,7 @@ ShellRoot {
     ipcTarget: "notchd"
     logName: "notchd"
     configPath: Quickshell.env("NOTCHD_CONFIG") || service.defaultConfigPath
+    compositor: compositorLoader.item
     hostSettingsSchema: [
       { page: "general", section: "Layout", key: "topOffset", type: "integer", label: "Top offset",
         default: 0, min: 0, max: 120, step: 1, unit: "px",
@@ -58,7 +59,6 @@ ShellRoot {
 
   NotchSurface {
     svc: service
-    compositor: compositorLoader.item
     barHeight: Math.max(0, Number(shell.config.topOffset) || 0)
   }
 }

@@ -37,8 +37,12 @@ function valueAt(cfg, key) {
 
 // A copy of cfg with one key set. `undefined` removes the key, and objects
 // it leaves empty go too, so the file never keeps `"theme": {}` around.
+// The value is copied as plain JSON: a list that went through a QML `var`
+// signal or property is a sequence, which Array.isArray (and so resolve)
+// would not take for a list.
 function withValue(cfg, key, value) {
   var out = JSON.parse(JSON.stringify(cfg || {}))
+  if (value !== undefined) value = JSON.parse(JSON.stringify(value))
   var parts = String(key).split(".")
   var chain = [out]
   var node = out
@@ -63,6 +67,16 @@ function delay(value, fallback) {
   return Math.max(0, Number(value) || 0)
 }
 
+// The workspaces the notch hangs on: ids or names, or null for every one
+// (also for an empty list).
+function workspaceList(value) {
+  if (!Array.isArray(value)) return null
+  var out = value.filter(function(w) {
+    return (typeof w === "number" && isFinite(w)) || (typeof w === "string" && w !== "")
+  })
+  return out.length > 0 ? out : null
+}
+
 // The core keys as the service uses them. A missing key falls back to its
 // default, so deleting it (by hand or in the settings window) resets it.
 function resolve(cfg, defaultModules) {
@@ -72,6 +86,7 @@ function resolve(cfg, defaultModules) {
     hoverOpenDelay: delay(cfg.hoverOpenDelay, DEFAULTS.hoverOpenDelay),
     hoverCloseDelay: delay(cfg.hoverCloseDelay, DEFAULTS.hoverCloseDelay),
     compactStyle: cfg.compactStyle === "notch" ? "notch" : DEFAULTS.compactStyle,
-    reserveSpace: cfg.reserveSpace === true
+    reserveSpace: cfg.reserveSpace === true,
+    workspaces: workspaceList(cfg.workspaces)
   }
 }

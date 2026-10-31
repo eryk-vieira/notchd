@@ -49,3 +49,33 @@ function reservedSpace(s) {
   if (!s.enabled || s.compactStyle !== "notch") return 0
   return Math.ceil(Math.max(Number(s.baseline) || 0, Number(s.tallest) || 0))
 }
+
+// Whether the notch hangs on a workspace. `list` is the config's
+// `workspaces` (null: every one); entries match a workspace's id or name.
+// An unknown workspace (no compositor support) is allowed.
+function workspaceAllowed(list, ws) {
+  if (!list || !list.length || !ws) return true
+  for (var i = 0; i < list.length; i++)
+    if (String(list[i]) === String(ws.id) || String(list[i]) === String(ws.name)) return true
+  return false
+}
+
+// The screen the notch goes on, by name; "" for none. `screens` are
+// { name, allowed } (allowed: its workspace takes the notch), `override` the
+// screen it was opened from (counts only while open), `open` whether it
+// peeks or is expanded. Open,
+// it shows on the focused screen whatever the workspace; closed, on the
+// focused screen if allowed there, else on the first screen that is.
+function notchScreen(s) {
+  var screens = s.screens || []
+  function find(name) {
+    for (var i = 0; i < screens.length; i++) if (screens[i].name === name) return screens[i]
+    return null
+  }
+  var over = s.open && s.override ? find(s.override) : null
+  if (over) return over.name
+  var focused = find(s.focused) || screens[0] || null
+  if (s.open || (focused && focused.allowed)) return focused ? focused.name : ""
+  for (var i = 0; i < screens.length; i++) if (screens[i].allowed) return screens[i].name
+  return ""
+}

@@ -18,11 +18,12 @@ The single source of truth: config, modules, mode, peeks, hover, IPC.
 | `configPath` | absolute path of the JSON config (watched, live); defaults to `$XDG_CONFIG_HOME/notchd/config.json` |
 | `hostModules` | `{ id: url }` of modules the host ships; they win over built-ins |
 | `barStyleAvailable` | whether the host has a bar indicator for `compactStyle: "bar"` |
+| `compositor` | a compositor adapter; the surface uses it unless given its own, and the `workspaces` setting needs one that knows workspaces |
 | `defaultModules` | modules to load when the config lists none |
 | `hostSettingsSchema` | settings-window fields for the host's own config keys (see [settings.md](settings.md)) |
 | `hostSettingsPages` | extra settings-window pages, or new labels/icons for the core ones |
 
-A host reads its own config keys from `service.config`.
+A host reads its own config keys from `service.config`. A bar indicator asks `service.showsOn(screen)` whether the closed notch belongs on its monitor's workspace.
 
 ## NotchSurface
 
@@ -31,7 +32,7 @@ The layer-shell overlay that puts the notch on screen: it picks the screen, plac
 | Property | Meaning |
 |---|---|
 | `svc` | the service |
-| `compositor` | a compositor adapter (see `core/GenericCompositor.qml` for the contract) |
+| `compositor` | a compositor adapter (see `core/GenericCompositor.qml` for the contract); defaults to the service's |
 | `barHeight`, `barOnTop`, `barHidden` | the host's bar, so the notch hangs under it |
 | `layerNamespace` | layer-shell namespace |
 
@@ -45,4 +46,4 @@ Set `Theme.provider` to an object mapping the host's theme onto the core's token
 
 ## Compositor adapters
 
-`HyprlandCompositor` and `GenericCompositor`. An adapter tells the surface which screen is focused and whether a fullscreen window covers it; the generic one assumes the first screen and never fullscreen.
+`HyprlandCompositor` and `GenericCompositor`. An adapter tells the notch which screen is focused, whether a fullscreen window covers it and which workspace each screen shows (`supportsWorkspaces`, `knownWorkspaces`, `activeWorkspace(screen)`); the generic one assumes the first screen, never fullscreen, and no workspaces, which hides the `workspaces` setting. `core/GenericCompositor.qml` has the contract.

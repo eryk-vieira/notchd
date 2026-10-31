@@ -91,3 +91,45 @@ function allIds(enabled, available) {
     if (out.indexOf(available[i]) === -1) out.push(available[i])
   return out
 }
+
+// A workspace as the config stores it: a number for a numbered one, else
+// its name.
+function workspaceValue(w) {
+  var s = String(w)
+  return /^[0-9]+$/.test(s) ? Number(s) : s
+}
+
+function sortWorkspaces(list) {
+  return list.sort(function(a, b) {
+    var an = typeof a === "number", bn = typeof b === "number"
+    if (an && bn) return a - b
+    if (an !== bn) return an ? -1 : 1
+    return a < b ? -1 : a > b ? 1 : 0
+  })
+}
+
+// The workspaces to offer: 1 to 10, the ones the compositor knows and the
+// ones already picked; numbers in order, then names.
+function workspaceChoices(known, picked) {
+  var out = []
+  function add(w) {
+    if (String(w) === "") return
+    var v = workspaceValue(w)
+    if (out.indexOf(v) === -1) out.push(v)
+  }
+  for (var i = 1; i <= 10; i++) add(i)
+  toList(known).forEach(add)
+  toList(picked).forEach(add)
+  return sortWorkspaces(out)
+}
+
+// `picked` with `w` added or removed, in order; undefined once empty, which
+// removes the key (every workspace).
+function toggleWorkspace(picked, w) {
+  var list = toList(picked).map(workspaceValue)
+  var v = workspaceValue(w)
+  var at = list.indexOf(v)
+  if (at === -1) list.push(v)
+  else list.splice(at, 1)
+  return list.length > 0 ? sortWorkspaces(list) : undefined
+}

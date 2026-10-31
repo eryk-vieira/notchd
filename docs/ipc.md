@@ -14,7 +14,7 @@ Every host exposes the same methods on its `ipcTarget`. The CLI depends on the h
 | `open`, `close`, `toggle` | pin the notch open, close it, flip |
 | `settings` | open or close the settings window |
 | `set <key> <json>` | change one config key, as the settings window does; an empty value resets it |
-| `state` | mode, compact style, current peek and modules, as JSON |
+| `state` | mode, compact style, reserved space, workspaces, current peek and modules, as JSON |
 
 ```sh
 omarchy-shell eryk.notchd set hoverOpenDelay 200

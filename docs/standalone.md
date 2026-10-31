@@ -1,6 +1,6 @@
 # Standalone host
 
-The notch as its own Quickshell config (`shell.qml` at the repo root), for any Wayland compositor with layer-shell. It uses the Hyprland adapter when `HYPRLAND_INSTANCE_SIGNATURE` is set, and the generic one otherwise. The generic adapter keeps the notch on the first screen and doesn't hide it for fullscreen apps.
+The notch as its own Quickshell config (`shell.qml` at the repo root), for any Wayland compositor with layer-shell. It uses the Hyprland adapter when `HYPRLAND_INSTANCE_SIGNATURE` is set, and the generic one otherwise. The generic adapter keeps the notch on the first screen, doesn't hide it for fullscreen apps and knows no workspaces, so the `workspaces` setting is Hyprland-only here.
 
 ```sh
 git clone https://github.com/eryk-vieira/notchd.git ~/.local/share/notchd

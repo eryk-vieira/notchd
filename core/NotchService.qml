@@ -35,6 +35,10 @@ Item {
   property bool barStyleAvailable: false
   // Prefix for log lines.
   property string logName: svc.ipcTarget
+  // A compositor adapter (HyprlandCompositor, GenericCompositor, ...): which
+  // workspace each screen shows, for the `workspaces` setting. NotchSurface
+  // uses it too unless given its own.
+  property var compositor: null
   // Modules to load when the config doesn't list any.
   property var defaultModules: ["media", "activities"]
   // Extra settings-window fields for the host's own config keys, in the
@@ -78,6 +82,15 @@ Item {
   // Keep windows out of the strip a closed notch hangs into (compactStyle
   // "notch" only); NotchSurface reserves it.
   property bool reserveSpace: Config.DEFAULTS.reserveSpace
+  // Workspaces the closed notch hangs on (ids or names); null: every one.
+  property var workspaces: null
+
+  // Whether the closed notch hangs on `screen`, by the workspace it shows.
+  // Bindings that call it follow workspace switches.
+  function showsOn(screen) {
+    var ws = svc.compositor && screen ? svc.compositor.activeWorkspace(screen) : null
+    return State.workspaceAllowed(svc.workspaces, ws)
+  }
 
   // Keys missing from the config fall back to their defaults, so deleting a
   // key in the file (or the settings window) resets it. Config.resolve has
@@ -90,6 +103,7 @@ Item {
     svc.hoverCloseDelay = r.hoverCloseDelay
     svc.configuredStyle = r.compactStyle
     svc.reserveSpace = r.reserveSpace
+    svc.workspaces = r.workspaces
   }
 
   function loadConfig(text) {
@@ -168,7 +182,7 @@ Item {
   // The fields the settings window shows, built from these descriptors:
   //   key        config key (dotted for nested objects)
   //   type       "choice" | "integer" | "boolean" | "string" | "color"
-  //              | "modules" | "note" (text only, no key)
+  //              | "modules" | "workspaces" | "note" (text only, no key)
   //   label, help
   //   page       sidebar page id (default "general")
   //   section    heading the field sits under, within its page
@@ -192,6 +206,10 @@ Item {
       out.push({ page: "general", section: "Layout", key: "reserveSpace", type: "boolean",
                  label: "Keep windows clear", default: Config.DEFAULTS.reserveSpace,
                  help: "Windows stay below the closed notch instead of under it. They lose that strip across the whole screen; peeks and the open notch still cover them." })
+    if (svc.compositor && svc.compositor.supportsWorkspaces)
+      out.push({ page: "general", section: "Layout", key: "workspaces", type: "workspaces",
+                 label: "Workspaces",
+                 help: "Where the closed notch (or its bar indicator) shows; none picked means every workspace. Peeks and the open notch show on any." })
     out.push({ page: "general", section: "Hover", key: "hoverOpenDelay", type: "integer", label: "Open delay",
                help: "How long the pointer rests on the notch before it expands.",
                default: Config.DEFAULTS.hoverOpenDelay, min: 0, max: 1000, step: 10, unit: "ms" })
@@ -310,7 +328,12 @@ Item {
 
   onPointerInsideChanged: {
     if (pointerInside) { closeTimer.stop(); openTimer.restart() }
-    else { openTimer.stop(); closeTimer.restart() }
+    else {
+      openTimer.stop()
+      closeTimer.restart()
+      // Left before it opened: forget the screen it was about to open on.
+      if (svc.mode !== "expanded" && svc.mode !== "peek") svc.screenOverride = ""
+    }
   }
   onHoveredChanged: if (hovered && svc.peekModule && !svc.peekModule.urgentPeek) svc.dismissPeek()
   onPinnedChanged: if (pinned) svc.dismissPeek()
@@ -359,6 +382,7 @@ Item {
         mode: svc.mode,
         compactStyle: svc.compactStyle,
         reserveSpace: svc.reserveSpace,
+        workspaces: svc.workspaces,
         peek: svc.peekModule ? svc.peekModule.moduleId : null,
         modules: svc.modules.map(function(m) { return { id: m.moduleId, active: m.active, priority: m.priority } })
       })

@@ -6,7 +6,8 @@ invariants that are easy to break, not a project tour. The tour is
 
 ## Before you commit
 
-- `make check` passes (tests, lint, plugin validation, visual scenarios).
+- `make check` passes (Node and QML tests, lint, plugin validation, visual scenarios).
+- A bug fix comes with a regression test that fails without it: `tests/*.test.mjs` for rules, `tests/qml/shell.qml` for QML behaviour.
 - A visual change: run `make visual` and look at the PNGs in `build/visual/`.
 - A QML change in `hosts/omarchy/`: `make restart` and read the shell log; lint and the visual scenarios cannot load it.
 - `CHANGELOG.md` has a line under `[Unreleased]` for anything user-visible.

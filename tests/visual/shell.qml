@@ -43,9 +43,21 @@ ShellRoot {
   property int index: -1
   readonly property var scenario: index >= 0 && index < scenarios.length ? scenarios[index] : null
 
+  // A compositor with workspaces, so the workspaces field shows; the Omarchy
+  // scenarios pick 1 to 3, as a config would.
+  QtObject {
+    id: fakeCompositor
+    readonly property string focusedScreenName: ""
+    function hasFullscreen(screen) { return false }
+    readonly property bool supportsWorkspaces: true
+    readonly property var knownWorkspaces: ["1", "2", "4", "code"]
+    function activeWorkspace(screen) { return null }
+  }
+
   NotchService {
     id: svc
     ipcTarget: "notchd-visual"
+    compositor: fakeCompositor
     configPath: root.outDir + "/config.json"
     barStyleAvailable: root.scenario ? root.scenario.bar : false
     hostSettingsSchema: root.scenario ? root.scenario.fields : []
@@ -59,6 +71,7 @@ ShellRoot {
     root.index++
     if (!root.scenario) { quitTimer.start(); return }
     Theme.provider = root.scenario.theme
+    svc.setConfigValue("workspaces", root.scenario.bar ? [1, 2, 3] : undefined)
     grabTimer.start()
   }
 

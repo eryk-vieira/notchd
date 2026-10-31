@@ -9,7 +9,7 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | Key | |
 |---|---|
 | `key` | config key; dotted for nested objects (`theme.accent`) |
-| `type` | `choice`, `integer`, `boolean`, `string`, `color`, `modules` or `note` (text only, no key) |
+| `type` | `choice`, `integer`, `boolean`, `string`, `color`, `modules`, `workspaces` or `note` (text only, no key) |
 | `label`, `help` | title and description |
 | `page` | sidebar page id; `general` when absent |
 | `section` | heading the field sits under, within its page; sections keep the order their first field appears in |
@@ -25,6 +25,7 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | `boolean` | `Toggle` |
 | `string`, `color` | `TextControl` (a color adds a swatch and is validated) |
 | `modules` | `ModuleList` |
+| `workspaces` | `WorkspaceChips`: 1 to 10, the compositor's workspaces and the picked ones; none picked removes the key |
 | `note` | none; just the title and help |
 
 ## Pages
@@ -47,4 +48,4 @@ Every control takes `field` (the schema entry) and `value` (the config value, or
 | `Settings.js` | pages, sections and list edits; pure, tested in `tests/settings.test.mjs` |
 | `SettingRow.qml` | one field: text and the control for its type |
 | `Label.qml`, `Icon.qml`, `Button.qml`, `NavItem.qml` | building blocks |
-| `*Control.qml`, `CardChoice.qml`, `Toggle.qml`, `ModuleList.qml` | the controls |
+| `*Control.qml`, `CardChoice.qml`, `Toggle.qml`, `ModuleList.qml`, `WorkspaceChips.qml` | the controls |

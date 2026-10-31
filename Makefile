@@ -12,13 +12,18 @@ LINT_FILES = shell.qml core/*.qml core/settings/*.qml core/settings/previews/*.q
 # Dev config for `make dev`, so it never touches ~/.config/notchd.
 DEV_CONFIG ?= $(CURDIR)/build/dev-config.json
 
-.PHONY: check test visual hero lint validate dev restart clean
+.PHONY: check test qmltest visual hero lint validate dev restart clean
 
-check: test lint validate visual
+check: test qmltest lint validate visual
 
 # Node tests of the pure-JS rules (core/*.js, core/settings/*.js).
 test:
 	node --test tests/*.test.mjs
+
+# QML behaviour tests (tests/qml/shell.qml), offscreen: bindings, signals
+# and animations the Node tests can't reach. Regression tests live here.
+qmltest:
+	scripts/qml-test.sh
 
 # Renders the settings window offscreen into build/visual/; fails on any QML
 # warning, so it also proves the core loads.

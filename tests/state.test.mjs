@@ -52,3 +52,30 @@ test('reservedSpace: only when enabled in notch style, never below the baseline'
   assert.equal(State.reservedSpace({ ...on, enabled: false }), 0);
   assert.equal(State.reservedSpace({ ...on, compactStyle: 'bar' }), 0);
 });
+
+test('workspaceAllowed matches ids or names; no list or no workspace allows', () => {
+  assert.equal(State.workspaceAllowed(null, { id: 5, name: '5' }), true);
+  assert.equal(State.workspaceAllowed([], { id: 5, name: '5' }), true);
+  assert.equal(State.workspaceAllowed([1, 2], null), true);
+  assert.equal(State.workspaceAllowed([1, 2], { id: 2, name: '2' }), true);
+  assert.equal(State.workspaceAllowed(['2'], { id: 2, name: '2' }), true);
+  assert.equal(State.workspaceAllowed(['code'], { id: 7, name: 'code' }), true);
+  assert.equal(State.workspaceAllowed([1, 2, 3], { id: 4, name: '4' }), false);
+});
+
+test('notchScreen: closed, the focused screen if allowed, else the first allowed one', () => {
+  const screens = [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: false }];
+  assert.equal(State.notchScreen({ screens, focused: 'DP-1' }), 'DP-1');
+  assert.equal(State.notchScreen({ screens, focused: 'eDP-1' }), 'DP-1');
+  assert.equal(State.notchScreen({ screens: [{ name: 'a', allowed: false }], focused: 'a' }), '');
+  assert.equal(State.notchScreen({ screens: [], focused: 'a' }), '');
+});
+
+test('notchScreen: open, the screen it was opened from, else the focused one', () => {
+  const screens = [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: false }];
+  assert.equal(State.notchScreen({ screens, focused: 'eDP-1', open: true }), 'eDP-1');
+  assert.equal(State.notchScreen({ screens, focused: 'eDP-1', open: true, override: 'DP-1' }), 'DP-1');
+  assert.equal(State.notchScreen({ screens, focused: 'gone', open: true }), 'DP-1');
+  assert.equal(State.notchScreen({ screens, focused: 'eDP-1', override: 'gone' }), 'DP-1');
+  assert.equal(State.notchScreen({ screens, focused: 'DP-1', override: 'eDP-1' }), 'DP-1');
+});

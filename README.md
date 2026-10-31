@@ -31,6 +31,8 @@ Over a fullscreen app only peeks show.
 
 A hanging notch covers the top of the windows under it. `reserveSpace: true` keeps windows below it instead: the compositor reserves a strip as deep as the compact notch, across the whole width of every screen (layer-shell can only reserve whole edges). Peeks and the expanded notch still open over windows. It does nothing in `"bar"` style.
 
+`workspaces` limits where the closed notch shows, e.g. `[1, 2, 3]` (ids or names). When the focused screen shows another workspace, the closed notch moves to a screen that shows one of them, or hides if none does; in `"bar"` style the bar indicator hides on those screens. Peeks and the open notch still show on the focused screen, so the volume OSD never goes missing. Reserved space follows too: a screen showing a workspace without the notch reserves nothing, so switching a screen between the two moves its windows. It needs a compositor adapter that knows workspaces (Hyprland today).
+
 ## Config
 
 The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/notchd/config.json`), outside the source tree, so plugin updates never touch it. A missing file means every key is at its default. A file you create by hand is picked up within a couple of seconds, and edits apply live.
@@ -42,6 +44,7 @@ The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/no
 | `hoverOpenDelay` | `120` | ms |
 | `hoverCloseDelay` | `300` | ms |
 | `reserveSpace` | `false` | keep windows below the closed notch (`"notch"` style); see above |
+| `workspaces` | every one | workspaces the closed notch shows on; see above |
 
 Hosts add their own keys; the standalone host, for example, adds `topOffset` and `theme`. A key missing from the file falls back to its default.
 

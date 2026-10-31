@@ -4,7 +4,8 @@ import "../../core"
 
 // Omarchy host: the notch service as an Omarchy shell plugin. Wires the core
 // to Omarchy: its IPC name, the osd module that receives `omarchy osd`, the
-// bar indicator (so compactStyle "bar" works) and Omarchy's theme.
+// bar indicator (so compactStyle "bar" works), Hyprland (for workspaces) and
+// Omarchy's theme.
 NotchService {
   id: svc
 
@@ -14,6 +15,7 @@ NotchService {
   ipcTarget: "eryk.notchd"
   logName: "eryk.notchd"
   barStyleAvailable: true
+  compositor: hyprland
   defaultModules: ["osd", "media", "activities"]
   hostModules: ({
     osd: Qt.resolvedUrl("modules/osd.qml")
@@ -22,6 +24,8 @@ NotchService {
     { page: "appearance", section: "Theme", type: "note", label: "Follows your Omarchy theme",
       help: "Colors, fonts and spacing come from the active Omarchy theme and change with it." }
   ]
+
+  HyprlandCompositor { id: hyprland }
 
   // Omarchy's theme mapped onto the core's tokens; follows theme switches.
   QtObject {

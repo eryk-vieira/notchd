@@ -69,3 +69,16 @@ test('allIds lists enabled ids first, then the other available ones', () => {
   assert.deepEqual(plain(Settings.allIds(['media', 'ghost'], ['activities', 'media', 'osd'])),
     ['media', 'ghost', 'activities', 'osd']);
 });
+
+test('workspaceChoices offers 1-10, known and picked ones, numbers first', () => {
+  assert.deepEqual(plain(Settings.workspaceChoices(['2', 'code', '12'], ['notes', 3])),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 'code', 'notes']);
+  assert.deepEqual(plain(Settings.workspaceChoices(null, null)), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+});
+
+test('toggleWorkspace keeps numbers as numbers and clears to undefined', () => {
+  assert.deepEqual(plain(Settings.toggleWorkspace([3, 1], '2')), [1, 2, 3]);
+  assert.deepEqual(plain(Settings.toggleWorkspace([1, 2], 2)), [1]);
+  assert.deepEqual(plain(Settings.toggleWorkspace(undefined, 'code')), ['code']);
+  assert.equal(Settings.toggleWorkspace([1], 1), undefined);
+});
