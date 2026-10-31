@@ -6,6 +6,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
+- An app icon: the notch with an orange dot and an `n`, in Gruvbox colors. `assets/icons/` has the SVG, PNGs at every size from 16 to 1024 px and a `.ico`.
 - `timer` module: a countdown or a pomodoro, started from the expanded notch or with `timer 25m`, `timer pomodoro`, `timer toggle`, `timer +5m`, `timer stop` over IPC. The closed notch shows the time left; at the end it peeks, even over the open notch, and sends a desktop notification. Its lengths, rounds, auto-start and notification are in settings (Modules › Timer). Not loaded by default.
 - `media.equalizer` (settings: Modules › Now playing › Equalizer): `"smooth"` (the default) glides the bars at 60 fps, `"light"` makes them jump about six times a second, for less CPU.
 - `resources` module: CPU, memory and the disk holding `/`, each with a bar and how much is used in the expanded notch, and their percentages in the closed notch. One that runs short (90 % or more; the CPU for about 10 s in a row, so a burst doesn't count) turns red and peeks once. `resources.compact: "short"` (settings: Modules › Resources › Closed notch) keeps them out of the closed notch until one runs short. Not loaded by default.

@@ -12,7 +12,7 @@ LINT_FILES = shell.qml core/*.qml core/settings/*.qml core/settings/previews/*.q
 # Dev config for `make dev`, so it never touches ~/.config/notchd.
 DEV_CONFIG ?= $(CURDIR)/build/dev-config.json
 
-.PHONY: check test qmltest visual hero bench lint validate dev restart clean
+.PHONY: check test qmltest visual hero icons bench lint validate dev restart clean
 
 check: test qmltest lint validate visual
 
@@ -36,6 +36,12 @@ visual:
 # and commit the image.
 hero:
 	scripts/hero.sh
+
+# The app icon at every hicolor size, plus notchd.ico, from
+# assets/icons/hicolor/scalable/apps/notchd.svg. Rerun after editing the SVG
+# and commit the PNGs.
+icons:
+	scripts/icons.sh
 
 # What notchd costs (CPU, wakeups, memory) per scenario, on your real
 # Wayland session with a demo player on a private D-Bus; a second notch

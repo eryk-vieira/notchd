@@ -1,4 +1,4 @@
-# notchd
+# <img src="assets/icons/hicolor/scalable/apps/notchd.svg" alt="" width="40" align="top"> notchd
 
 ![notchd in its four states: compact, peek, OSD and expanded](docs/images/hero.webp)
 
