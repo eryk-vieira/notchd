@@ -18,6 +18,8 @@ NotchService {
   barEdge: svc.shell && svc.shell.bar ? String(svc.shell.bar.position || "top") : "top"
   compositor: hyprland
   defaultModules: ["osd", "media", "activities"]
+  // `omarchy osd` always shows, whatever the notches list.
+  systemModules: ["osd"]
   hostModules: ({
     osd: Qt.resolvedUrl("modules/osd.qml")
   })

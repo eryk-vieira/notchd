@@ -152,13 +152,16 @@ function notches(cfg, defaultModules) {
   return out
 }
 
-// Every module any notch shows, in order of first appearance: the ones the
+// Every module any notch shows, in order of first appearance, then the
+// `extra` ones (the host's system modules) no notch lists: the ones the
 // service loads.
-function moduleUnion(specs) {
+function moduleUnion(specs, extra) {
   var out = []
   for (var i = 0; i < specs.length; i++)
     for (var j = 0; j < specs[i].moduleIds.length; j++)
       if (out.indexOf(specs[i].moduleIds[j]) === -1) out.push(specs[i].moduleIds[j])
+  for (var k = 0; k < (extra || []).length; k++)
+    if (out.indexOf(String(extra[k])) === -1) out.push(String(extra[k]))
   return out
 }
 

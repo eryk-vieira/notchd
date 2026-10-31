@@ -98,6 +98,8 @@ test('notches: ids default by place and never repeat', () => {
 test('moduleUnion: every module a notch shows, once, in first-seen order', () => {
   const specs = plain(Config.notches({ notches: [{ modules: ['osd', 'media'] }, { modules: ['activities', 'osd'] }] }, []));
   assert.deepEqual(plain(Config.moduleUnion(specs)), ['osd', 'media', 'activities']);
+  // The host's system modules load whether a notch lists them or not.
+  assert.deepEqual(plain(Config.moduleUnion(specs, ['osd', 'clock'])), ['osd', 'media', 'activities', 'clock']);
 });
 
 test('freeNotchId: the lowest notch-<n> not taken', () => {

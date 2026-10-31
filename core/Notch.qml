@@ -136,7 +136,11 @@ Item {
   // A module's peek, if this notch shows the module: on the focused copy,
   // or the one copy wherever it is.
   function requestPeek(module, ms) {
-    if (!notch.hasModule(module)) return
+    if (notch.hasModule(module)) notch.showPeek(module, ms)
+  }
+  // The peek, whether this notch lists the module or not: a system module's
+  // borrows the notch on the screen you work on.
+  function showPeek(module, ms) {
     var copy = notch.focusedCopy()
     if (copy) copy.requestPeek(module, ms)
   }

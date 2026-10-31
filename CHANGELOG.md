@@ -6,6 +6,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
+- The Omarchy OSD always shows, even when no notch lists `osd`: hosts name system modules (`NotchService.systemModules`) that always load. Their peeks show on the focused monitor, in a notch there (one that lists the module first), else in a default notch at the top.
 - Modules can set `peekOnFocusedScreen`: their peek shows once, on the focused monitor only, in the first notch there that shows the module, else at the top. The Omarchy OSD sets it, so the volume and brightness show where you change them and nowhere else.
 - Several notches (`notches`; settings: the notch picker at the top of General and Modules): each with its own modules, compact style, position, workspaces and reserved space, inheriting the top-level keys it leaves out. A module may show in several. IPC gets `openNotch`, `closeNotch` and `toggleNotch` by notch id, and `state` lists the notches and their copies.
 - `position.screen: "all"` (settings: General › Position › Screen › Every screen): a copy of the notch on every monitor, each hovered, pinned and dragged on its own. A peek shows on the focused monitor only, so changing the volume on one monitor no longer takes the notch away from the music playing on another. In bar style the notch has a copy per bar.

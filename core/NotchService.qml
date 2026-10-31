@@ -48,6 +48,13 @@ Item {
   property var screens: Quickshell.screens || []
   // Modules to load when the config doesn't list any.
   property var defaultModules: ["media", "activities"]
+  // Modules that show what the system does (the OSD): loaded whether a
+  // notch lists them or not, so their peeks always show; where no notch on
+  // the focused screen lists one, the default notch shows it, at the top.
+  property var systemModules: []
+  // Later: set while the service is being made, it would reassign the list
+  // its own binding reads.
+  onSystemModulesChanged: Qt.callLater(svc.refreshModuleIds)
   // Extra settings-window fields for the host's own config keys, in the
   // same format as coreSettingsSchema below.
   property var hostSettingsSchema: []
@@ -83,10 +90,14 @@ Item {
   // Every notch, resolved (Config.notches), and their ids.
   property var notchSpecs: Config.notches({}, svc.defaultModules)
   property var notchIds: svc.notchSpecs.map(function(n) { return n.id })
-  // Every module some notch shows: the ones to load.
-  property var moduleIds: Config.moduleUnion(svc.notchSpecs)
+  // Every module some notch shows, and the system ones: the ones to load.
+  property var moduleIds: Config.moduleUnion(svc.notchSpecs, svc.systemModules)
 
   function sameList(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
+  function refreshModuleIds() {
+    var modules = Config.moduleUnion(svc.notchSpecs, svc.systemModules)
+    if (!svc.sameList(modules, svc.moduleIds)) svc.moduleIds = modules
+  }
 
   // Keys missing from the config fall back to their defaults, so deleting a
   // key in the file (or the settings window) resets it. Config.resolve and
@@ -102,7 +113,7 @@ Item {
     svc.notchSpecs = specs
     var ids = specs.map(function(n) { return n.id })
     if (!svc.sameList(ids, svc.notchIds)) svc.notchIds = ids
-    var modules = Config.moduleUnion(specs)
+    var modules = Config.moduleUnion(specs, svc.systemModules)
     if (!svc.sameList(modules, svc.moduleIds)) svc.moduleIds = modules
   }
 
@@ -285,11 +296,22 @@ Item {
                  help: "Pick the notch whose modules to set." })
     out.push({ page: "modules", section: several ? "Modules" : "", key: key("modules"), type: "modules", label: "Loaded modules",
                default: inherited("modules", svc.defaultModules),
-               help: several ? "What this notch shows. A module may show in several notches. Their order breaks ties in the expanded view."
-                             : "Switched-on modules load. Their order breaks ties in the expanded view." })
+               help: (several ? "What this notch shows. A module may show in several notches. Their order breaks ties in the expanded view."
+                              : "Switched-on modules load. Their order breaks ties in the expanded view.")
+                     + svc.systemNote })
     return out
   }
   readonly property var settingsSchema: svc.coreSettingsSchema.concat(svc.hostSettingsSchema || [])
+  // The system modules, for the modules field's help.
+  readonly property string systemNote: {
+    if (!svc.systemModules || svc.systemModules.length === 0) return ""
+    var names = svc.systemModules.map(function(id) {
+      var m = svc.moduleById(id)
+      return m && m.title ? m.title : id
+    })
+    return " " + names.join(", ") + " always " + (names.length > 1 ? "load" : "loads")
+      + " and " + (names.length > 1 ? "show" : "shows") + " on the screen you work on: in a notch there that has it switched on, else in any notch there, else at the top."
+  }
 
   property bool settingsOpen: false
   // The page the window shows; kept here so it survives closing the window.
@@ -338,8 +360,10 @@ Item {
       notchId: modelData
     }
   }
-  // A notch of its own at the top of every screen, hidden until it shows a
-  // peek where no notch with that module does (State.needsVisitor).
+  // The default notch: a notch of its own at the top of every screen, hidden
+  // until it shows a peek where no notch with that module does
+  // (State.needsVisitor, State.focusedPeek), such as a system module's
+  // that no notch lists.
   Notch {
     id: visitorNotch
     // Through `owner`, as above.
@@ -402,7 +426,9 @@ Item {
   // on the focused screen of one that has a copy per screen), and to the
   // visitor when none of them peeks on the focused screen. A module that
   // peeks on the focused screen only (the OSD) peeks once: in the first
-  // notch there that shows it, else in the visitor (State.focusedPeek).
+  // notch there that shows it, else in the visitor (State.focusedPeek). A
+  // system module's peek, with no notch there showing it, borrows the first
+  // notch there all the same, so the default notch never draws over it.
   function requestPeek(module, ms) {
     var places = []
     var owners = []
@@ -412,10 +438,15 @@ Item {
       owners.push(svc.notches[i])
     }
     var focused = svc.compositor ? svc.compositor.focusedScreenName : ""
-    if (module && module.peekOnFocusedScreen) {
+    var system = !!module && (svc.systemModules || []).indexOf(module.moduleId) !== -1
+    if (module && (module.peekOnFocusedScreen || system)) {
       var at = State.focusedPeek(places, focused)
-      if (at >= 0) owners[at].requestPeek(module, ms)
-      else visitorNotch.requestPeek(module, ms)
+      if (at >= 0) { owners[at].requestPeek(module, ms); return }
+      if (system && focused) {
+        var any = State.focusedPeek(svc.notches.map(function(n) { return n.peekPlace() }), focused)
+        if (any >= 0) { svc.notches[any].showPeek(module, ms); return }
+      }
+      visitorNotch.requestPeek(module, ms)
       return
     }
     for (var j = 0; j < owners.length; j++) owners[j].requestPeek(module, ms)

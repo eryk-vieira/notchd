@@ -9,7 +9,7 @@ No symlinks: `omarchy plugin validate` rejects any inside the plugin folder.
 
 ## NotchService
 
-The single source of truth: config, modules, the notches and IPC. It makes a `Notch` per entry of the config's `notches` (one, from the top-level keys, without a list): its modules, compact style, position, workspaces. Each notch shows as one or more `NotchCopy`: one that moves (following focus, or kept on its home screen), or one per screen with `position.screen` `"all"` and in bar style. The service also has a `visitor`, a notch with every module and a copy at the top of each screen; its copies (`guest`) stay hidden and only show a peek on a focused screen where no notch with that module is (`State.needsVisitor`). A copy holds the state the pointer and peeks change (hover, pin, peek, drag) and so its own mode.
+The single source of truth: config, modules, the notches and IPC. It makes a `Notch` per entry of the config's `notches` (one, from the top-level keys, without a list): its modules, compact style, position, workspaces. Each notch shows as one or more `NotchCopy`: one that moves (following focus, or kept on its home screen), or one per screen with `position.screen` `"all"` and in bar style. The service also has a default notch (`visitor`), with every module and a copy at the top of each screen; its copies (`guest`) stay hidden and only show a peek on a focused screen where no notch with that module is (`State.needsVisitor`). A copy holds the state the pointer and peeks change (hover, pin, peek, drag) and so its own mode.
 
 | Property | Meaning |
 |---|---|
@@ -22,6 +22,7 @@ The single source of truth: config, modules, the notches and IPC. It makes a `No
 | `compositor` | a compositor adapter: the focused screen, fullscreen windows and workspaces; the `workspaces` setting needs one that knows workspaces |
 | `screens` | the screens a notch can be on; Quickshell's (tests give their own) |
 | `defaultModules` | modules to load when the config lists none |
+| `systemModules` | modules that show what the system does (the Omarchy host's `osd`): always loaded, listed by a notch or not. Their peeks show on the focused screen: in a notch there that lists them, else in any notch there, else in the default notch at the top |
 | `hostSettingsSchema` | settings-window fields for the host's own config keys (see [settings.md](settings.md)) |
 | `hostSettingsPages` | extra settings-window pages, or new labels/icons for the core ones |
 

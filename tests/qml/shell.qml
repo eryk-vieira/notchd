@@ -81,7 +81,8 @@ ShellRoot {
       { name: "adding a notch and removing it gives the config back", run: root.addAndRemoveNotch },
       { name: "only the first notch asking for the bar gets it", run: root.oneBarNotch },
       { name: "a notch kept on a screen stays there and a peek also shows where you work", run: root.peekBesideHomedNotch },
-      { name: "an OSD peek shows once, on the focused screen only", run: root.osdPeekOnFocusedScreen }
+      { name: "an OSD peek shows once, on the focused screen only", run: root.osdPeekOnFocusedScreen },
+      { name: "a system module no notch lists loads and always peeks, never over a notch", run: root.systemModuleAlwaysShows }
     ]
     Qt.callLater(root.next)
   }
@@ -708,6 +709,43 @@ ShellRoot {
         multi.dismissPeek(null)
         module.peekOnFocusedScreen = false
         module.clear("")
+      }]
+    ], function() { root.done() })
+  }
+
+  // Bug: with the OSD taken out of every notch, the module did not load and
+  // the volume and brightness showed nowhere. A host's system module loads
+  // anyway and peeks in the default notch, at the top of the focused screen.
+  function systemModuleAlwaysShows() {
+    var visitor = multi.visitor
+    root.steps([
+      [0, function() {
+        multi.replaceConfig({ modules: [], position: { screen: "A" } })
+        twoScreens.focusedScreenName = "B"
+      }],
+      [100, function() {
+        root.check(multi.moduleById("activities") === null, "loaded a module no notch lists (test setup)")
+        multi.systemModules = ["activities"]
+      }],
+      [100, function() {
+        root.check(multi.moduleById("activities") !== null, "the system module did not load")
+        root.check(multi.notches[0].modules.length === 0, "the notch took the system module")
+        root.push("volume", true)
+      }],
+      [100, function() {
+        root.check(visitor.copyOn("B").mode === "peek", "no peek at the top of B: " + visitor.copyOn("B").mode)
+        root.check(multi.notches[0].copies[0].mode === "rest", "the notch on A shows " + multi.notches[0].copies[0].mode)
+        multi.dismissPeek(null)
+        twoScreens.focusedScreenName = "A"
+        root.push("brightness", true)
+      }],
+      // Bug: on a screen with a notch that doesn't list the OSD, the default
+      // notch drew the volume right over it. The notch there shows it.
+      [100, function() {
+        root.check(multi.notches[0].copies[0].mode === "peek", "the notch on A did not show the peek: " + multi.notches[0].copies[0].mode)
+        root.check(visitor.copyOn("A").mode !== "peek", "the default notch drew over the notch on A")
+        multi.dismissPeek(null)
+        multi.systemModules = []
       }]
     ], function() { root.done() })
   }
