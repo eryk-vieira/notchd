@@ -1,12 +1,13 @@
 import QtQuick
 
-// Base type for every notch module. A module is a file in modules/ whose root
-// is a NotchModule; list its file name (without .qml) in config.json to load it.
+// Base type for every notch module. A module is a QML file whose root is a
+// NotchModule: a built-in in core/modules/, or one a host ships (see
+// NotchService.hostModules). List its id in the config's "modules" to load it.
 //
 // The notch shows, by state:
-//   rest      nothing active: a small lip under the clock (hidden in bar style)
+//   rest      nothing active: a small lip at the top edge (hidden in bar style)
 //   compact   the highest-priority active module's `compact` view under the
-//             clock, or its `barView` in the bar (compactStyle "bar")
+//             top edge, or its `barView` in the host's bar (compactStyle "bar")
 //   peek      a module's `peek` view, for a few seconds, after requestPeek()
 //   expanded  on hover or click: the `expanded` view of every active module
 //

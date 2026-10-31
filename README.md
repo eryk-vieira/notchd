@@ -1,47 +1,84 @@
-# eryk.notch
+# notchd
 
-A dynamic notch that hangs under the bar's centered clock on the focused monitor.
+A dynamic notch for Wayland desktops, built with Quickshell. It hangs from the top edge of the focused screen and shows modules: media, OSD, script activities, or anything you write.
+
+It is a **notch framework, not a shell**. Modules show what the system is already doing; they never take over a system service. The notch is not a notification daemon, a launcher or a lock screen, so it sits on top of whatever desktop you already have.
+
+## Layout
+
+```
+core/                 the framework: no desktop-specific code
+  NotchService.qml    state: config, modules, mode, peeks, hover, IPC
+  NotchSurface.qml    the overlay that draws the notch
+  NotchModule.qml     base type for modules
+  Theme.qml           visual tokens (singleton), fed by the host
+  *Compositor.qml     compositor adapters (Hyprland, generic)
+  modules/            built-in modules: media, activities
+hosts/
+  omarchy/            Omarchy shell plugin (eryk.notchd); see its README
+  standalone/         its own Quickshell config, for any compositor
+scripts/
+  build-omarchy.sh    self-contained Omarchy plugin in dist/
+```
+
+Each host links `core` in with a relative symlink (`hosts/*/core -> ../../core`), so `import "core"` works from the host folder.
+
+## States
 
 | State | When | Shows |
 |---|---|---|
 | rest | nothing active | a small lip (nothing in bar style) |
-| compact | a module is active | the highest-priority active module's `compact` view under the clock, or its `barView` in the bar |
+| compact | a module is active | the highest-priority active module's `compact` view, or its `barView` in the host's bar |
 | peek | a module calls `requestPeek()` | that module's `peek` view, for a few seconds |
 | expanded | hover (click pins it, click outside unpins) | the `expanded` view of every active module |
 
 Over a fullscreen app only peeks show.
 
-## Style
+`compactStyle` in the config sets where compact lives:
 
-The `"compactStyle"` key in `config.json` sets the style, and it applies live:
+- `"bar"`: in the host's bar indicator. The notch only drops out to peek or expand. Only hosts with a bar indicator support it; that is only the Omarchy host today.
+- `"notch"`: compact hangs from the top edge all the time, Mac style.
 
-- `"bar"` (default): rest and compact live in the bar indicator (the `eryk.notch` bar widget, placed right after the clock). The notch only drops below the bar to peek or expand, so it never sits over windows. Hovering the indicator expands the notch on that monitor, and clicking pins it.
-- `"notch"`: compact hangs under the clock all the time, Mac style, and covers the top of windows there.
+## What a host provides
 
-## Layout
+`NotchService`:
 
-- `Service.qml`: all state (config, modules, mode, peeks, hover, IPC). Modules see it as `notch`.
-- `Notch.qml`: the overlay surface under the bar.
-- `BarIndicator.qml`: the bar widget, which renders `barView` (or `compact`).
-- `modules/`: one file per element type.
+| Property | Meaning |
+|---|---|
+| `ipcTarget` | IPC target name for scripts |
+| `configPath` | absolute path of the JSON config (watched, live) |
+| `hostModules` | `{ id: url }` of modules the host ships; they win over built-ins |
+| `barStyleAvailable` | whether the host has a bar indicator for `compactStyle: "bar"` |
 
-The plugin is enabled by its bar entry (`.bar.layout.center` in `~/.config/omarchy/shell.json`). It is not listed in `plugins[]`. If it is listed there, `omarchy bar put` thinks it is already on the bar and does nothing.
+`NotchSurface`:
 
-## Modules
+| Property | Meaning |
+|---|---|
+| `svc` | the service |
+| `compositor` | a compositor adapter (see `core/GenericCompositor.qml` for the contract) |
+| `barHeight`, `barOnTop`, `barHidden` | the host's bar, so the notch hangs under it |
+| `layerNamespace` | layer-shell namespace |
 
-`config.json` lists the modules to load, in order. Each id is a file in `modules/`:
+`Theme.provider`: an object with any of `foreground`, `background`, `accent`, `fontFamily`, `fontCaption`, `fontBodySmall`, `fontBody`, `fontHeading`, `fontDisplay` and `spacingScale`. Missing keys use defaults.
 
-- `osd`: volume, brightness, mic and keyboard light. It owns the `osd` IPC target that every `omarchy osd` call uses, so the stock OSD must stay disabled: `omarchy plugin disable omarchy.osd`. Undo it with `omarchy plugin enable omarchy.osd`.
-- `media`: MPRIS now playing. Compact shows artwork plus an equalizer, a new track peeks, and expanded shows controls.
-- `activities`: generic items pushed by scripts (see below).
+## Config
 
-### Adding a module
+| Key | Default | |
+|---|---|---|
+| `modules` | `["media", "activities"]` | module ids to load, in order |
+| `compactStyle` | `"bar"` | see above |
+| `hoverOpenDelay` | `120` | ms |
+| `hoverCloseDelay` | `300` | ms |
 
-Create `modules/<name>.qml` with a `NotchModule` root (see `modules/NotchModule.qml`), then add `"<name>"` to `config.json`.
+Hosts add their own keys; the standalone host, for example, adds `topOffset` and `theme`.
+
+## Writing a module
+
+A module is a QML file whose root is a `NotchModule`. Built-ins live in `core/modules/` and import the core with `import ".."`. A host's modules import it with `import "../core"` and register through `hostModules`.
 
 ```qml
 import QtQuick
-import qs.Commons
+import ".."
 
 NotchModule {
   id: m
@@ -50,40 +87,28 @@ NotchModule {
   active: true          // show in compact/expanded while true
   // urgentPeek: true   // peek even while expanded by hover
 
-  compact: Component { Text { text: "hi"; color: Color.foreground } }
-  barView: Component { Text { text: "hi"; color: Color.foreground } }  // optional, for the bar
-  peek: Component { Text { text: "hello!"; color: Color.foreground } }
-  expanded: Component { Text { text: "details"; color: Color.foreground } }
+  compact: Component { Text { text: "hi"; color: Theme.foreground } }
+  barView: Component { Text { text: "hi"; color: Theme.foreground } }  // optional, for the bar
+  peek: Component { Text { text: "hello!"; color: Theme.foreground } }
+  expanded: Component { Text { text: "details"; color: Theme.foreground } }
 
   // m.requestPeek(3000) pops the notch open with `peek` for 3 s.
 }
 ```
 
-Views are Components that size themselves through `implicitWidth`/`implicitHeight`; the notch springs to fit. Expanded views get a fixed width.
+Use `Theme.space(px)` for sizes and `Theme.font.*` for text, so the module follows the host's density and fonts. Views are Components that size themselves through `implicitWidth`/`implicitHeight`; the notch springs to fit. Expanded views get a fixed width.
 
-After changing QML, run `omarchy restart shell`, because the hot reload keeps serving the old compiled QML. Edits to `config.json` apply live.
+The scope rule: a module **shows** state, it does not **own** it. A notifications module mirrors toasts; it does not register as the notification server.
 
-## Activities from scripts
+## IPC
 
-```sh
-omarchy-shell eryk.notch push '{"id":"deploy","icon":"󰜎","title":"Deploying api","subtitle":"staging","progress":40,"sticky":true}'
-omarchy-shell eryk.notch push '{"id":"deploy","progress":80,"peek":false,"sticky":true,"title":"Deploying api"}'
-omarchy-shell eryk.notch clear deploy     # clear "" removes all
+Every host exposes the same methods on its `ipcTarget`:
+
+```
+push '<json>'    add or update an activity (see core/modules/activities.qml)
+clear <id>       remove one; "" removes all
+open | close | toggle
+state            mode, current peek, modules
 ```
 
-Fields:
-
-- `id`: the same id updates the item in place.
-- `icon`: a Nerd Font glyph.
-- `title`, `subtitle`.
-- `progress`: 0 to 100; omit it for no bar.
-- `sticky`: keep the item in compact/expanded until it is cleared. Without it, the item only peeks.
-- `peek`: set to `false` to update without popping open.
-- `duration`: peek length in ms.
-
-## Other IPC
-
-```sh
-omarchy-shell eryk.notch toggle | open | close
-omarchy-shell eryk.notch state     # mode, current peek, modules
-```
+The CLI depends on the host: `omarchy-shell eryk.notchd ...` on Omarchy, `qs -p hosts/standalone ipc call notchd ...` standalone.

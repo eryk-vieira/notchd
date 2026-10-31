@@ -9,7 +9,7 @@ import qs.Commons
 // Takes no space while nothing is active or in "notch" style.
 BarWidget {
   id: root
-  moduleName: "eryk.notch"
+  moduleName: "eryk.notchd"
 
   property var svc: null
   Timer {
@@ -17,7 +17,7 @@ BarWidget {
     repeat: true
     triggeredOnStart: true
     running: !root.svc && !!root.bar && !!root.bar.shell
-    onTriggered: root.svc = root.bar.shell.serviceFor("eryk.notch")
+    onTriggered: root.svc = root.bar.shell.serviceFor("eryk.notchd")
   }
 
   readonly property var module: root.svc && root.svc.compactStyle === "bar" ? root.svc.compactModule : null

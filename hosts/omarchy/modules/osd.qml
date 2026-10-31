@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell.Io
-import qs.Commons
+import "../core"
 
 // Volume, brightness, mic, keyboard light... Every `omarchy osd` call arrives
 // as `omarchy-shell osd show <json>` on the "osd" IPC target, which this module
@@ -80,34 +80,34 @@ NotchModule {
 
   peek: Component {
     Row {
-      spacing: Style.space(12)
+      spacing: Theme.space(12)
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        width: Style.space(22)
+        width: Theme.space(22)
         horizontalAlignment: Text.AlignHCenter
         textFormat: Text.PlainText
         text: osd.icon
-        color: Color.foreground
-        font.family: Style.font.family
-        font.pixelSize: Style.font.heading
+        color: Theme.foreground
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.heading
       }
 
       Item {
         visible: osd.hasProgress
         anchors.verticalCenter: parent.verticalCenter
-        width: Style.space(160)
-        height: Style.space(6)
+        width: Theme.space(160)
+        height: Theme.space(6)
         Rectangle {
           anchors.fill: parent
           radius: height / 2
-          color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.18)
+          color: Qt.rgba(Theme.foreground.r, Theme.foreground.g, Theme.foreground.b, 0.18)
         }
         Rectangle {
           width: parent.width * osd.fraction
           height: parent.height
           radius: height / 2
-          color: Color.accent
+          color: Theme.accent
           Behavior on width { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
         }
       }
@@ -115,13 +115,13 @@ NotchModule {
       Text {
         anchors.verticalCenter: parent.verticalCenter
         // Fixed width with a bar so it doesn't shift as the number changes.
-        width: osd.hasProgress ? Style.space(38) : implicitWidth
+        width: osd.hasProgress ? Theme.space(38) : implicitWidth
         horizontalAlignment: osd.hasProgress ? Text.AlignRight : Text.AlignLeft
         textFormat: Text.PlainText
         text: osd.message
-        color: Color.foreground
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
+        color: Theme.foreground
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.body
       }
     }
   }

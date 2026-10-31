@@ -1,12 +1,13 @@
 import QtQuick
 import QtQuick.Layouts
-import qs.Commons
+import ".."
 
-// Generic activities pushed from scripts, no QML needed:
+// Generic activities pushed from scripts over the notch IPC target, no QML
+// needed (the host decides the target name and CLI; see its README):
 //
-//   omarchy-shell eryk.notch push '{"id":"deploy","icon":"󰜎","title":"Deploying api",
-//                                   "subtitle":"staging","progress":40,"sticky":true}'
-//   omarchy-shell eryk.notch clear deploy      # or clear "" for all
+//   <notch-ipc> push '{"id":"deploy","icon":"󰜎","title":"Deploying api",
+//                    "subtitle":"staging","progress":40,"sticky":true}'
+//   <notch-ipc> clear deploy      # or clear "" for all
 //
 // Fields: id (same id updates in place), icon (Nerd Font glyph), title,
 // subtitle, progress (0-100, omit for none), sticky (stay in compact/expanded
@@ -51,7 +52,7 @@ NotchModule {
   compact: Component {
     ActivityRow {
       item: acts.items.length > 0 ? acts.items[acts.items.length - 1] : null
-      implicitWidth: Style.space(220)
+      implicitWidth: Theme.space(220)
       showSubtitle: false
     }
   }
@@ -59,34 +60,34 @@ NotchModule {
   barView: Component {
     Row {
       readonly property var item: acts.items.length > 0 ? acts.items[acts.items.length - 1] : null
-      spacing: Style.space(6)
+      spacing: Theme.space(6)
       Text {
         anchors.verticalCenter: parent.verticalCenter
         textFormat: Text.PlainText
         text: parent.item ? parent.item.icon : ""
-        color: Color.accent
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
+        color: Theme.accent
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.body
       }
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        width: Math.min(implicitWidth, Style.space(140))
+        width: Math.min(implicitWidth, Theme.space(140))
         textFormat: Text.PlainText
         text: parent.item ? parent.item.title : ""
         elide: Text.ElideRight
-        color: Color.foreground
-        font.family: Style.font.family
-        font.pixelSize: Style.font.bodySmall
+        color: Theme.foreground
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.bodySmall
       }
       Text {
         anchors.verticalCenter: parent.verticalCenter
         visible: !!parent.item && parent.item.progress >= 0
         textFormat: Text.PlainText
         text: parent.item && parent.item.progress >= 0 ? Math.round(parent.item.progress) + "%" : ""
-        color: Color.foreground
+        color: Theme.foreground
         opacity: 0.6
-        font.family: Style.font.family
-        font.pixelSize: Style.font.caption
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.caption
       }
     }
   }
@@ -94,13 +95,13 @@ NotchModule {
   peek: Component {
     ActivityRow {
       item: acts.last
-      implicitWidth: Math.min(Style.space(340), Math.max(Style.space(220), naturalWidth))
+      implicitWidth: Math.min(Theme.space(340), Math.max(Theme.space(220), naturalWidth))
     }
   }
 
   expanded: Component {
     Column {
-      spacing: Style.space(8)
+      spacing: Theme.space(8)
       Repeater {
         model: acts.items
         delegate: ActivityRow {
@@ -117,7 +118,7 @@ NotchModule {
     property var item: null
     property bool showSubtitle: true
     readonly property bool hasProgress: !!item && item.progress >= 0
-    readonly property real naturalWidth: iconText.implicitWidth + Style.space(12)
+    readonly property real naturalWidth: iconText.implicitWidth + Theme.space(12)
       + Math.max(titleText.implicitWidth, subtitleText.implicitWidth)
     implicitHeight: layout.implicitHeight
 
@@ -125,18 +126,18 @@ NotchModule {
       id: layout
       anchors.left: parent.left
       anchors.right: parent.right
-      spacing: Style.space(5)
+      spacing: Theme.space(5)
 
       RowLayout {
         Layout.fillWidth: true
-        spacing: Style.space(12)
+        spacing: Theme.space(12)
         Text {
           id: iconText
           textFormat: Text.PlainText
           text: row.item ? row.item.icon : ""
-          color: Color.accent
-          font.family: Style.font.family
-          font.pixelSize: Style.font.heading
+          color: Theme.accent
+          font.family: Theme.font.family
+          font.pixelSize: Theme.font.heading
         }
         ColumnLayout {
           Layout.fillWidth: true
@@ -147,9 +148,9 @@ NotchModule {
             textFormat: Text.PlainText
             text: row.item ? row.item.title : ""
             elide: Text.ElideRight
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
+            color: Theme.foreground
+            font.family: Theme.font.family
+            font.pixelSize: Theme.font.body
           }
           Text {
             id: subtitleText
@@ -158,37 +159,37 @@ NotchModule {
             textFormat: Text.PlainText
             text: row.item ? row.item.subtitle : ""
             elide: Text.ElideRight
-            color: Color.foreground
+            color: Theme.foreground
             opacity: 0.6
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+            font.family: Theme.font.family
+            font.pixelSize: Theme.font.caption
           }
         }
         Text {
           visible: row.hasProgress
           textFormat: Text.PlainText
           text: row.hasProgress ? Math.round(row.item.progress) + "%" : ""
-          color: Color.foreground
+          color: Theme.foreground
           opacity: 0.6
-          font.family: Style.font.family
-          font.pixelSize: Style.font.caption
+          font.family: Theme.font.family
+          font.pixelSize: Theme.font.caption
         }
       }
 
       Item {
         visible: row.hasProgress && row.showSubtitle
         Layout.fillWidth: true
-        implicitHeight: Style.space(4)
+        implicitHeight: Theme.space(4)
         Rectangle {
           anchors.fill: parent
           radius: height / 2
-          color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
+          color: Qt.rgba(Theme.foreground.r, Theme.foreground.g, Theme.foreground.b, 0.15)
         }
         Rectangle {
           width: parent.width * (row.hasProgress ? row.item.progress / 100 : 0)
           height: parent.height
           radius: height / 2
-          color: Color.accent
+          color: Theme.accent
           Behavior on width { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
         }
       }

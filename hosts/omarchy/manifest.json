@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "eryk.notchd",
+  "name": "notchd",
+  "version": "0.3.0",
+  "author": "eryk",
+  "description": "notchd for Omarchy: a dynamic notch under the clock with media, volume/brightness OSD, and pluggable modules",
+  "kinds": [
+    "service",
+    "overlay",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "overlay": "Notch.qml",
+    "barWidget": "BarIndicator.qml"
+  },
+  "barWidget": {
+    "displayName": "notchd",
+    "description": "notchd's compact state in the bar (compactStyle \"bar\"); hover to drop the notch",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "center"
+  }
+}

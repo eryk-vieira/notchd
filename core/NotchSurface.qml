@@ -2,41 +2,32 @@ import QtQuick
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
-import qs.Commons
-import qs.Commons as Commons
 
-// The notch surface under the bar. All state lives in Service.qml; this only
-// draws it. With compactStyle "bar" it hides at rest/compact (the bar
-// indicator shows that) and drops out from under the bar to peek or expand.
+// The notch surface at the top edge of the screen (under the host's bar, if
+// it has one). All state lives in NotchService; this only draws it. With
+// compactStyle "bar" it hides at rest/compact (the host's bar indicator shows
+// that) and drops out from under the bar to peek or expand.
 //
 // The window covers the whole screen on the overlay layer but its input mask
 // is just the notch, so everything else stays click-through.
 Item {
   id: root
 
-  property var shell: null
-  property var manifest: null
-  // Injected by the shell when the service is up; looked up otherwise.
-  property var service: null
-  readonly property var svc: root.service
-
-  Timer {
-    interval: 200
-    repeat: true
-    running: !root.service && !!root.shell
-    onTriggered: root.service = root.shell.serviceFor("eryk.notch")
-  }
-
-  // The shell calls these when the overlay is summoned/hidden.
-  function open() { if (root.svc) root.svc.open() }
-  function close() { if (root.svc) root.svc.close() }
+  // ------------------------------------------------------------------ host
+  property var svc: null
+  // A compositor adapter (HyprlandCompositor, GenericCompositor, ...).
+  property var compositor: null
+  // The host's bar, so the notch hangs right under it. barHeight 0 = no bar.
+  property int barHeight: 0
+  property bool barOnTop: true
+  property bool barHidden: false
+  property string layerNamespace: "notchd"
 
   // ----------------------------------------------------------------- theme
-  readonly property color fg: Commons.Color.foreground
-  readonly property color bg: Commons.Color.background
+  readonly property color fg: Theme.foreground
+  readonly property color bg: Theme.background
   readonly property color dim: Qt.rgba(fg.r, fg.g, fg.b, 0.55)
-  readonly property string fontFamily: Style.font.family
+  readonly property string fontFamily: Theme.font.family
 
   // ------------------------------------------------------------------ mode
   readonly property string svcMode: root.svc ? root.svc.mode : "rest"
@@ -71,20 +62,17 @@ Item {
   readonly property var targetScreen: {
     var screens = Quickshell.screens || []
     var wanted = root.svc && root.svc.screenOverride !== "" ? root.svc.screenOverride
-      : (Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : "")
+      : (root.compositor ? root.compositor.focusedScreenName : "")
     for (var i = 0; i < screens.length; i++)
       if (screens[i].name === wanted) return screens[i]
     return screens.length > 0 ? screens[0] : null
   }
-  readonly property var targetMonitor: root.targetScreen ? Hyprland.monitorFor(root.targetScreen) : null
-  readonly property bool fullscreenOnScreen: !!(root.targetMonitor && root.targetMonitor.activeWorkspace
-    && root.targetMonitor.activeWorkspace.hasFullscreen)
+  readonly property bool fullscreenOnScreen: !!(root.compositor && root.targetScreen
+    && root.compositor.hasFullscreen(root.targetScreen))
 
-  readonly property int barSize: root.shell && root.shell.bar ? Math.max(0, Number(root.shell.bar.barSize) || 0) : 0
-  readonly property string barPosition: root.shell && root.shell.bar ? String(root.shell.bar.position || "top") : "top"
-  readonly property bool barVisible: !root.fullscreenOnScreen && (root.shell && root.shell.bar ? !root.shell.bar.barHidden : true)
-  readonly property int topOffset: (root.barPosition === "top" && root.barVisible)
-    ? (root.barSize > 0 ? root.barSize : Style.bar.sizeHorizontal) : 0
+  // The bar hides over fullscreen apps, so the notch moves up with it.
+  readonly property bool barVisible: !root.fullscreenOnScreen && !root.barHidden
+  readonly property int topOffset: (root.barOnTop && root.barVisible) ? Math.max(0, root.barHeight) : 0
 
   // Hidden in bar style at rest/compact; over a fullscreen app only peeks show.
   readonly property bool concealed: root.mode === "hidden"
@@ -92,13 +80,13 @@ Item {
   readonly property bool pinned: !!root.svc && root.svc.pinned
 
   readonly property bool roomy: root.mode === "peek" || root.mode === "compact" || root.mode === "expanded"
-  readonly property real padX: !root.roomy ? 0 : Style.space(root.mode === "expanded" ? 20 : 14)
-  readonly property real padTop: !root.roomy ? 0 : Style.space(root.mode === "expanded" ? 14 : 6)
-  readonly property real padBottom: !root.roomy ? 0 : Style.space(root.mode === "expanded" ? 18 : 8)
-  readonly property real cornerRadius: !root.roomy ? 0 : Style.space(root.mode === "expanded" ? 26 : 16)
-  readonly property real shoulder: Style.space(10)
+  readonly property real padX: !root.roomy ? 0 : Theme.space(root.mode === "expanded" ? 20 : 14)
+  readonly property real padTop: !root.roomy ? 0 : Theme.space(root.mode === "expanded" ? 14 : 6)
+  readonly property real padBottom: !root.roomy ? 0 : Theme.space(root.mode === "expanded" ? 18 : 8)
+  readonly property real cornerRadius: !root.roomy ? 0 : Theme.space(root.mode === "expanded" ? 26 : 16)
+  readonly property real shoulder: Theme.space(10)
 
-  readonly property real maxWidth: window.width - Style.space(64)
+  readonly property real maxWidth: window.width - Theme.space(64)
   readonly property real targetWidth: Math.min(root.maxWidth, (content.item ? content.item.implicitWidth : 0) + root.padX * 2)
   readonly property real targetHeight: (content.item ? content.item.implicitHeight : 0) + root.padTop + root.padBottom
 
@@ -106,21 +94,21 @@ Item {
   Component {
     id: restView
     Item {
-      implicitWidth: Style.space(120)
-      implicitHeight: Style.space(5)
+      implicitWidth: Theme.space(120)
+      implicitHeight: Theme.space(5)
     }
   }
 
   Component {
     id: expandedView
     Column {
-      spacing: Style.space(16)
+      spacing: Theme.space(16)
 
       Repeater {
         model: root.svc ? root.svc.expandedModules : []
         delegate: Loader {
           required property var modelData
-          width: Style.space(400)
+          width: Theme.space(400)
           sourceComponent: modelData.expanded
         }
       }
@@ -128,15 +116,15 @@ Item {
       // Nothing active: say so instead of opening an empty card.
       Column {
         visible: !root.svc || root.svc.expandedModules.length === 0
-        width: Style.space(260)
-        spacing: Style.space(2)
+        width: Theme.space(260)
+        spacing: Theme.space(2)
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
           textFormat: Text.PlainText
           text: Qt.formatDate(new Date(), "dddd, d MMMM")
           color: root.fg
           font.family: root.fontFamily
-          font.pixelSize: Style.font.body
+          font.pixelSize: Theme.font.body
         }
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
@@ -144,7 +132,7 @@ Item {
           text: "All quiet"
           color: root.dim
           font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
+          font.pixelSize: Theme.font.caption
         }
       }
     }
@@ -158,7 +146,7 @@ Item {
     anchors { top: true; left: true; right: true; bottom: true }
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.namespace: "eryk-notch"
+    WlrLayershell.namespace: root.layerNamespace
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
@@ -166,7 +154,7 @@ Item {
 
     // Input region: the notch plus some slack so the small rest lip is easy
     // to hover; while pinned, everything below the bar, to click away.
-    readonly property real slack: Style.space(root.mode === "rest" ? 10 : 4)
+    readonly property real slack: Theme.space(root.mode === "rest" ? 10 : 4)
     Item {
       id: hitArea
       x: root.pinned ? 0 : card.x - window.slack
@@ -178,7 +166,7 @@ Item {
     MouseArea {
       anchors.fill: parent
       visible: root.pinned
-      onClicked: root.close()
+      onClicked: if (root.svc) root.svc.close()
     }
 
     Item {

@@ -1,0 +1,14 @@
+{
+  "modules": [
+    "media",
+    "activities"
+  ],
+  "topOffset": 0,
+  "hoverOpenDelay": 120,
+  "hoverCloseDelay": 300,
+  "theme": {
+    "foreground": "#cacccc",
+    "background": "#101315",
+    "fontFamily": "monospace"
+  }
+}

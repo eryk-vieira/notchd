@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell.Services.Mpris
 import Quickshell.Widgets
-import qs.Commons
+import ".."
 
 // Now playing, from MPRIS (Spotify, browsers, mpv...). Compact: artwork on
 // the left, equalizer on the right. Peeks on a new track. Expanded: artwork,
@@ -80,37 +80,37 @@ NotchModule {
   // ----------------------------------------------------------------- views
   compact: Component {
     Item {
-      implicitWidth: Style.space(220)
-      implicitHeight: Style.space(22)
-      Art { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; size: Style.space(20); radius: Style.space(5) }
-      Equalizer { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; barHeight: Style.space(14) }
+      implicitWidth: Theme.space(220)
+      implicitHeight: Theme.space(22)
+      Art { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; size: Theme.space(20); radius: Theme.space(5) }
+      Equalizer { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; barHeight: Theme.space(14) }
     }
   }
 
   barView: Component {
     Row {
-      spacing: Style.space(6)
-      Art { anchors.verticalCenter: parent.verticalCenter; size: Style.space(16); radius: Style.space(4) }
-      Equalizer { anchors.verticalCenter: parent.verticalCenter; barHeight: Style.space(12) }
+      spacing: Theme.space(6)
+      Art { anchors.verticalCenter: parent.verticalCenter; size: Theme.space(16); radius: Theme.space(4) }
+      Equalizer { anchors.verticalCenter: parent.verticalCenter; barHeight: Theme.space(12) }
     }
   }
 
   peek: Component {
     RowLayout {
-      spacing: Style.space(12)
-      Art { size: Style.space(38); radius: Style.space(8) }
+      spacing: Theme.space(12)
+      Art { size: Theme.space(38); radius: Theme.space(8) }
       ColumnLayout {
         spacing: 0
-        Layout.preferredWidth: Math.min(Style.space(240), Math.max(titleText.implicitWidth, artistText.implicitWidth))
+        Layout.preferredWidth: Math.min(Theme.space(240), Math.max(titleText.implicitWidth, artistText.implicitWidth))
         Text {
           id: titleText
           Layout.fillWidth: true
           textFormat: Text.PlainText
           text: media.trackTitle
           elide: Text.ElideRight
-          color: Color.foreground
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body
+          color: Theme.foreground
+          font.family: Theme.font.family
+          font.pixelSize: Theme.font.body
           font.bold: true
         }
         Text {
@@ -120,35 +120,35 @@ NotchModule {
           textFormat: Text.PlainText
           text: media.trackArtist
           elide: Text.ElideRight
-          color: Color.foreground
+          color: Theme.foreground
           opacity: 0.6
-          font.family: Style.font.family
-          font.pixelSize: Style.font.caption
+          font.family: Theme.font.family
+          font.pixelSize: Theme.font.caption
         }
       }
-      Equalizer { barHeight: Style.space(16) }
+      Equalizer { barHeight: Theme.space(16) }
     }
   }
 
   expanded: Component {
     ColumnLayout {
-      spacing: Style.space(10)
+      spacing: Theme.space(10)
 
       RowLayout {
         Layout.fillWidth: true
-        spacing: Style.space(14)
-        Art { size: Style.space(58); radius: Style.space(10) }
+        spacing: Theme.space(14)
+        Art { size: Theme.space(58); radius: Theme.space(10) }
         ColumnLayout {
           Layout.fillWidth: true
-          spacing: Style.space(2)
+          spacing: Theme.space(2)
           Text {
             Layout.fillWidth: true
             textFormat: Text.PlainText
             text: media.trackTitle
             elide: Text.ElideRight
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
+            color: Theme.foreground
+            font.family: Theme.font.family
+            font.pixelSize: Theme.font.body
             font.bold: true
           }
           Text {
@@ -157,10 +157,10 @@ NotchModule {
             textFormat: Text.PlainText
             text: media.trackArtist
             elide: Text.ElideRight
-            color: Color.foreground
+            color: Theme.foreground
             opacity: 0.7
-            font.family: Style.font.family
-            font.pixelSize: Style.font.bodySmall
+            font.family: Theme.font.family
+            font.pixelSize: Theme.font.bodySmall
           }
           Text {
             Layout.fillWidth: true
@@ -168,32 +168,32 @@ NotchModule {
             textFormat: Text.PlainText
             text: media.source
             elide: Text.ElideRight
-            color: Color.foreground
+            color: Theme.foreground
             opacity: 0.45
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+            font.family: Theme.font.family
+            font.pixelSize: Theme.font.caption
           }
         }
-        Equalizer { Layout.alignment: Qt.AlignTop; barHeight: Style.space(16) }
+        Equalizer { Layout.alignment: Qt.AlignTop; barHeight: Theme.space(16) }
       }
 
       ColumnLayout {
         Layout.fillWidth: true
         visible: media.length > 0
-        spacing: Style.space(4)
+        spacing: Theme.space(4)
         Item {
           Layout.fillWidth: true
-          implicitHeight: Style.space(4)
+          implicitHeight: Theme.space(4)
           Rectangle {
             anchors.fill: parent
             radius: height / 2
-            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
+            color: Qt.rgba(Theme.foreground.r, Theme.foreground.g, Theme.foreground.b, 0.15)
           }
           Rectangle {
             width: parent.width * Math.max(0, Math.min(1, media.position / Math.max(1, media.length)))
             height: parent.height
             radius: height / 2
-            color: Color.foreground
+            color: Theme.foreground
             Behavior on width { NumberAnimation { duration: 900 } }
           }
         }
@@ -207,7 +207,7 @@ NotchModule {
 
       RowLayout {
         Layout.alignment: Qt.AlignHCenter
-        spacing: Style.space(26)
+        spacing: Theme.space(26)
         IconButton { glyph: "󰒮"; enabled: !!media.player && media.player.canGoPrevious; onActivated: media.previous() }
         IconButton { glyph: media.playing ? "󰏤" : "󰐊"; big: true; onActivated: media.togglePlay() }
         IconButton { glyph: "󰒭"; enabled: !!media.player && media.player.canGoNext; onActivated: media.next() }
@@ -218,12 +218,12 @@ NotchModule {
   // ------------------------------------------------------------ components
   component Art: ClippingRectangle {
     id: art
-    property real size: Style.space(20)
+    property real size: Theme.space(20)
     implicitWidth: size
     implicitHeight: size
     Layout.preferredWidth: size
     Layout.preferredHeight: size
-    color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.12)
+    color: Qt.rgba(Theme.foreground.r, Theme.foreground.g, Theme.foreground.b, 0.12)
     Image {
       id: artImage
       anchors.fill: parent
@@ -239,9 +239,9 @@ NotchModule {
       visible: artImage.status !== Image.Ready
       textFormat: Text.PlainText
       text: "󰝚"
-      color: Color.foreground
+      color: Theme.foreground
       opacity: 0.7
-      font.family: Style.font.family
+      font.family: Theme.font.family
       font.pixelSize: art.size * 0.55
     }
   }
@@ -250,13 +250,13 @@ NotchModule {
   // Fixed-size box so the bars moving never resize the notch.
   component Equalizer: Item {
     id: eq
-    property real barHeight: Style.space(14)
+    property real barHeight: Theme.space(14)
     implicitWidth: eqRow.implicitWidth
     implicitHeight: barHeight
     Row {
       id: eqRow
       anchors.bottom: parent.bottom
-      spacing: Style.space(2)
+      spacing: Theme.space(2)
     Repeater {
       model: 4
       delegate: Rectangle {
@@ -264,10 +264,10 @@ NotchModule {
         required property int index
         property real level: 0.25
         anchors.bottom: parent.bottom
-        width: Style.space(3)
+        width: Theme.space(3)
         radius: width / 2
         height: Math.max(width, eq.barHeight * (media.playing ? level : 0.2))
-        color: Color.accent
+        color: Theme.accent
         Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
         Timer {
           interval: 170 + eqBar.index * 37
@@ -285,13 +285,13 @@ NotchModule {
     property string glyph: ""
     property bool big: false
     signal activated()
-    implicitWidth: Style.space(big ? 36 : 28)
+    implicitWidth: Theme.space(big ? 36 : 28)
     implicitHeight: implicitWidth
     opacity: enabled ? 1 : 0.35
     Rectangle {
       anchors.fill: parent
       radius: width / 2
-      color: Color.foreground
+      color: Theme.foreground
       opacity: btnMouse.containsMouse ? 0.12 : 0
       Behavior on opacity { NumberAnimation { duration: 100 } }
     }
@@ -299,9 +299,9 @@ NotchModule {
       anchors.centerIn: parent
       textFormat: Text.PlainText
       text: btn.glyph
-      color: Color.foreground
-      font.family: Style.font.family
-      font.pixelSize: btn.big ? Style.font.display * 0.75 : Style.font.heading
+      color: Theme.foreground
+      font.family: Theme.font.family
+      font.pixelSize: btn.big ? Theme.font.display * 0.75 : Theme.font.heading
     }
     MouseArea {
       id: btnMouse
@@ -314,9 +314,9 @@ NotchModule {
 
   component TimeText: Text {
     textFormat: Text.PlainText
-    color: Color.foreground
+    color: Theme.foreground
     opacity: 0.5
-    font.family: Style.font.family
-    font.pixelSize: Style.font.caption
+    font.family: Theme.font.family
+    font.pixelSize: Theme.font.caption
   }
 }

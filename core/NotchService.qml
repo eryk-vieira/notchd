@@ -2,39 +2,68 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// The notch's single source of truth, shared by the overlay under the bar
-// (Notch.qml) and the bar indicator (BarIndicator.qml): config, modules,
-// mode, peeks, hover and IPC. Modules see this object as `notch`.
+// The notch's single source of truth: config, modules, mode, peeks, hover and
+// IPC. Every surface that shows the notch (NotchSurface, a host's bar
+// indicator) reads it; modules see it as `notch`.
+//
+// It knows nothing about the desktop it runs in. A host instantiates it and
+// sets the properties in the "host" block below.
 Item {
   id: svc
   visible: false
 
-  property var shell: null
+  // ------------------------------------------------------------------ host
+  // IPC target scripts call (`qs ipc call <target> push ...`).
+  property string ipcTarget: "notchd"
+  // Absolute path of the JSON config. Watched; edits apply live.
+  property string configPath: ""
+  // Extra modules the host ships, as { id: url }. They win over built-ins
+  // with the same id.
+  property var hostModules: ({})
+  // Whether the host has a bar indicator that can hold the compact state.
+  // Without one, compactStyle is always "notch".
+  property bool barStyleAvailable: false
+  // Prefix for log lines.
+  property string logName: svc.ipcTarget
+
+  // -------------------------------------------------------------- built-ins
+  readonly property var builtinModules: ({
+    media: Qt.resolvedUrl("modules/media.qml"),
+    activities: Qt.resolvedUrl("modules/activities.qml")
+  })
+
+  function moduleUrl(id) {
+    if (svc.hostModules && svc.hostModules[id]) return svc.hostModules[id]
+    return svc.builtinModules[id] || ""
+  }
 
   // ---------------------------------------------------------------- config
-  readonly property string pluginDir: String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "").replace(/\/$/, "")
-  property var moduleIds: ["osd", "media", "activities"]
+  // The parsed config, so hosts can read their own keys from it.
+  property var config: ({})
+  property var moduleIds: ["media", "activities"]
   property int hoverOpenDelay: 120
   property int hoverCloseDelay: 300
-  // Where the compact state lives: "bar" (an indicator in the bar; the notch
-  // only drops below it to peek or expand) or "notch" (hanging under the
-  // clock all the time).
-  property string compactStyle: "bar"
+  // Where the compact state lives: "bar" (in the host's bar indicator; the
+  // notch only drops out to peek or expand) or "notch" (hanging under the
+  // top edge all the time).
+  property string configuredStyle: "bar"
+  readonly property string compactStyle: svc.barStyleAvailable && svc.configuredStyle === "bar" ? "bar" : "notch"
 
   function loadConfig(text) {
     try {
       var cfg = JSON.parse(String(text || "{}"))
+      svc.config = cfg
       if (Array.isArray(cfg.modules)) svc.moduleIds = cfg.modules.map(String)
       if (cfg.hoverOpenDelay !== undefined) svc.hoverOpenDelay = Math.max(0, Number(cfg.hoverOpenDelay) || 0)
       if (cfg.hoverCloseDelay !== undefined) svc.hoverCloseDelay = Math.max(0, Number(cfg.hoverCloseDelay) || 0)
-      svc.compactStyle = cfg.compactStyle === "notch" ? "notch" : "bar"
+      svc.configuredStyle = cfg.compactStyle === "notch" ? "notch" : "bar"
     } catch (e) {
-      console.warn("eryk.notch: config.json is not valid JSON:", e)
+      console.warn(svc.logName + ": " + svc.configPath + " is not valid JSON:", e)
     }
   }
 
   FileView {
-    path: svc.pluginDir + "/config.json"
+    path: svc.configPath
     watchChanges: true
     printErrors: false
     onLoaded: svc.loadConfig(text())
@@ -64,13 +93,14 @@ Item {
     model: svc.moduleIds
     delegate: Loader {
       required property string modelData
-      source: Qt.resolvedUrl("modules/" + modelData + ".qml")
+      source: svc.moduleUrl(modelData)
       onLoaded: {
         item.notch = svc
         if (item.moduleId === "") item.moduleId = modelData
         svc.rebuildModules()
       }
-      onStatusChanged: if (status === Loader.Error) console.warn("eryk.notch: module '" + modelData + "' failed to load")
+      onStatusChanged: if (status === Loader.Error) console.warn(svc.logName + ": module '" + modelData + "' failed to load")
+      Component.onCompleted: if (String(source) === "") console.warn(svc.logName + ": unknown module '" + modelData + "'")
       Component.onDestruction: Qt.callLater(svc.rebuildModules)
     }
   }
@@ -164,7 +194,7 @@ Item {
 
   // ------------------------------------------------------------------- IPC
   IpcHandler {
-    target: "eryk.notch"
+    target: svc.ipcTarget
     function toggle(): void { svc.pinned = !svc.pinned }
     function open(): void { svc.open() }
     function close(): void { svc.close() }
