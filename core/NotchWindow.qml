@@ -247,6 +247,10 @@ Scope {
       }
       opacity: root.concealed || root.dragAway ? 0 : 1
       Behavior on opacity { NumberAnimation { duration: 160 } }
+      // Concealed and faded out, it stops drawing, and views that animate
+      // pause (they check `visible`): a notch hidden over a fullscreen app
+      // costs no frames. Dragged away it stays visible: it holds the pointer.
+      visible: !root.concealed || opacity > 0
     }
   }
 

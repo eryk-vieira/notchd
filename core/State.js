@@ -33,13 +33,16 @@ function canPeek(module, s) {
 }
 
 // "peek" | "expanded" | "compact" | "rest". Being dragged, the notch stays
-// closed: the pointer is on it, but it is moving it, not opening it.
+// closed: the pointer is on it, but it is moving it, not opening it. A
+// `guest` (a copy of the visitor) is hidden while closed, so it rests
+// instead of holding a compact view nobody sees: a live view there kept its
+// window drawing frames.
 function mode(s) {
-  if (s.dragging) return s.compactModule ? "compact" : "rest"
+  var compact = s.compactModule && !s.guest ? "compact" : "rest"
+  if (s.dragging) return compact
   if (s.peekModule && !s.pinned) return "peek"
   if (s.pinned || s.hovered) return "expanded"
-  if (s.compactModule) return "compact"
-  return "rest"
+  return compact
 }
 
 // How far windows are kept from the notch's edge (the layer-shell exclusive

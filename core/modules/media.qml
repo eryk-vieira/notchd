@@ -242,7 +242,8 @@ NotchModule {
             height: parent.height
             radius: height / 2
             color: Theme.foreground
-            Behavior on width { NumberAnimation { duration: 900 } }
+            // No easing: `position` ticks every second, and a 900 ms ease
+            // kept the window drawing frames nine tenths of the time.
           }
         }
         RowLayout {
@@ -317,37 +318,39 @@ NotchModule {
     }
   }
 
-  // A fake equalizer: bars wander while playing and rest low when paused.
-  // Fixed-size box so the bars moving never resize the notch.
+  // A fake equalizer: bars jump while playing and rest low when paused.
+  // Fixed-size box so the bars moving never resize the notch. All bars step
+  // at once, without easing: a frame per step, about six a second. Eased
+  // bars were always moving, a frame on every refresh of the screen for as
+  // long as music played. Hidden (a notch concealed over a fullscreen app),
+  // it stops.
   component Equalizer: Item {
     id: eq
     property real barHeight: Theme.space(14)
+    property var levels: [0.25, 0.25, 0.25, 0.25]
     implicitWidth: eqRow.implicitWidth
     implicitHeight: barHeight
+    Timer {
+      interval: 160
+      repeat: true
+      running: media.playing && eq.visible
+      onTriggered: eq.levels = eq.levels.map(function() { return 0.25 + Math.random() * 0.75 })
+    }
     Row {
       id: eqRow
       anchors.bottom: parent.bottom
       spacing: Theme.space(2)
-    Repeater {
-      model: 4
-      delegate: Rectangle {
-        id: eqBar
-        required property int index
-        property real level: 0.25
-        anchors.bottom: parent.bottom
-        width: Theme.space(3)
-        radius: width / 2
-        height: Math.max(width, eq.barHeight * (media.playing ? level : 0.2))
-        color: Theme.accent
-        Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-        Timer {
-          interval: 170 + eqBar.index * 37
-          repeat: true
-          running: media.playing
-          onTriggered: eqBar.level = 0.25 + Math.random() * 0.75
+      Repeater {
+        model: 4
+        delegate: Rectangle {
+          required property int index
+          anchors.bottom: parent.bottom
+          width: Theme.space(3)
+          radius: width / 2
+          height: Math.max(width, eq.barHeight * (media.playing ? eq.levels[index] : 0.2))
+          color: Theme.accent
         }
       }
-    }
     }
   }
 

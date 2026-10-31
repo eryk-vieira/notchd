@@ -50,6 +50,17 @@ test('mode: a dragged notch stays closed whatever else is going on', () => {
   assert.equal(State.mode({ dragging: true, hovered: true, peekModule: m }), 'rest');
 });
 
+// Bug: the visitor's copies, one fullscreen window per screen, showed the
+// compact view while hidden; the media equalizer kept them drawing frames
+// nobody saw, two thirds of what music playing cost.
+test('mode: a guest copy rests while closed, and only peeks or opens', () => {
+  const m = mod('media', 50);
+  assert.equal(State.mode({ guest: true, compactModule: m }), 'rest');
+  assert.equal(State.mode({ guest: true, dragging: true, compactModule: m }), 'rest');
+  assert.equal(State.mode({ guest: true, compactModule: m, peekModule: m }), 'peek');
+  assert.equal(State.mode({ guest: true, compactModule: m, hovered: true }), 'expanded');
+});
+
 test('reservedSpace: only when enabled in notch style; compact never below the baseline', () => {
   const on = { enabled: true, compactStyle: 'notch', compact: true, baseline: 36, tallest: 0, rest: 5 };
   assert.equal(State.reservedSpace(on), 36);

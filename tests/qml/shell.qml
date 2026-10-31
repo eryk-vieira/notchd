@@ -77,6 +77,7 @@ ShellRoot {
       { name: "on a side edge the card grows sideways", run: root.sideEdgeAxes },
       { name: "a peek shows on the focused screen and leaves the other copies alone", run: root.peekOnFocusedCopy },
       { name: "a peek goes only to the notches that show the module", run: root.peekOnlyWhereShown },
+      { name: "the visitor's hidden copies hold no compact view", run: root.visitorRestsWhileClosed },
       { name: "notches, copies and modules survive a config edit", run: root.survivesConfigEdits },
       { name: "adding a notch and removing it gives the config back", run: root.addAndRemoveNotch },
       { name: "only the first notch asking for the bar gets it", run: root.oneBarNotch },
@@ -550,6 +551,29 @@ ShellRoot {
       [100, function() {
         root.check(main.copyOn("A").mode === "peek" && main.copyOn("B").mode === "compact",
                    "focus on A: " + main.copyOn("A").mode + " / " + main.copyOn("B").mode)
+        multi.dismissPeek(null)
+      }]
+    ], function() { root.done() })
+  }
+
+  // Bug: the visitor's copies (a fullscreen window per screen, hidden while
+  // closed) showed the compact view of whatever was active. Music playing
+  // kept the equalizer drawing frames in windows nobody could see.
+  function visitorRestsWhileClosed() {
+    var visitor = multi.visitor
+    root.push("quiet", false)
+    root.steps([
+      [100, function() {
+        root.check(visitor.copies.length === 2, "the visitor has " + visitor.copies.length + " copies, not one per screen")
+        visitor.copies.forEach(function(c) {
+          root.check(c.mode === "rest", "a closed visitor copy on " + c.fixedScreen + " shows " + c.mode)
+        })
+        twoScreens.focusedScreenName = "B"
+        multi.requestPeek(multi.moduleById("activities"), 2000)
+      }],
+      [100, function() {
+        root.check(visitor.copies.some(function(c) { return c.mode === "peek" }) || multi.peeking(multi.moduleById("activities")),
+                   "nothing peeks")
         multi.dismissPeek(null)
       }]
     ], function() { root.done() })

@@ -44,6 +44,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Fixed
 
+- Music playing cost a quarter to a third of a CPU core (on a 160 Hz monitor) and kept the compositor busy: the hidden default notch drew the media view on every monitor, and the equalizer and the progress bar never stopped easing. It now costs about 1 %: hidden copies hold no view, the equalizer steps about six times a second, the progress bar moves once a second without easing, and a notch hidden over a fullscreen app stops its equalizer.
 - The notch's animations looked choppy at their slow end: one side of the outline moved a whole pixel at a time while the other glided. It now moves in fractions of a pixel and settles on whole pixels, with its content kept on whole pixels throughout.
 - Moving the pointer across the open notch's controls (the media buttons, the gear) closed and reopened it: those controls took the hover from the notch.
 - With `reserveSpace`, windows took 4 s to reclaim the space after the last module ended; they now do as the notch finishes collapsing (400 ms).

@@ -105,7 +105,7 @@ Item {
 
   // ------------------------------------------------------------------ mode
   readonly property string mode: State.mode({ peekModule: copy.peekModule, pinned: copy.pinned, dragging: copy.dragging,
-                                             hovered: copy.hovered, compactModule: copy.compactModule })
+                                             hovered: copy.hovered, compactModule: copy.compactModule, guest: copy.guest })
   readonly property bool isOpen: copy.mode === "peek" || copy.mode === "expanded"
 
   // ---------------------------------------------------------------- screen
