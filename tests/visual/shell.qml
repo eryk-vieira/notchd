@@ -106,8 +106,9 @@ ShellRoot {
   DemoService { id: pomodoroSvc; tag: "pomodoro"; defaultModules: ["timer"] }
   DemoService { id: timerIdleSvc; tag: "timer-idle"; defaultModules: ["timer"] }
   DemoService { id: timerDoneSvc; tag: "timer-done"; defaultModules: ["timer"] }
+  DemoService { id: restSvc; tag: "rest"; defaultModules: [] }
   readonly property var demoServices: [mediaSvc, activitySvc, osdSvc, openSvc, resourcesSvc, resourcesOpenSvc,
-                                       timerSvc, pomodoroSvc, timerIdleSvc, timerDoneSvc]
+                                       timerSvc, pomodoroSvc, timerIdleSvc, timerDoneSvc, restSvc]
 
   // Demo values instead of this machine's: memory short, the rest fine.
   function demoResources(m) {
@@ -151,6 +152,8 @@ ShellRoot {
     id: mock
     property var svc: null
     property string caption: ""
+    // Overrides the notch's own offset (NaN: keep it).
+    property real offset: NaN
     readonly property int barHeight: Theme.space(22)
     width: Theme.space(500)
     height: Theme.space(330)
@@ -175,12 +178,152 @@ ShellRoot {
       maxWidth: mock.width - Theme.space(24)
       maxHeight: mock.height - Theme.space(24)
       readonly property var spot: Position.place({
-        edge: mockCard.edge, offset: mockCard.notch ? mockCard.notch.placement.offset : 0.5,
+        edge: mockCard.edge,
+        offset: !isNaN(mock.offset) ? mock.offset : mockCard.notch ? mockCard.notch.placement.offset : 0.5,
         width: mock.width, height: mock.height, cardWidth: mockCard.width, cardHeight: mockCard.height,
-        insets: Position.insets("top", mock.barHeight, true), margin: mockCard.shoulder + Theme.space(4)
+        insets: Position.insets("top", mock.barHeight, true), snap: mockCard.shoulder + Theme.space(4)
       })
       x: mockCard.spot.x
       y: mockCard.spot.y
+      startSide: mockCard.spot.atStart ? "corner" : "shoulder"
+      endSide: mockCard.spot.atEnd ? "corner" : "shoulder"
+    }
+  }
+
+  // Three notches wanting nearly the same spot, packed as NotchSurface
+  // does (Position.pack): joined flush into one shape as deep as its
+  // deepest notch (Position.rowDepths), the empty one in the middle too.
+  component JoinedScreen: Rectangle {
+    id: joined
+    property string caption: ""
+    // The three notches' services, along the edge.
+    property var services: [timerSvc, restSvc, resourcesSvc]
+    readonly property int barHeight: Theme.space(22)
+    width: Theme.space(500)
+    height: Theme.space(330)
+    color: Theme.mix(Theme.background, Theme.foreground, 0.12)
+    border.width: 1
+    border.color: Theme.line
+    clip: true
+
+    Rectangle { width: parent.width; height: joined.barHeight; color: Theme.background }
+    Text {
+      anchors.verticalCenter: parent.top
+      anchors.verticalCenterOffset: joined.barHeight / 2
+      x: Theme.space(10)
+      text: joined.caption
+      color: Theme.muted
+      font.family: Theme.font.family
+      font.pixelSize: Theme.font.caption
+    }
+
+    readonly property var cards: [first, second, third]
+    readonly property var insets: Position.insets("top", joined.barHeight, true)
+    readonly property var stretch: Position.stretch({ edge: first.edge, width: joined.width, height: joined.height,
+                                                      insets: joined.insets })
+    readonly property real snap: first.shoulder + Theme.space(4)
+    function wish(i) { return (joined.stretch.start + joined.stretch.end) / 2 + (i - 1) * Theme.space(30) }
+    readonly property var packing: Position.pack(joined.cards.map(function(c, i) {
+      return { group: "demo", center: joined.wish(i), size: c.vertical ? c.height : c.width,
+               start: joined.stretch.start, end: joined.stretch.end, snap: joined.snap,
+               open: c.mode === "peek" || c.mode === "expanded" }
+    }), 2 * Theme.space(10) + Theme.space(8))
+    readonly property var rowDepths: Position.rowDepths(joined.packing, joined.cards.map(function(c) { return c.closedDepth }))
+    function spotOf(i) {
+      var c = joined.cards[i]
+      var span = joined.stretch.end - joined.stretch.start
+      return Position.place({ edge: c.edge, offset: (joined.wish(i) + joined.packing[i].shift - joined.stretch.start) / span,
+                              width: joined.width, height: joined.height, cardWidth: c.width, cardHeight: c.height,
+                              insets: joined.insets, snap: joined.snap })
+    }
+    function side(i, which) {
+      var j = joined.packing[i][which === "start" ? "joinStart" : "joinEnd"]
+      return j >= 0 ? "joined" : joined.spotOf(i)[which === "start" ? "atStart" : "atEnd"] ? "corner" : "shoulder"
+    }
+    function neighborDepth(i, which) {
+      var j = joined.packing[i][which === "start" ? "joinStart" : "joinEnd"]
+      return j >= 0 ? joined.cards[j].depth : 0
+    }
+
+    NotchCard {
+      id: first
+      notch: joined.services[0].firstCopy
+      x: joined.spotOf(0).x; y: joined.spotOf(0).y
+      startSide: joined.side(0, "start"); endSide: joined.side(0, "end")
+      startNeighborDepth: joined.neighborDepth(0, "start"); endNeighborDepth: joined.neighborDepth(0, "end")
+      minDepth: joined.rowDepths[0]
+    }
+    NotchCard {
+      id: second
+      notch: joined.services[1].firstCopy
+      x: joined.spotOf(1).x; y: joined.spotOf(1).y
+      startSide: joined.side(1, "start"); endSide: joined.side(1, "end")
+      startNeighborDepth: joined.neighborDepth(1, "start"); endNeighborDepth: joined.neighborDepth(1, "end")
+      minDepth: joined.rowDepths[1]
+    }
+    NotchCard {
+      id: third
+      notch: joined.services[2].firstCopy
+      x: joined.spotOf(2).x; y: joined.spotOf(2).y
+      startSide: joined.side(2, "start"); endSide: joined.side(2, "end")
+      startNeighborDepth: joined.neighborDepth(2, "start"); endNeighborDepth: joined.neighborDepth(2, "end")
+      minDepth: joined.rowDepths[2]
+    }
+  }
+
+  // A notch in the top-left corner and one at the top of the left edge:
+  // the top one keeps the corner and the side one starts where it ends
+  // (Position.corners), whatever edge the scenario puts the others on.
+  component CornerScreen: Rectangle {
+    id: quina
+    property string caption: ""
+    readonly property int barHeight: Theme.space(22)
+    width: Theme.space(500)
+    height: Theme.space(330)
+    color: Theme.mix(Theme.background, Theme.foreground, 0.12)
+    border.width: 1
+    border.color: Theme.line
+    clip: true
+
+    Rectangle { width: parent.width; height: quina.barHeight; color: Theme.background }
+    Text {
+      anchors.verticalCenter: parent.top
+      anchors.verticalCenterOffset: quina.barHeight / 2
+      x: quina.width - width - Theme.space(10)
+      text: quina.caption
+      color: Theme.muted
+      font.family: Theme.font.family
+      font.pixelSize: Theme.font.caption
+    }
+
+    readonly property var bar: Position.insets("top", quina.barHeight, true)
+    readonly property real snap: topCard.shoulder + Theme.space(4)
+    readonly property var topSpot: Position.place({ edge: "top", offset: 0, width: quina.width, height: quina.height,
+      cardWidth: topCard.width, cardHeight: topCard.height, insets: quina.bar, snap: quina.snap })
+    readonly property var inset: Position.corners([
+      { screen: "s", edge: "top", atStart: quina.topSpot.atStart, atEnd: quina.topSpot.atEnd, depth: topCard.depth, shown: true },
+      { screen: "s", edge: "left" }])[1]
+    readonly property var sideSpot: Position.place({ edge: "left", offset: 0, width: quina.width, height: quina.height,
+      cardWidth: sideCard.width, cardHeight: sideCard.height, snap: quina.snap,
+      insets: { top: quina.bar.top + quina.inset.start, bottom: quina.bar.bottom + quina.inset.end, left: 0, right: 0 } })
+    readonly property var span: Position.corners([
+      { screen: "s", edge: "top" },
+      { screen: "s", edge: "left", atStart: quina.sideSpot.atStart, atEnd: quina.sideSpot.atEnd, depth: sideCard.depth, shown: true }])[0]
+
+    NotchCard {
+      id: topCard
+      notch: resourcesSvc.firstCopy
+      edge: "top"
+      x: quina.topSpot.x; y: quina.topSpot.y
+      startSide: quina.topSpot.atStart ? "corner" : "shoulder"
+      startNeighborDepth: quina.span.start
+    }
+    NotchCard {
+      id: sideCard
+      notch: timerSvc.firstCopy
+      edge: "left"
+      x: quina.sideSpot.x; y: quina.sideSpot.y
+      startSide: quina.sideSpot.atStart ? "corner" : "shoulder"
     }
   }
 
@@ -205,6 +348,10 @@ ShellRoot {
       MockScreen { svc: pomodoroSvc; caption: "timer, expanded (pomodoro)" }
       MockScreen { svc: timerIdleSvc; caption: "timer, expanded (idle)" }
       MockScreen { svc: timerDoneSvc; caption: "timer, peek (time's up)" }
+      MockScreen { svc: mediaSvc; offset: 0; caption: "media, in the corner" }
+      JoinedScreen { caption: "timer, an empty notch and resources, joined" }
+      JoinedScreen { services: [timerSvc, osdSvc, resourcesSvc]; caption: "the middle one peeking pushes its row aside" }
+      CornerScreen { caption: "a corner shared by two edges" }
     }
   }
 

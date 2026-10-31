@@ -47,33 +47,43 @@ function effective(position, compactStyle, barEdge) {
 //   insets              { top, bottom, left, right }: what the host's bar
 //                       takes on each edge; the card hangs from its edge's
 //                       inset and its offset runs between the other two
-//   margin              kept free at both ends of the edge (the shoulders)
+//   snap                within this many px of either end of the stretch,
+//                       the card goes flush against it (its shoulder would
+//                       not fit there): the corner
 // The card's middle goes at `offset` along the free stretch, clamped so the
 // card stays inside it; a card longer than the stretch is centered on it.
-// Not rounded: the card's size animates in fractions of a pixel, and a
-// rounded corner would step a pixel at a time while the opposite one glides
-// (NotchCard snaps its content to whole pixels instead).
+// Returns { x, y, atStart, atEnd }: atStart and atEnd say the card is flush
+// with that end (the left or top one is the start), where NotchCard draws
+// it into the corner. Not rounded: the card's size animates in fractions of
+// a pixel, and a rounded corner would step a pixel at a time while the
+// opposite one glides (NotchCard snaps its content to whole pixels instead).
 function place(s) {
   var edge = isEdge(s.edge) ? s.edge : DEFAULT_EDGE
   var offset = resolve({ offset: s.offset }).offset
   var insets = s.insets || {}
   function inset(e) { return Math.max(0, Number(insets[e]) || 0) }
-  var margin = Math.max(0, Number(s.margin) || 0)
+  var snap = Math.max(0, Number(s.snap) || 0)
   var vertical = isVertical(edge)
   var length = vertical ? s.height : s.width
   var along = vertical ? s.cardHeight : s.cardWidth
-  var start = (vertical ? inset("top") : inset("left")) + margin
-  var end = length - (vertical ? inset("bottom") : inset("right")) - margin
+  var start = vertical ? inset("top") : inset("left")
+  var end = length - (vertical ? inset("bottom") : inset("right"))
   var lo = start
   var hi = end - along
-  var pos = hi < lo ? (lo + hi) / 2
-    : Math.max(lo, Math.min(hi, start + offset * (end - start) - along / 2))
+  var pos, atStart = false, atEnd = false
+  if (hi < lo) pos = (lo + hi) / 2
+  else {
+    pos = Math.max(lo, Math.min(hi, start + offset * (end - start) - along / 2))
+    if (pos - lo <= snap && pos - lo <= hi - pos) { pos = lo; atStart = true }
+    else if (hi - pos <= snap) { pos = hi; atEnd = true }
+  }
   var depth
   if (edge === "top") depth = inset("top")
   else if (edge === "bottom") depth = s.height - inset("bottom") - s.cardHeight
   else if (edge === "left") depth = inset("left")
   else depth = s.width - inset("right") - s.cardWidth
-  return vertical ? { x: depth, y: pos } : { x: pos, y: depth }
+  return vertical ? { x: depth, y: pos, atStart: atStart, atEnd: atEnd }
+    : { x: pos, y: depth, atStart: atStart, atEnd: atEnd }
 }
 
 // What the host's bar takes on each edge: `size` on `barEdge` while it is
@@ -95,17 +105,17 @@ function nearestEdge(x, y, width, height) {
 
 // Where a notch dragged to the pointer goes: the nearest edge, its middle
 // under the pointer along that edge (the inverse of place). Within
-// `magnet` px of the middle of the free stretch it snaps to 0.5. `s`:
-// x, y (the pointer), width, height, insets, margin and magnet, as place.
+// `magnet` px of the middle of the free stretch it snaps to 0.5 (place's
+// `snap` takes it into a corner). `s`: x, y (the pointer), width, height,
+// insets and magnet, as place.
 function dragTarget(s) {
   var edge = nearestEdge(s.x, s.y, s.width, s.height)
   var insets = s.insets || {}
   function inset(e) { return Math.max(0, Number(insets[e]) || 0) }
-  var margin = Math.max(0, Number(s.margin) || 0)
   var vertical = isVertical(edge)
   var p = vertical ? s.y : s.x
-  var start = (vertical ? inset("top") : inset("left")) + margin
-  var end = (vertical ? s.height - inset("bottom") : s.width - inset("right")) - margin
+  var start = vertical ? inset("top") : inset("left")
+  var end = vertical ? s.height - inset("bottom") : s.width - inset("right")
   if (end <= start) return { edge: edge, offset: DEFAULT_OFFSET }
   if (Math.abs(p - (start + end) / 2) <= Math.max(0, Number(s.magnet) || 0))
     return { edge: edge, offset: DEFAULT_OFFSET }
@@ -146,29 +156,40 @@ function stretch(s) {
   var edge = isEdge(s.edge) ? s.edge : DEFAULT_EDGE
   var insets = s.insets || {}
   function inset(e) { return Math.max(0, Number(insets[e]) || 0) }
-  var margin = Math.max(0, Number(s.margin) || 0)
   var vertical = isVertical(edge)
   var length = vertical ? s.height : s.width
   return {
-    start: (vertical ? inset("top") : inset("left")) + margin,
-    end: length - (vertical ? inset("bottom") : inset("right")) - margin
+    start: vertical ? inset("top") : inset("left"),
+    end: length - (vertical ? inset("bottom") : inset("right"))
   }
 }
 
-// Notches sharing an edge of a screen, side by side: none sits on another.
-// `items`, each { group, center, size, start, end, open, skip }: the group
-// ("<screen>|<edge>"), where its middle wants to be and its length along
-// the edge (closed: open ones give the size they had closed, so they open
-// from where they were), the stretch it must stay in (stretch), whether it
-// is open, and whether it takes no part (hidden, being dragged). In each
-// group, in order of `center` (ties: list order), notches at least `gap`
-// apart, each moved as little as it takes. Returns, per item, { shift } to
-// add to its place along the edge and { covered }: a closed notch an open
-// one (`openSize`) grows over, which should hide while it is open.
+// Notches sharing an edge of a screen, side by side: none sits on another,
+// and ones that come close join into one. `items`, each { group, center,
+// size, start, end, snap, open, skip }: the group ("<screen>|<edge>"),
+// where its middle wants to be and its length along the edge as it is now
+// (an open one's as it grows), the stretch it must stay in (stretch) and
+// how near an end of it takes it into the corner (place's `snap`), whether
+// it is open, and whether it takes no part (hidden, being dragged). In each
+// group, in order of `center` (ties: list order), notches that would be
+// less than `gap` apart join: flush against each other, the row as near
+// where its notches want to be as it can, taken into a corner like a single
+// notch. The others stay where they are. So a notch that opens grows from
+// where it is and pushes its neighbors where they can go: evenly to both
+// sides in the middle of the edge, away from the screen's side against it.
+// Returns, per item:
+//   shift      to add to its place along the edge
+//   covered    a closed notch pushed off the edge by an open one, which
+//              should hide while it is open
+//   joinStart, joinEnd
+//              the index of the notch flush against its start (left or top)
+//              and end, -1 for none; never with a covered one
 function pack(items, gap) {
   items = items || []
   gap = Math.max(0, Number(gap) || 0)
-  var out = items.map(function() { return { shift: 0, covered: false } })
+  var out = items.map(function() {
+    return { shift: 0, covered: false, joinStart: -1, joinEnd: -1 }
+  })
   var groups = {}
   for (var i = 0; i < items.length; i++) {
     if (!items[i] || items[i].skip) continue
@@ -180,12 +201,15 @@ function pack(items, gap) {
     var order = groups[g].slice().sort(function(a, b) {
       return items[a].center - items[b].center || a - b
     })
-    // Blocks of notches touching each other: `rel` is each one's middle
-    // from the block's first, `pos` the first's middle.
+    // Rows of joined notches: `rel` is each one's middle from the row's
+    // first, `pos` the first's middle.
     var blocks = []
     function want(block) {
-      var sum = 0
-      for (var k = 0; k < block.idx.length; k++) sum += items[block.idx[k]].center - block.rel[k]
+      var sum = 0, snap = 0
+      for (var k = 0; k < block.idx.length; k++) {
+        sum += items[block.idx[k]].center - block.rel[k]
+        snap = Math.max(snap, Number(items[block.idx[k]].snap) || 0)
+      }
       var pos = sum / block.idx.length
       var lo = -Infinity, hi = Infinity
       for (var m = 0; m < block.idx.length; m++) {
@@ -193,11 +217,17 @@ function pack(items, gap) {
         lo = Math.max(lo, it.start + it.size / 2 - block.rel[m])
         hi = Math.min(hi, it.end - it.size / 2 - block.rel[m])
       }
-      block.pos = lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, pos))
+      if (lo > hi) { block.pos = block.free = (lo + hi) / 2; return }
+      // `free`: before the corner takes it, which is what joining goes by,
+      // so a notch near the corner still joins the one beside it.
+      pos = block.free = Math.max(lo, Math.min(hi, pos))
+      if (pos - lo <= snap && pos - lo <= hi - pos) pos = lo
+      else if (hi - pos <= snap) pos = hi
+      block.pos = pos
     }
     function lastEnd(block) {
       var k = block.idx.length - 1
-      return block.pos + block.rel[k] + items[block.idx[k]].size / 2
+      return block.free + block.rel[k] + items[block.idx[k]].size / 2
     }
     for (var n = 0; n < order.length; n++) {
       var block = { idx: [order[n]], rel: [0], pos: 0 }
@@ -206,9 +236,9 @@ function pack(items, gap) {
       while (blocks.length > 1) {
         var prev = blocks[blocks.length - 2]
         var last = blocks[blocks.length - 1]
-        if (lastEnd(prev) + gap + items[last.idx[0]].size / 2 <= last.pos + 1e-9) break
+        if (lastEnd(prev) + gap + items[last.idx[0]].size / 2 <= last.free + 1e-9) break
         var base = prev.rel[prev.rel.length - 1] + items[prev.idx[prev.idx.length - 1]].size / 2
-          + gap + items[last.idx[0]].size / 2
+          + items[last.idx[0]].size / 2
         for (var q = 0; q < last.idx.length; q++) {
           prev.idx.push(last.idx[q])
           prev.rel.push(base + last.rel[q])
@@ -221,17 +251,82 @@ function pack(items, gap) {
       for (var k = 0; k < b.idx.length; k++)
         out[b.idx[k]].shift = b.pos + b.rel[k] - items[b.idx[k]].center
     })
-    // An open notch grows from where it was; the closed ones it reaches hide.
-    order.forEach(function(o) {
-      if (!items[o].open) return
-      var mid = items[o].center + out[o].shift
-      var half = Math.max(items[o].size, Number(items[o].openSize) || 0) / 2
-      order.forEach(function(c) {
-        if (c === o || items[c].open) return
-        var cm = items[c].center + out[c].shift
-        if (Math.abs(cm - mid) < half + items[c].size / 2 + gap) out[c].covered = true
+    // A closed notch an open one pushed off the edge, or still over, hides.
+    var opened = order.filter(function(o) { return items[o].open })
+    if (opened.length > 0) order.forEach(function(c) {
+      if (items[c].open) return
+      var cm = items[c].center + out[c].shift, half = items[c].size / 2
+      var off = cm - half < items[c].start - 0.5 || cm + half > items[c].end + 0.5
+      var under = opened.some(function(o) {
+        return Math.abs(items[o].center + out[o].shift - cm) < (items[o].size + items[c].size) / 2 - 0.5
       })
+      if (off || under) out[c].covered = true
+    })
+    // Neighbors in a row join while both show.
+    blocks.forEach(function(b) {
+      for (var k = 0; k + 1 < b.idx.length; k++) {
+        var x = b.idx[k], y = b.idx[k + 1]
+        if (out[x].covered || out[y].covered) continue
+        out[x].joinEnd = y
+        out[y].joinStart = x
+      }
     })
   })
   return out
+}
+
+// The depth each notch takes, from pack's result and each notch's own
+// depth: a joined row as deep as its deepest notch, so the row reads as
+// one shape; 0 (its own) for a notch joined to none. Give an open notch
+// its depth closed: it is deeper than its row and steps down to it, and
+// the row stays as it was through it.
+function rowDepths(packing, depths) {
+  packing = packing || []
+  var out = []
+  for (var i = 0; i < packing.length; i++) {
+    var p = packing[i]
+    if (!p || (p.joinStart < 0 && p.joinEnd < 0)) { out.push(0); continue }
+    var first = i
+    while (packing[first] && packing[first].joinStart >= 0) first = packing[first].joinStart
+    var deepest = 0
+    for (var k = first; k >= 0; k = packing[k] ? packing[k].joinEnd : -1)
+      deepest = Math.max(deepest, Number(depths[k]) || 0)
+    out.push(deepest)
+  }
+  return out
+}
+
+// Notches in the same corner of a screen, one on the top or bottom edge and
+// one on a side edge, would sit on each other: the top or bottom one keeps
+// the corner and the side one starts where it ends, meeting it. `items`,
+// each { screen, edge, atStart, atEnd, depth, shown }: where it is, whether
+// it sits flush in the corner at either end of its edge (place's atStart,
+// atEnd), its depth as it is now and whether it shows. Returns, per item,
+// { start, end }:
+//   on a side edge   how far in from each end (top, bottom) its edge now
+//                    starts: the depth of the notch keeping that corner,
+//                    less 1 px so they meet without a seam
+//   on top or bottom how far along its far side, from each end (left,
+//                    right), the side notch below it reaches: where it
+//                    draws no hairline
+function corners(items) {
+  items = items || []
+  function deepest(screen, edge, end) {
+    var d = 0
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i]
+      if (!it || !it.shown || it.screen !== screen || it.edge !== edge) continue
+      if (end === "start" ? it.atStart : it.atEnd) d = Math.max(d, Number(it.depth) || 0)
+    }
+    return d
+  }
+  return items.map(function(it) {
+    if (!it) return { start: 0, end: 0 }
+    var side = it.edge === "left" ? "start" : "end"
+    if (it.edge === "left" || it.edge === "right")
+      return { start: Math.max(0, deepest(it.screen, "top", side) - 1),
+               end: Math.max(0, deepest(it.screen, "bottom", side) - 1) }
+    var near = it.edge === "top" ? "start" : "end"
+    return { start: deepest(it.screen, "left", near), end: deepest(it.screen, "right", near) }
+  })
 }

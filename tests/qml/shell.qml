@@ -63,6 +63,7 @@ ShellRoot {
     root.cases = [
       { name: "workspace chips store a real list", run: root.workspaceChipsList },
       { name: "compact depth ignores peek and expanded transitions", run: root.compactDepthTransitions },
+      { name: "a joined row's depth ignores a peek opening and closing", run: root.closedDepthTransitions },
       { name: "leaving the notch before it opens forgets the screen", run: root.hoverLeaveForgetsScreen },
       { name: "peeks and the open notch never move windows", run: root.reserveIgnoresOpenNotch },
       { name: "reserved space grows at once and shrinks after the delay", run: root.reserveGrowsAndShrinks },
@@ -198,6 +199,8 @@ ShellRoot {
     notch: cardSvc
     property real tallestCompact: 0
     onCompactDepthChanged: if (compactDepth > tallestCompact) tallestCompact = compactDepth
+    property var closedDepths: []
+    onClosedDepthChanged: closedDepths = closedDepths.concat([closedDepth])
   }
 
   function compactDepthTransitions() {
@@ -213,6 +216,26 @@ ShellRoot {
     ], function() {
       root.check(base > 0, "no compact height measured")
       root.check(card.tallestCompact === base, "compact height reached " + card.tallestCompact + ", compact is " + base)
+      root.done()
+    })
+  }
+
+  // Bug: closing a peek, the notches joined to it grew for a moment and
+  // shrank back, as if about to open. The row's depth went by the closing
+  // card's own depth, still the peek's while its content faded out.
+  function closedDepthTransitions() {
+    var settle = 450
+    var base = 0
+    root.steps([
+      [settle, function() { base = card.closedDepth; card.closedDepths = [] }],
+      [0, function() { cardSvc.mode = "peek" }],
+      [settle, function() { cardSvc.mode = "compact" }],
+      [settle, function() { cardSvc.mode = "expanded" }],
+      [settle, function() { cardSvc.mode = "compact" }],
+      [settle, function() {}]
+    ], function() {
+      root.check(base > 0, "no closed depth measured")
+      root.check(card.closedDepths.length === 0, "the closed depth moved: " + base + " then " + card.closedDepths)
       root.done()
     })
   }

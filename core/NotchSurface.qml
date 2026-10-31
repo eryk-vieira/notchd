@@ -8,8 +8,8 @@ import "Position.js" as Position
 // (NotchService.copies), which places it and routes its pointer, plus the
 // space the closed notches keep clear of windows. Notches on one edge of a
 // screen go side by side, never on each other (Position.pack): each as
-// near its offset as the others let it, and an open one hides those it
-// grows over.
+// near its offset as the others let it, ones that come close joined flush
+// into one shape, and an open one hides those it grows over.
 //
 // With reserveSpace on, an empty window per screen edge holds a layer-shell
 // exclusive zone as deep as the deepest closed notch there (ReservedSpace,
@@ -43,14 +43,47 @@ Item {
       readonly property var packed: root.packOf(modelData)
       packShift: packed ? packed.shift : 0
       covered: !!packed && packed.covered
+      joinStart: root.windowAt(packed ? packed.joinStart : -1)
+      joinEnd: root.windowAt(packed ? packed.joinEnd : -1)
+      rowDepth: root.rowDepthOf(modelData)
+      cornerInset: root.cornerOf(modelData, root.cornerInsets)
+      cornerSpan: root.cornerOf(modelData, root.cornerSpans)
     }
   }
 
   // ---------------------------------------------------------- side by side
-  // Between two notches: both shoulders, which flare past the card, and a
-  // little air.
+  // Notches closer than this join flush into one shape: two shoulders,
+  // which flare past the card, and a little air would not fit between them.
   readonly property real packGap: 2 * Theme.space(10) + Theme.space(8)
   readonly property var packing: Position.pack(root.windows.map(function(w) { return w.packItem }), root.packGap)
+  // A joined row as deep as its deepest notch closed; an open one, deeper,
+  // steps down to its neighbors and keeps the row as it was.
+  readonly property var rowDepths: Position.rowDepths(root.packing,
+    root.windows.map(function(w) { return w.closedDepth }))
+  function rowDepthOf(copy) {
+    var list = root.windows
+    for (var i = 0; i < list.length; i++) if (list[i].copy === copy) return root.rowDepths[i] || 0
+    return 0
+  }
+  // Corners (Position.corners), in two halves so no window's place feeds
+  // back into itself: where side notches start, from the top and bottom
+  // ones flush in the corners; and where those meet the side notches, from
+  // the side ones.
+  function cornerInfo(w, sides) {
+    var it = w.cornerItem
+    var side = it.edge === "left" || it.edge === "right"
+    return side === sides ? it : { screen: it.screen, edge: it.edge }
+  }
+  readonly property var cornerInsets: Position.corners(root.windows.map(function(w) { return root.cornerInfo(w, false) }))
+  readonly property var cornerSpans: Position.corners(root.windows.map(function(w) { return root.cornerInfo(w, true) }))
+  function cornerOf(copy, list) {
+    var ws = root.windows
+    for (var i = 0; i < ws.length; i++) if (ws[i].copy === copy) return list[i] || { start: 0, end: 0 }
+    return { start: 0, end: 0 }
+  }
+  function windowAt(index) {
+    return index >= 0 && index < root.windows.length ? root.windows[index] : null
+  }
   function packOf(copy) {
     var list = root.windows
     for (var i = 0; i < list.length; i++) if (list[i].copy === copy) return root.packing[i] || null

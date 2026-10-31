@@ -72,32 +72,59 @@ Scope {
   // ------------------------------------------------------------ side by side
   // Notches on one edge of a screen never sit on each other: NotchSurface
   // packs them (Position.pack) from what each says here, and hands back how
-  // far along the edge to move (`packShift`) and whether an open one covers
-  // this one (`covered`).
+  // far along the edge to move (`packShift`), whether an open one covers
+  // this one (`covered`) and which ones it is joined to.
   property real packShift: 0
   property bool covered: false
+  // The windows of the notches flush against this one's start (left or
+  // top) and end, joined into one shape with it; null for none.
+  property var joinStart: null
+  property var joinEnd: null
+  // The card's depth, which a joined neighbor steps down from or up to,
+  // and its own closed, which sets a joined row's (Position.rowDepths).
+  readonly property real cardDepth: card.depth
+  readonly property real closedDepth: card.closedDepth
+  // A joined row's depth, which this card takes at least.
+  property real rowDepth: 0
+
+  // ------------------------------------------------------------ corners
+  // A notch on the top or bottom edge flush in a corner keeps it; one on
+  // the side edge there starts where it ends (Position.corners). From
+  // NotchSurface: `cornerInset`, how far in a side notch's edge starts at
+  // each end (top, bottom); `cornerSpan`, how far along a top or bottom
+  // notch's far side the side notch meets it (left, right).
+  property var cornerInset: ({ start: 0, end: 0 })
+  property var cornerSpan: ({ start: 0, end: 0 })
+  // What it reports for that: where it is and whether it is flush in a
+  // corner, how deep, and whether it shows.
+  readonly property var cornerItem: ({
+    screen: root.windowScreenName, edge: card.edge,
+    atStart: !!card.spot.atStart, atEnd: !!card.spot.atEnd,
+    depth: card.depth, shown: !root.concealed && !root.dragPlacement
+  })
+  // The bar's insets, and on a side edge the corners' too: where the card's
+  // stretch runs. The pinned notch's click-away area and drags keep the
+  // bar's alone.
+  readonly property var edgeInsets: {
+    var i = root.insets
+    if (!card.vertical) return i
+    return { top: i.top + root.cornerInset.start, bottom: i.bottom + root.cornerInset.end, left: i.left, right: i.right }
+  }
   readonly property bool cardOpen: root.mode === "peek" || root.mode === "expanded"
   readonly property var stretch: Position.stretch({
-    edge: card.edge, width: window.width, height: window.height, insets: root.insets, margin: card.margin
+    edge: card.edge, width: window.width, height: window.height, insets: root.edgeInsets
   })
   // Where its middle wants to be along the edge: the configured offset.
   readonly property real wishCenter: root.stretch.start + root.shownPlacement.offset * (root.stretch.end - root.stretch.start)
-  // Its length along the edge while closed. Open, it keeps the closed one,
-  // so it opens from where it was and its neighbors stay put.
-  property real closedAlong: 0
-  function trackClosed() { if (!root.cardOpen && !card.swapping) root.closedAlong = card.along }
-  onCardOpenChanged: root.trackClosed()
-  Connections {
-    target: card
-    function onAlongChanged() { root.trackClosed() }
-  }
+  // Its length as it is, an open one's as it grows: the packing pushes its
+  // neighbors along with it, frame by frame.
   readonly property var packItem: ({
     group: root.windowScreenName + "|" + card.edge,
     center: root.wishCenter,
-    size: root.cardOpen ? root.closedAlong : card.along,
-    openSize: card.along,
+    size: card.along,
     start: root.stretch.start,
     end: root.stretch.end,
+    snap: card.snap,
     open: root.cardOpen,
     skip: root.hidden || !!root.dragPlacement || root.windowScreenName === ""
   })
@@ -194,15 +221,23 @@ Scope {
       maxWidth: window.width - Theme.space(64)
       maxHeight: window.height - Theme.space(64)
       // Position.js has the rules; the shoulders stay on screen.
-      readonly property real margin: card.shoulder + Theme.space(4)
+      // Closer than this to an end of the edge, there is no room for the
+      // shoulder: the card goes flush into the corner (Position.place).
+      readonly property real snap: card.shoulder + Theme.space(4)
       readonly property var spot: Position.place({
         edge: card.edge, offset: root.shownOffset,
         width: window.width, height: window.height, cardWidth: card.width, cardHeight: card.height,
-        insets: root.insets, margin: card.margin
+        insets: root.edgeInsets, snap: card.snap
       })
+      // Flush with a neighbor, or in a corner, the end loses its shoulder.
+      // Not while dragged: it follows the pointer, alone.
+      startSide: root.joinStart && !root.dragPlacement ? "joined" : card.spot.atStart ? "corner" : "shoulder"
+      endSide: root.joinEnd && !root.dragPlacement ? "joined" : card.spot.atEnd ? "corner" : "shoulder"
+      startNeighborDepth: root.joinStart ? root.joinStart.cardDepth : card.vertical ? 0 : root.cornerSpan.start
+      endNeighborDepth: root.joinEnd ? root.joinEnd.cardDepth : card.vertical ? 0 : root.cornerSpan.end
+      minDepth: root.dragPlacement ? 0 : root.rowDepth
       x: card.spot.x
       y: card.spot.y
-      Component.onCompleted: root.trackClosed()
 
       onHoveredChanged: if (root.copy) root.copy.setPointer("notch", card.hovered, window.screenName)
 
@@ -228,7 +263,7 @@ Scope {
         root.dragPlacement = Position.dragTarget({
           x: gx - (target ? target.x : 0), y: gy - (target ? target.y : 0),
           width: target ? target.width : window.width, height: target ? target.height : window.height,
-          insets: root.insets, margin: card.margin, magnet: Theme.space(24)
+          insets: root.insets, magnet: Theme.space(24)
         })
       }
       onDragEnded: {
@@ -295,8 +330,10 @@ Scope {
         readonly property var spot: Position.place({
           edge: previewCard.edge, offset: root.dragPlacement ? root.dragPlacement.offset : 0.5,
           width: preview.width, height: preview.height, cardWidth: previewCard.width, cardHeight: previewCard.height,
-          insets: root.insets, margin: previewCard.shoulder + Theme.space(4)
+          insets: root.insets, snap: previewCard.shoulder + Theme.space(4)
         })
+        startSide: previewCard.spot.atStart ? "corner" : "shoulder"
+        endSide: previewCard.spot.atEnd ? "corner" : "shoulder"
         x: previewCard.spot.x
         y: previewCard.spot.y
       }

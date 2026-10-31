@@ -41,46 +41,64 @@ test('insets: only the bar edge, only while the bar shows', () => {
   assert.deepEqual(plain(Position.insets('nowhere', 30, true)), { top: 0, bottom: 0, left: 0, right: 0 });
 });
 
-const screen = { width: 1000, height: 600, cardWidth: 200, cardHeight: 40, margin: 10 };
+const screen = { width: 1000, height: 600, cardWidth: 200, cardHeight: 40, snap: 10 };
+const xy = (p) => ({ x: p.x, y: p.y });
 const bar = (edge, size = 30) => Position.insets(edge, size, true);
 
 test('place: top-center hangs under the bar, centered', () => {
-  assert.deepEqual(plain(Position.place({ ...screen, edge: 'top', offset: 0.5, insets: bar('top') })), { x: 400, y: 30 });
+  assert.deepEqual(xy(Position.place({ ...screen, edge: 'top', offset: 0.5, insets: bar('top') })), { x: 400, y: 30 });
 });
 
 test('place: bottom and the side edges sit against their edge', () => {
   const none = bar('top', 0);
-  assert.deepEqual(plain(Position.place({ ...screen, edge: 'bottom', offset: 0.5, insets: none })), { x: 400, y: 560 });
+  assert.deepEqual(xy(Position.place({ ...screen, edge: 'bottom', offset: 0.5, insets: none })), { x: 400, y: 560 });
   const side = { ...screen, cardWidth: 40, cardHeight: 200, insets: none };
-  assert.deepEqual(plain(Position.place({ ...side, edge: 'left', offset: 0.5 })), { x: 0, y: 200 });
-  assert.deepEqual(plain(Position.place({ ...side, edge: 'right', offset: 0.5 })), { x: 960, y: 200 });
+  assert.deepEqual(xy(Position.place({ ...side, edge: 'left', offset: 0.5 })), { x: 0, y: 200 });
+  assert.deepEqual(xy(Position.place({ ...side, edge: 'right', offset: 0.5 })), { x: 960, y: 200 });
 });
 
 test('place: a bar on the same edge pushes the notch off it', () => {
-  assert.deepEqual(plain(Position.place({ ...screen, edge: 'bottom', offset: 0.5, insets: bar('bottom') })), { x: 400, y: 530 });
+  assert.deepEqual(xy(Position.place({ ...screen, edge: 'bottom', offset: 0.5, insets: bar('bottom') })), { x: 400, y: 530 });
   const side = { ...screen, cardWidth: 40, cardHeight: 200 };
-  assert.deepEqual(plain(Position.place({ ...side, edge: 'left', offset: 0.5, insets: bar('left', 28) })), { x: 28, y: 200 });
-  assert.deepEqual(plain(Position.place({ ...side, edge: 'right', offset: 0.5, insets: bar('right', 28) })), { x: 932, y: 200 });
+  assert.deepEqual(xy(Position.place({ ...side, edge: 'left', offset: 0.5, insets: bar('left', 28) })), { x: 28, y: 200 });
+  assert.deepEqual(xy(Position.place({ ...side, edge: 'right', offset: 0.5, insets: bar('right', 28) })), { x: 932, y: 200 });
 });
 
 test('place: the offset runs along the stretch the bar leaves free', () => {
-  const side = { ...screen, cardWidth: 40, cardHeight: 100, margin: 0 };
+  const side = { ...screen, cardWidth: 40, cardHeight: 100, snap: 0 };
   // Bar on top: the left edge runs from 30 to 600; the middle is 315.
-  assert.deepEqual(plain(Position.place({ ...side, edge: 'left', offset: 0.5, insets: bar('top') })), { x: 0, y: 265 });
+  assert.deepEqual(xy(Position.place({ ...side, edge: 'left', offset: 0.5, insets: bar('top') })), { x: 0, y: 265 });
 });
 
-test('place: the ends clamp so the card and its shoulders stay on screen', () => {
-  assert.deepEqual(plain(Position.place({ ...screen, edge: 'top', offset: 0, insets: bar('top') })), { x: 10, y: 30 });
-  assert.deepEqual(plain(Position.place({ ...screen, edge: 'top', offset: 1, insets: bar('top') })), { x: 790, y: 30 });
-  // A side edge with the bar on top: the card never slides under the bar.
+// Asked for: at an end of the edge the notch sits flush in the corner
+// instead of short of it by its shoulder.
+test('place: at either end the card goes flush into the corner', () => {
+  assert.deepEqual(plain(Position.place({ ...screen, edge: 'top', offset: 0, insets: bar('top') })),
+                   { x: 0, y: 30, atStart: true, atEnd: false });
+  assert.deepEqual(plain(Position.place({ ...screen, edge: 'top', offset: 1, insets: bar('top') })),
+                   { x: 800, y: 30, atStart: false, atEnd: true });
+  // A side edge with the bar on top: flush against the bar, never under it.
   const side = { ...screen, cardWidth: 40, cardHeight: 200 };
-  assert.deepEqual(plain(Position.place({ ...side, edge: 'left', offset: 0, insets: bar('top') })), { x: 0, y: 40 });
-  assert.deepEqual(plain(Position.place({ ...side, edge: 'right', offset: 1, insets: bar('bottom') })), { x: 960, y: 360 });
+  assert.deepEqual(plain(Position.place({ ...side, edge: 'left', offset: 0, insets: bar('top') })),
+                   { x: 0, y: 30, atStart: true, atEnd: false });
+  assert.deepEqual(plain(Position.place({ ...side, edge: 'right', offset: 1, insets: bar('bottom') })),
+                   { x: 960, y: 370, atStart: false, atEnd: true });
+});
+
+test('place: within `snap` of an end it goes into the corner, farther it stays', () => {
+  // Its left end would be 8 px from the screen's side: no room for the shoulder.
+  assert.deepEqual(plain(Position.place({ ...screen, edge: 'top', offset: 0.108, insets: bar('top', 0) })),
+                   { x: 0, y: 0, atStart: true, atEnd: false });
+  const p = plain(Position.place({ ...screen, edge: 'top', offset: 0.112, insets: bar('top', 0) }));
+  assert.equal(Math.round(p.x), 12);
+  assert.equal(p.atStart, false);
+  assert.equal(Position.place({ ...screen, edge: 'top', offset: 0.5, insets: bar('top', 0) }).atStart, false);
 });
 
 test('place: a card longer than the edge is centered on it', () => {
-  const big = { ...screen, cardWidth: 40, cardHeight: 700, margin: 0 };
-  assert.deepEqual(plain(Position.place({ ...big, edge: 'left', offset: 0, insets: bar('top', 0) })), { x: 0, y: -50 });
+  const big = { ...screen, cardWidth: 40, cardHeight: 700, snap: 0 };
+  assert.deepEqual(plain(Position.place({ ...big, edge: 'left', offset: 0, insets: bar('top', 0) })),
+                   { x: 0, y: -50, atStart: false, atEnd: false });
 });
 
 test('nearestEdge: the closest side of the screen', () => {
@@ -91,7 +109,7 @@ test('nearestEdge: the closest side of the screen', () => {
   assert.equal(Position.nearestEdge(500, 300, 1000, 600), 'top');
 });
 
-const drag = { width: 1000, height: 600, insets: { top: 30, bottom: 0, left: 0, right: 0 }, margin: 0, magnet: 0 };
+const drag = { width: 1000, height: 600, insets: { top: 30, bottom: 0, left: 0, right: 0 }, magnet: 0 };
 
 test('dragTarget: the nearest edge, the notch middle under the pointer', () => {
   assert.deepEqual(plain(Position.dragTarget({ ...drag, x: 250, y: 40 })), { edge: 'top', offset: 0.25 });
@@ -125,7 +143,7 @@ test('configValue leaves defaults out; top-center is no key at all', () => {
 // read as a low frame rate at the slow end of each animation.
 test('place: no rounding, so a growing card grows evenly on both sides', () => {
   const at = (w) => Position.place({ edge: 'top', offset: 0.5, width: 1000, height: 600, cardWidth: w, cardHeight: 40,
-                                     insets: { top: 30 }, margin: 10 });
+                                     insets: { top: 30 }, snap: 10 });
   assert.equal(at(200.4).x, 399.8);
   assert.equal(at(200.4).x + 200.4, 600.2);
   assert.equal(at(200).x, 400);
@@ -164,11 +182,11 @@ test('pack: notches apart from each other stay where they are', () => {
 });
 
 // Asked for: two notches can't sit on top of each other. Closed, they go
-// side by side, each moved as little as it takes.
-test('pack: notches on one spot go side by side, around it', () => {
-  assert.deepEqual(at([item(500, 100), item(500, 100)]), [445, 555]);
+// side by side, flush, each moved as little as it takes.
+test('pack: notches on one spot join side by side, around it', () => {
+  assert.deepEqual(at([item(500, 100), item(500, 100)]), [450, 550]);
   // Partly over each other: both give way by half.
-  assert.deepEqual(at([item(500, 100), item(560, 100)]), [475, 585]);
+  assert.deepEqual(at([item(500, 100), item(560, 100)]), [480, 580]);
   // Three in a row, the middle one kept in place.
   assert.deepEqual(at([item(400, 100), item(500, 100), item(600, 100)], 0), [400, 500, 600]);
   assert.deepEqual(at([item(500, 100), item(500, 100), item(500, 100)], 0), [400, 500, 600]);
@@ -177,13 +195,31 @@ test('pack: notches on one spot go side by side, around it', () => {
 test('pack: a notch that grows pushes its neighbor along', () => {
   // The first one's compact view got wider: it now reaches the second, and
   // both give way by the same amount.
-  assert.deepEqual(at([item(500, 400), item(600, 100)]), [420, 680]);
+  assert.deepEqual(at([item(500, 400), item(600, 100)]), [425, 675]);
 });
 
 test('pack: notches stay inside the edge, pushed back from its ends', () => {
-  assert.deepEqual(at([item(50, 100), item(60, 100)]), [50, 160]);
+  assert.deepEqual(at([item(50, 100), item(60, 100)]), [50, 150]);
   // The one that wanted 940 stays left of the one that wanted 950.
-  assert.deepEqual(at([item(950, 100), item(940, 100)]), [950, 840]);
+  assert.deepEqual(at([item(950, 100), item(940, 100)]), [950, 850]);
+});
+
+// Asked for: notches next to each other read as one, and one dropped near
+// another snaps to it.
+test('pack: notches less than `gap` apart join flush; farther ones stay put', () => {
+  const near = plain(Position.pack([item(200, 100), item(305, 100)], 10));
+  assert.deepEqual(near.map((r, i) => [200, 305][i] + r.shift), [202.5, 302.5]);
+  assert.deepEqual(near.map((r) => [r.joinStart, r.joinEnd]), [[-1, 1], [0, -1]]);
+  const apart = plain(Position.pack([item(200, 100), item(320, 100)], 10));
+  assert.deepEqual(apart.map((r) => r.shift), [0, 0]);
+  assert.deepEqual(apart.map((r) => [r.joinStart, r.joinEnd]), [[-1, -1], [-1, -1]]);
+});
+
+test('pack: a row near an end of the edge goes into the corner, like one notch', () => {
+  assert.deepEqual(at([item(60, 100, { snap: 14 }), item(165, 100, { snap: 14 })]), [50, 150]);
+  assert.deepEqual(at([item(940, 100, { snap: 14 }), item(835, 100, { snap: 14 })]), [950, 850]);
+  // Farther than `snap`: where it was.
+  assert.deepEqual(at([item(300, 100, { snap: 14 })]), [300]);
 });
 
 test('pack: only notches on one screen edge push each other', () => {
@@ -192,15 +228,95 @@ test('pack: only notches on one screen edge push each other', () => {
   assert.deepEqual(at([item(500, 100), item(500, 100, { skip: true })]), [500, 500]);
 });
 
-test('pack: an open notch grows from where it was and hides the ones it reaches', () => {
-  const r = plain(Position.pack([item(300, 100, { open: true, openSize: 500 }), item(450, 100), item(800, 100)], 10));
-  assert.deepEqual(r.map((x) => x.shift), [0, 0, 0]);
-  assert.deepEqual(r.map((x) => x.covered), [false, true, false]);
+test('stretch: the ends of the edge the middle of a notch may take', () => {
+  assert.deepEqual(plain(Position.stretch({ edge: 'top', width: 1000, height: 600, insets: { left: 40 } })),
+                   { start: 40, end: 1000 });
+  assert.deepEqual(plain(Position.stretch({ edge: 'left', width: 1000, height: 600, insets: { top: 30 } })),
+                   { start: 30, end: 600 });
 });
 
-test('stretch: the ends of the edge the middle of a notch may take', () => {
-  assert.deepEqual(plain(Position.stretch({ edge: 'top', width: 1000, height: 600, insets: { left: 40 }, margin: 14 })),
-                   { start: 54, end: 986 });
-  assert.deepEqual(plain(Position.stretch({ edge: 'left', width: 1000, height: 600, insets: { top: 30 }, margin: 14 })),
-                   { start: 44, end: 586 });
+// Asked for: joined notches of different depths looked odd, a step
+// between them. A joined row takes its deepest notch's depth.
+test('rowDepths: a joined row is as deep as its deepest notch; the rest keep theirs', () => {
+  const packing = [{ joinStart: -1, joinEnd: 1 }, { joinStart: 0, joinEnd: 2 }, { joinStart: 1, joinEnd: -1 },
+                   { joinStart: -1, joinEnd: -1 }];
+  assert.deepEqual(plain(Position.rowDepths(packing, [20, 28, 5, 40])), [28, 28, 28, 0]);
+  assert.deepEqual(plain(Position.rowDepths([], [])), []);
+  assert.deepEqual(plain(Position.rowDepths([null], [10])), [0]);
+});
+
+
+// Asked for: a notch that opens (a peek, the pointer) grows to fit it,
+// pushing its neighbors where they can go: in the middle of the edge it
+// grows evenly and pushes both sides; against the screen's side it grows
+// away from it, pushing the others along.
+test('pack: an open notch grows from where it is and pushes its row aside', () => {
+  // A row of three in the middle; the middle one opens to 300.
+  const row = [item(400, 100), item(500, 300, { open: true }), item(600, 100)];
+  assert.deepEqual(at(row), [300, 500, 700]);
+  const r = plain(Position.pack(row, 10));
+  assert.deepEqual(r.map((x) => x.covered), [false, false, false]);
+  // Still joined, the open one too: it steps down to its neighbors.
+  assert.deepEqual(r.map((x) => [x.joinStart, x.joinEnd]), [[-1, 1], [0, 2], [1, -1]]);
+});
+
+test('pack: against the screen side, an open notch grows away from it', () => {
+  // The row sits in the corner; the first one opens to 300.
+  assert.deepEqual(at([item(50, 300, { open: true, snap: 14 }), item(150, 100, { snap: 14 })]), [150, 350]);
+  // The last one, against the far side.
+  assert.deepEqual(at([item(850, 100, { snap: 14 }), item(950, 300, { open: true, snap: 14 })]), [650, 850]);
+});
+
+test('pack: an open notch reaching one apart pushes it, and joins it while it does', () => {
+  const r = plain(Position.pack([item(300, 300, { open: true }), item(505, 100)], 10));
+  assert.deepEqual(r.map((x, i) => [300, 505][i] + x.shift), [302.5, 502.5]);
+  assert.deepEqual(r.map((x) => [x.joinStart, x.joinEnd]), [[-1, 1], [0, -1]]);
+});
+
+test('pack: only notches that do not fit on the edge hide under an open one', () => {
+  const r = plain(Position.pack([item(500, 900, { open: true }), item(500, 300)], 10));
+  assert.deepEqual(r.map((x) => x.covered), [false, true]);
+  assert.deepEqual(r.map((x) => [x.joinStart, x.joinEnd]), [[-1, -1], [-1, -1]]);
+});
+
+// Asked for: notches in the same corner of a screen, one on the top (or
+// bottom) edge and one on the side, sat on each other. The top or bottom
+// one keeps the corner; the side one starts where it ends, meeting it
+// (1 px into it, so no seam shows), and gets pushed along as it grows.
+const corner = (screen, edge, extra = {}) => ({ screen, edge, atStart: false, atEnd: false, depth: 30, along: 200, shown: true, ...extra });
+
+test('corners: a side notch starts below a top notch in its corner, above a bottom one', () => {
+  const r = plain(Position.corners([
+    corner('A', 'top', { atStart: true, depth: 40 }),
+    corner('A', 'left', { atStart: true, depth: 30 }),
+    corner('A', 'bottom', { atStart: true, depth: 50 }),
+    corner('A', 'right')
+  ]));
+  assert.deepEqual(r[1], { start: 39, end: 49 });
+  // Nothing in the top-right or bottom-right corner.
+  assert.deepEqual(r[3], { start: 0, end: 0 });
+});
+
+test('corners: the top or bottom notch leaves the side notch its stretch of its far side', () => {
+  const r = plain(Position.corners([
+    corner('A', 'top', { atEnd: true, depth: 40 }),
+    corner('A', 'right', { atStart: true, depth: 26 }),
+    corner('A', 'bottom', { atEnd: true }),
+    corner('A', 'right', { atEnd: true, depth: 60 })
+  ]));
+  // Its far side's end runs into the side notch below it: no hairline there.
+  assert.deepEqual(r[0], { start: 0, end: 26 });
+  assert.deepEqual(r[2], { start: 0, end: 60 });
+});
+
+test('corners: only flush notches on one screen that show count', () => {
+  const r = plain(Position.corners([
+    corner('A', 'top', { atStart: true, depth: 40 }),
+    corner('B', 'left', { atStart: true }),
+    corner('A', 'top', { atEnd: true, depth: 40, shown: false }),
+    corner('A', 'right'),
+    corner('A', 'top', { depth: 40 })
+  ]));
+  assert.deepEqual(r[1], { start: 0, end: 0 });
+  assert.deepEqual(r[3], { start: 0, end: 0 });
 });

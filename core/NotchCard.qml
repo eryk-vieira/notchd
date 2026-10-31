@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
+import "Outline.js" as Outline
 
 // The notch itself: its outline, its padding per mode and the view of the
 // current mode, springing to fit. It draws; NotchSurface puts it on screen
@@ -33,6 +34,21 @@ Item {
   // controls inside the views (which take hover themselves) never hide it.
   readonly property bool hovered: hover.hovered
   HoverHandler { id: hover }
+  // How each end of the card along the edge meets what is beside it
+  // (Outline.js): "shoulder" flares into the edge, "corner" sits flush and
+  // square against the screen's side, "joined" sits flush with a
+  // neighbor notch so the two read as one. The start is the left end on a
+  // top or bottom edge, the top end on a side edge. Whoever places the card
+  // decides (NotchWindow, from Position.place and Position.pack).
+  property string startSide: "shoulder"
+  property string endSide: "shoulder"
+  // A joined neighbor's depth, for the step down to a shallower one (only
+  // while depths spring: a joined row shares one depth, `minDepth`).
+  property real startNeighborDepth: 0
+  property real endNeighborDepth: 0
+  // At least this deep: a joined row takes its deepest notch's depth
+  // (Position.rowDepths), the content centered in what it adds.
+  property real minDepth: 0
   // Size the notch may grow to (the screen, less some margin).
   property real maxWidth: Theme.space(1200)
   property real maxHeight: Theme.space(1200)
@@ -76,6 +92,7 @@ Item {
     card.shownComponent = card.modeComponent
     card.shownMode = card.mode
     card.shownVertical = card.vertical
+    card.trackClosedDepth()
   }
 
   SequentialAnimation {
@@ -131,8 +148,31 @@ Item {
   // springs run in fractions of a pixel.
   readonly property real targetAlong: 2 * Math.ceil(Math.min(card.vertical ? card.maxHeight : card.maxWidth,
     (card.vertical ? card.contentHeight : card.contentWidth) + card.alongPad * 2) / 2)
-  readonly property real targetDepth: Math.ceil(Math.min(card.vertical ? card.maxWidth : card.maxHeight,
+  // Its own depth, from its content; a joined row may make it deeper.
+  readonly property real naturalDepth: Math.ceil(Math.min(card.vertical ? card.maxWidth : card.maxHeight,
     (card.vertical ? card.contentWidth : card.contentHeight) + card.nearPad + card.farPad))
+  readonly property real targetDepth: Math.max(card.naturalDepth,
+    Math.ceil(Math.min(card.vertical ? card.maxWidth : card.maxHeight, card.minDepth)))
+  // Its own depth closed, held while it is open and while its content
+  // swaps: what a joined row goes by (Position.rowDepths). Read live, a
+  // closing peek's depth (its content still fading out) made the row grow
+  // for a moment and shrink back, as if about to open.
+  property real closedDepth: 0
+  function trackClosedDepth() {
+    if (!card.swapping && card.shownMode === card.mode && card.shownVertical === card.vertical
+        && (card.mode === "rest" || card.mode === "compact"))
+      card.closedDepth = card.naturalDepth
+  }
+  onNaturalDepthChanged: card.trackClosedDepth()
+  onSwappingChanged: card.trackClosedDepth()
+  onShownModeChanged: card.trackClosedDepth()
+  // Made deeper by its row: shown like a compact notch even at rest, so the
+  // row's outline and corners run through it.
+  readonly property bool stretched: card.targetDepth > card.naturalDepth
+  // Half of what the row adds, moving the content off the edge so it stays
+  // centered; it springs with the depth.
+  property real contentShift: Math.max(0, card.targetDepth - card.naturalDepth) / 2
+  Behavior on contentShift { NumberAnimation { duration: 380; easing.type: Easing.OutQuint } }
   // Depth of the closed notch while it shows a compact view, else 0. The
   // padding follows `mode` at once (the outline springs while the content
   // fades), so this adds the compact padding itself.
@@ -244,9 +284,9 @@ Item {
   }
 
   // --------------------------------------------------------------- drawing
-  // One outline, drawn for the top edge (x along, y depth): concave
-  // shoulders flaring into the edge, rounded far side. `transform` turns it
-  // onto the card's edge.
+  // One outline, drawn for the top edge (x along, y depth): each end as
+  // `startSide` and `endSide` say (Outline.js), rounded far side.
+  // `transform` turns it onto the card's edge.
   Shape {
     id: outline
     width: outline.w
@@ -254,8 +294,8 @@ Item {
     preferredRendererType: Shape.CurveRenderer
     readonly property real w: Math.max(0, card.along)
     readonly property real h: Math.max(0, card.depth)
-    readonly property real s: Math.min(card.shoulder, h / 2)
-    readonly property real r: Math.min(Math.max(card.cornerRadius, card.roomy ? 0 : h / 2), h / 2, w / 2)
+    readonly property real r: card.stretched && !card.roomy ? Math.min(Theme.space(12), h / 2, w / 2)
+      : Math.min(Math.max(card.cornerRadius, card.roomy ? 0 : h / 2), h / 2, w / 2)
     // (x, y) -> top: (x, y), bottom: (x, h - y), left: (y, x), right: (h - y, x).
     transform: Matrix4x4 {
       matrix: card.edge === "bottom" ? Qt.matrix4x4(1, 0, 0, 0,  0, -1, 0, outline.h,  0, 0, 1, 0,  0, 0, 0, 1)
@@ -264,34 +304,26 @@ Item {
         : Qt.matrix4x4()
     }
 
+    readonly property var paths: Outline.path({
+      w: outline.w, h: outline.h, shoulder: card.shoulder, radius: outline.r,
+      start: { kind: card.startSide, depth: card.startNeighborDepth },
+      end: { kind: card.endSide, depth: card.endNeighborDepth }
+    })
+
     ShapePath {
       fillColor: Theme.background
       strokeColor: "transparent"
-      startX: -card.shoulder; startY: 0
-      PathQuad { x: 0; y: outline.s; controlX: 0; controlY: 0 }
-      PathLine { x: 0; y: outline.h - outline.r }
-      PathQuad { x: outline.r; y: outline.h; controlX: 0; controlY: outline.h }
-      PathLine { x: outline.w - outline.r; y: outline.h }
-      PathQuad { x: outline.w; y: outline.h - outline.r; controlX: outline.w; controlY: outline.h }
-      PathLine { x: outline.w; y: outline.s }
-      PathQuad { x: outline.w + card.shoulder; y: 0; controlX: outline.w; controlY: 0 }
-      PathLine { x: -card.shoulder; y: 0 }
+      PathSvg { path: outline.paths.fill }
     }
 
     // Hairline on the open sides only, so the notch reads against dark
-    // windows without drawing a seam where it meets the edge.
+    // windows without drawing a seam where it meets the edge, the screen's
+    // side or a neighbor.
     ShapePath {
       fillColor: "transparent"
-      strokeColor: card.roomy ? Theme.line : "transparent"
+      strokeColor: card.roomy || card.stretched ? Theme.line : "transparent"
       strokeWidth: 1
-      startX: -card.shoulder; startY: 0
-      PathQuad { x: 0; y: outline.s; controlX: 0; controlY: 0 }
-      PathLine { x: 0; y: outline.h - outline.r }
-      PathQuad { x: outline.r; y: outline.h; controlX: 0; controlY: outline.h }
-      PathLine { x: outline.w - outline.r; y: outline.h }
-      PathQuad { x: outline.w; y: outline.h - outline.r; controlX: outline.w; controlY: outline.h }
-      PathLine { x: outline.w; y: outline.s }
-      PathQuad { x: outline.w + card.shoulder; y: 0; controlX: outline.w; controlY: 0 }
+      PathSvg { path: outline.paths.stroke }
     }
   }
 
@@ -329,10 +361,10 @@ Item {
     // fractions of a pixel (Position.place).
     Loader {
       id: content
-      x: Math.round(card.x + (card.edge === "left" ? card.nearPad
-        : card.edge === "right" ? card.width - card.nearPad - width : (card.width - width) / 2)) - card.x
-      y: Math.round(card.y + (card.edge === "top" ? card.nearPad
-        : card.edge === "bottom" ? card.height - card.nearPad - height : (card.height - height) / 2)) - card.y
+      x: Math.round(card.x + (card.edge === "left" ? card.nearPad + card.contentShift
+        : card.edge === "right" ? card.width - card.nearPad - card.contentShift - width : (card.width - width) / 2)) - card.x
+      y: Math.round(card.y + (card.edge === "top" ? card.nearPad + card.contentShift
+        : card.edge === "bottom" ? card.height - card.nearPad - card.contentShift - height : (card.height - height) / 2)) - card.y
       sourceComponent: card.shownComponent
     }
   }

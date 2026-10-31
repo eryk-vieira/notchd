@@ -29,7 +29,8 @@ core/                 the framework: no desktop-specific code
   Theme.qml           visual tokens (singleton), fed by the host
   Config.js           config rules (pure JS)
   State.js            mode, peek and screen rules (pure JS)
-  Position.js         edge and offset: where the notch sits (pure JS)
+  Position.js         edge and offset: where the notch sits, corners and joined rows (pure JS)
+  Outline.js          the notch's outline: shoulders, corners, joins (pure JS)
   Resources.js        /proc and df parsing, when a resource runs short (pure JS)
   Countdown.js        timer and pomodoro: durations, commands, the countdown (pure JS)
   ReservedSpace.qml   how much of its edge windows leave to the closed notch
