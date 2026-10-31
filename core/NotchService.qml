@@ -15,8 +15,14 @@ Item {
   // ------------------------------------------------------------------ host
   // IPC target scripts call (`qs ipc call <target> push ...`).
   property string ipcTarget: "notchd"
-  // Absolute path of the JSON config. Watched; edits apply live.
-  property string configPath: ""
+  // Absolute path of the JSON config. Watched; edits apply live. Defaults
+  // to the user's config dir, so settings survive plugin updates and never
+  // land in the source tree. A missing file means every key at its default.
+  readonly property string defaultConfigPath: {
+    var base = Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")
+    return base + "/notchd/config.json"
+  }
+  property string configPath: svc.defaultConfigPath
   // Extra modules the host ships, as { id: url }. They win over built-ins
   // with the same id.
   property var hostModules: ({})
@@ -25,6 +31,11 @@ Item {
   property bool barStyleAvailable: false
   // Prefix for log lines.
   property string logName: svc.ipcTarget
+  // Modules to load when the config doesn't list any.
+  property var defaultModules: ["media", "activities"]
+  // Extra settings-window fields for the host's own config keys, in the
+  // same format as coreSettingsSchema below.
+  property var hostSettingsSchema: []
 
   // -------------------------------------------------------------- built-ins
   readonly property var builtinModules: ({
@@ -37,10 +48,19 @@ Item {
     return svc.builtinModules[id] || ""
   }
 
+  // Every module this host can load, built-ins first.
+  readonly property var availableModuleIds: {
+    var out = Object.keys(svc.builtinModules)
+    var host = Object.keys(svc.hostModules || {})
+    for (var i = 0; i < host.length; i++)
+      if (out.indexOf(host[i]) === -1) out.push(host[i])
+    return out
+  }
+
   // ---------------------------------------------------------------- config
   // The parsed config, so hosts can read their own keys from it.
   property var config: ({})
-  property var moduleIds: ["media", "activities"]
+  property var moduleIds: svc.defaultModules
   property int hoverOpenDelay: 120
   property int hoverCloseDelay: 300
   // Where the compact state lives: "bar" (in the host's bar indicator; the
@@ -49,25 +69,143 @@ Item {
   property string configuredStyle: "bar"
   readonly property string compactStyle: svc.barStyleAvailable && svc.configuredStyle === "bar" ? "bar" : "notch"
 
+  // Keys missing from the config fall back to their defaults, so deleting a
+  // key in the file (or the settings window) resets it.
+  function applyConfig(cfg) {
+    svc.config = cfg
+    svc.moduleIds = Array.isArray(cfg.modules) ? cfg.modules.map(String) : svc.defaultModules
+    svc.hoverOpenDelay = cfg.hoverOpenDelay === undefined ? 120 : Math.max(0, Number(cfg.hoverOpenDelay) || 0)
+    svc.hoverCloseDelay = cfg.hoverCloseDelay === undefined ? 300 : Math.max(0, Number(cfg.hoverCloseDelay) || 0)
+    svc.configuredStyle = cfg.compactStyle === "notch" ? "notch" : "bar"
+  }
+
   function loadConfig(text) {
+    // Our own pending edit is newer than whatever the file says right now.
+    if (saveTimer.running) return
     try {
       var cfg = JSON.parse(String(text || "{}"))
-      svc.config = cfg
-      if (Array.isArray(cfg.modules)) svc.moduleIds = cfg.modules.map(String)
-      if (cfg.hoverOpenDelay !== undefined) svc.hoverOpenDelay = Math.max(0, Number(cfg.hoverOpenDelay) || 0)
-      if (cfg.hoverCloseDelay !== undefined) svc.hoverCloseDelay = Math.max(0, Number(cfg.hoverCloseDelay) || 0)
-      svc.configuredStyle = cfg.compactStyle === "notch" ? "notch" : "bar"
+      svc.applyConfig(cfg && typeof cfg === "object" && !Array.isArray(cfg) ? cfg : {})
     } catch (e) {
       console.warn(svc.logName + ": " + svc.configPath + " is not valid JSON:", e)
     }
   }
 
   FileView {
+    id: configFile
     path: svc.configPath
     watchChanges: true
     printErrors: false
-    onLoaded: svc.loadConfig(text())
+    onLoaded: { missingConfigRetry.stop(); svc.loadConfig(text()) }
+    onLoadFailed: missingConfigRetry.start()
     onFileChanged: reload()
+    onSaveFailed: function(error) { console.warn(svc.logName + ": could not write " + svc.configPath + ": " + error) }
+    // A file that didn't exist when the view loaded isn't watched yet; a
+    // reload after the first save starts watching it.
+    onSaved: reload()
+  }
+
+  // While the file is missing, look again now and then, so creating it by
+  // hand is picked up without a restart.
+  Timer {
+    id: missingConfigRetry
+    interval: 2000
+    repeat: true
+    onTriggered: configFile.reload()
+  }
+
+  // ------------------------------------------------------- config editing
+  // Dotted keys reach into objects: "theme.foreground".
+  function configValue(key) {
+    var parts = String(key).split(".")
+    var node = svc.config
+    for (var i = 0; i < parts.length; i++) {
+      if (!node || typeof node !== "object") return undefined
+      node = node[parts[i]]
+    }
+    return node
+  }
+
+  // Applies at once and writes the file shortly after, so dragging a slider
+  // doesn't write on every step. `undefined` removes the key (back to its
+  // default); emptied parent objects are removed too.
+  function setConfigValue(key, value) {
+    var cfg = JSON.parse(JSON.stringify(svc.config || {}))
+    var parts = String(key).split(".")
+    var chain = [cfg]
+    var node = cfg
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (!node[parts[i]] || typeof node[parts[i]] !== "object") {
+        if (value === undefined) return
+        node[parts[i]] = {}
+      }
+      node = node[parts[i]]
+      chain.push(node)
+    }
+    var leaf = parts[parts.length - 1]
+    if (value === undefined) delete node[leaf]
+    else node[leaf] = value
+    for (var j = chain.length - 1; j > 0; j--)
+      if (Object.keys(chain[j]).length === 0) delete chain[j - 1][parts[j - 1]]
+    svc.applyConfig(cfg)
+    saveTimer.restart()
+  }
+
+  Timer {
+    id: saveTimer
+    interval: 250
+    onTriggered: {
+      // The config dir may not exist yet on the first save.
+      ensureConfigDir.command = ["mkdir", "-p", svc.configPath.replace(/\/[^\/]*$/, "")]
+      ensureConfigDir.running = true
+    }
+  }
+
+  Process {
+    id: ensureConfigDir
+    onExited: function(code) {
+      if (code !== 0) console.warn(svc.logName + ": could not create the config dir for " + svc.configPath)
+      configFile.setText(JSON.stringify(svc.config, null, 2) + "\n")
+    }
+  }
+
+  // --------------------------------------------------------------- settings
+  // The fields the settings window shows, built from these descriptors:
+  //   key        config key (dotted for nested objects)
+  //   type       "choice" | "integer" | "string" | "color" | "modules"
+  //   label, help
+  //   section    heading the field sits under
+  //   default    value shown while the key is absent
+  //   options    [{ value, label }] for "choice"
+  //   min, max, step, unit   for "integer"
+  readonly property var coreSettingsSchema: {
+    var out = []
+    if (svc.barStyleAvailable)
+      out.push({ section: "Behavior", key: "compactStyle", type: "choice", label: "Compact style",
+                 default: "bar",
+                 help: "Where the compact view lives when a module is active.",
+                 options: [{ value: "bar", label: "In the bar" }, { value: "notch", label: "Hanging notch" }] })
+    out.push({ section: "Behavior", key: "hoverOpenDelay", type: "integer", label: "Hover open delay",
+               default: 120, min: 0, max: 1000, step: 10, unit: "ms" })
+    out.push({ section: "Behavior", key: "hoverCloseDelay", type: "integer", label: "Hover close delay",
+               default: 300, min: 0, max: 2000, step: 10, unit: "ms" })
+    out.push({ section: "Modules", key: "modules", type: "modules", label: "Enabled",
+               default: svc.defaultModules,
+               help: "Checked modules load; order breaks ties in the expanded view." })
+    return out
+  }
+  readonly property var settingsSchema: svc.coreSettingsSchema.concat(svc.hostSettingsSchema || [])
+
+  property bool settingsOpen: false
+  function openSettings() { svc.settingsOpen = true }
+  function closeSettings() { svc.settingsOpen = false }
+
+  // `svc: svc` would bind the window's own property to itself (the property
+  // name shadows the id), so the reference goes through `owner`.
+  LazyLoader {
+    id: settingsLoader
+    readonly property var owner: svc
+    active: svc.settingsOpen
+    NotchSettings { svc: settingsLoader.owner }
   }
 
   // --------------------------------------------------------------- modules
@@ -198,6 +336,15 @@ Item {
     function toggle(): void { svc.pinned = !svc.pinned }
     function open(): void { svc.open() }
     function close(): void { svc.close() }
+    function settings(): void { svc.settingsOpen = !svc.settingsOpen }
+    // Change one config key, as the settings window does. `value` is JSON
+    // ("200", "\"notch\"", "[\"media\"]"); empty resets the key to its default.
+    function set(key: string, value: string): string {
+      if (!key) return "usage: set <key> <json value>"
+      if (value === "") { svc.setConfigValue(key, undefined); return "ok" }
+      try { svc.setConfigValue(key, JSON.parse(value)) } catch (e) { return "not JSON: " + value }
+      return "ok"
+    }
     // Generic activities, for scripts: see modules/activities.qml.
     function push(json: string): string {
       var m = svc.moduleById("activities")

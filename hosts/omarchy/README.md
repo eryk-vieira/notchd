@@ -15,7 +15,7 @@ omarchy restart shell
 
 The plugin is enabled by its bar entry (`.bar.layout.center` in `~/.config/omarchy/shell.json`). It is not listed in `plugins[]`. If it is listed there, `omarchy bar put` thinks it is already on the bar and does nothing.
 
-After changing QML, run `omarchy restart shell`, because the hot reload keeps serving the old compiled QML. Edits to `config.json` apply live.
+After changing QML, run `omarchy restart shell`, because the hot reload keeps serving the old compiled QML. Config changes apply live.
 
 ## Distribution
 
@@ -23,7 +23,7 @@ After changing QML, run `omarchy restart shell`, because the hot reload keeps se
 
 ## Config
 
-`config.json` takes the core keys (see the root README); `modules` here includes `osd`.
+`~/.config/notchd/config.json`, edited by hand, through the settings window (the gear in the expanded notch) or with `omarchy-shell eryk.notchd set`. It takes the core keys (see the root README); the default `modules` here include `osd`.
 
 ## Activities from scripts
 
@@ -47,5 +47,7 @@ Fields:
 
 ```sh
 omarchy-shell eryk.notchd toggle | open | close
+omarchy-shell eryk.notchd settings  # settings window (also the gear in the expanded notch)
+omarchy-shell eryk.notchd set hoverOpenDelay 200   # change one key; '' resets it
 omarchy-shell eryk.notchd state     # mode, current peek, modules
 ```

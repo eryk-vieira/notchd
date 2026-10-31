@@ -13,8 +13,8 @@ NotchService {
 
   ipcTarget: "eryk.notchd"
   logName: "eryk.notchd"
-  configPath: String(Qt.resolvedUrl("config.json")).replace(/^file:\/\//, "")
   barStyleAvailable: true
+  defaultModules: ["osd", "media", "activities"]
   hostModules: ({
     osd: Qt.resolvedUrl("modules/osd.qml")
   })

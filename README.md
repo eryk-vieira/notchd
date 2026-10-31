@@ -46,9 +46,11 @@ Over a fullscreen app only peeks show.
 | Property | Meaning |
 |---|---|
 | `ipcTarget` | IPC target name for scripts |
-| `configPath` | absolute path of the JSON config (watched, live) |
+| `configPath` | absolute path of the JSON config (watched, live); defaults to `$XDG_CONFIG_HOME/notchd/config.json` |
 | `hostModules` | `{ id: url }` of modules the host ships; they win over built-ins |
 | `barStyleAvailable` | whether the host has a bar indicator for `compactStyle: "bar"` |
+| `defaultModules` | modules to load when the config lists none |
+| `hostSettingsSchema` | settings-window fields for the host's own config keys (see [Settings](#settings)) |
 
 `NotchSurface`:
 
@@ -63,6 +65,8 @@ Over a fullscreen app only peeks show.
 
 ## Config
 
+The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/notchd/config.json`), outside the source tree, so plugin updates never touch it. A missing file means every key is at its default. The settings window creates the file on the first change, and a file you create by hand is picked up within a couple of seconds.
+
 | Key | Default | |
 |---|---|---|
 | `modules` | `["media", "activities"]` | module ids to load, in order |
@@ -70,7 +74,23 @@ Over a fullscreen app only peeks show.
 | `hoverOpenDelay` | `120` | ms |
 | `hoverCloseDelay` | `300` | ms |
 
-Hosts add their own keys; the standalone host, for example, adds `topOffset` and `theme`.
+Hosts add their own keys; the standalone host, for example, adds `topOffset` and `theme`. A key missing from the file falls back to its default.
+
+## Settings
+
+The gear in the expanded notch (or the `settings` IPC method) opens a settings window. It is an ordinary toplevel window with a fixed size, so tiling compositors float it, and it takes keyboard input. Every change applies at once and is written back to the config file; there is no Apply button. Clearing a field removes the key, so it goes back to its default.
+
+The form is generated from `NotchService.settingsSchema`: the core's fields, then the host's `hostSettingsSchema`. Each field is an object:
+
+| Key | |
+|---|---|
+| `key` | config key; dotted for nested objects (`theme.accent`) |
+| `type` | `choice`, `integer`, `string`, `color` or `modules` |
+| `label`, `help` | text shown next to and under the control |
+| `section` | heading the field sits under |
+| `default` | value shown while the key is absent |
+| `options` | `[{ value, label }]`, for `choice` |
+| `min`, `max`, `step`, `unit` | for `integer` (a slider) |
 
 ## Writing a module
 
@@ -108,7 +128,12 @@ Every host exposes the same methods on its `ipcTarget`:
 push '<json>'    add or update an activity (see core/modules/activities.qml)
 clear <id>       remove one; "" removes all
 open | close | toggle
+settings         open or close the settings window
+set <key> <json> change one config key, e.g. set hoverOpenDelay 200;
+                 an empty value resets it to its default
 state            mode, current peek, modules
 ```
+
+For an array, put a space before the bracket: `set modules ' ["media","activities"]'`. Quickshell's CLI reads an argument that starts with `[` as a comma-separated list.
 
 The CLI depends on the host: `omarchy-shell eryk.notchd ...` on Omarchy, `qs -p hosts/standalone ipc call notchd ...` standalone.

@@ -9,12 +9,10 @@ import "core"
 // "notch"), the theme comes from the config's "theme" object, and the gap
 // above the notch (e.g. your bar's height) from "topOffset".
 //
-// Config: $NOTCHD_CONFIG if set, else config.json next to this file.
+// Config: $NOTCHD_CONFIG if set, else $XDG_CONFIG_HOME/notchd/config.json.
 ShellRoot {
   id: shell
 
-  readonly property string dir: String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "").replace(/\/$/, "")
-  readonly property string configPath: Quickshell.env("NOTCHD_CONFIG") || (shell.dir + "/config.json")
   readonly property var config: svc.config || ({})
   readonly property var themeConfig: shell.config.theme || ({})
 
@@ -22,7 +20,18 @@ ShellRoot {
     id: svc
     ipcTarget: "notchd"
     logName: "notchd"
-    configPath: shell.configPath
+    configPath: Quickshell.env("NOTCHD_CONFIG") || svc.defaultConfigPath
+    hostSettingsSchema: [
+      { section: "Layout", key: "topOffset", type: "integer", label: "Top offset",
+        default: 0, min: 0, max: 120, step: 1, unit: "px",
+        help: "Gap above the notch, e.g. your bar's height." },
+      { section: "Appearance", key: "theme.foreground", type: "color", label: "Foreground", default: "#cacccc" },
+      { section: "Appearance", key: "theme.background", type: "color", label: "Background", default: "#101315" },
+      { section: "Appearance", key: "theme.accent", type: "color", label: "Accent",
+        help: "Defaults to the foreground color." },
+      { section: "Appearance", key: "theme.fontFamily", type: "string", label: "Font", default: "monospace",
+        help: "Use a Nerd Font so module icons render." }
+    ]
   }
 
   QtObject {

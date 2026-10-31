@@ -102,37 +102,66 @@ Item {
   Component {
     id: expandedView
     Column {
-      spacing: Theme.space(16)
+      spacing: Theme.space(6)
 
-      Repeater {
-        model: root.svc ? root.svc.expandedModules : []
-        delegate: Loader {
-          required property var modelData
-          width: Theme.space(400)
-          sourceComponent: modelData.expanded
+      Column {
+        id: expandedStack
+        spacing: Theme.space(16)
+
+        Repeater {
+          model: root.svc ? root.svc.expandedModules : []
+          delegate: Loader {
+            required property var modelData
+            width: Theme.space(400)
+            sourceComponent: modelData.expanded
+          }
+        }
+
+        // Nothing active: say so instead of opening an empty card.
+        Column {
+          visible: !root.svc || root.svc.expandedModules.length === 0
+          width: Theme.space(260)
+          spacing: Theme.space(2)
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            textFormat: Text.PlainText
+            text: Qt.formatDate(new Date(), "dddd, d MMMM")
+            color: root.fg
+            font.family: root.fontFamily
+            font.pixelSize: Theme.font.body
+          }
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            textFormat: Text.PlainText
+            text: "All quiet"
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Theme.font.caption
+          }
         }
       }
 
-      // Nothing active: say so instead of opening an empty card.
-      Column {
-        visible: !root.svc || root.svc.expandedModules.length === 0
-        width: Theme.space(260)
-        spacing: Theme.space(2)
+      // Footer: the gear opens the settings window (and closes the notch,
+      // which would otherwise sit over it).
+      Item {
+        width: expandedStack.width
+        implicitHeight: gear.implicitHeight
         Text {
-          anchors.horizontalCenter: parent.horizontalCenter
+          id: gear
+          anchors.right: parent.right
           textFormat: Text.PlainText
-          text: Qt.formatDate(new Date(), "dddd, d MMMM")
-          color: root.fg
+          text: String.fromCodePoint(0xF0493)  // nf-md-cog
+          color: gearArea.containsMouse ? root.fg : root.dim
           font.family: root.fontFamily
-          font.pixelSize: Theme.font.body
-        }
-        Text {
-          anchors.horizontalCenter: parent.horizontalCenter
-          textFormat: Text.PlainText
-          text: "All quiet"
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Theme.font.caption
+          font.pixelSize: Theme.font.heading
+          MouseArea {
+            id: gearArea
+            anchors.fill: parent
+            anchors.margins: -Theme.space(6)
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: if (root.svc) { root.svc.close(); root.svc.openSettings() }
+          }
         }
       }
     }
