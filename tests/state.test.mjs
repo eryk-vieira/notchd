@@ -98,3 +98,21 @@ test('notchScreen: open, the screen it was opened from, else the focused one', (
   assert.equal(State.notchScreen({ screens, focused: 'eDP-1', override: 'gone' }), 'DP-1');
   assert.equal(State.notchScreen({ screens, focused: 'DP-1', override: 'eDP-1' }), 'DP-1');
 });
+
+test('notchScreen: closed, the notch stays on its home screen whatever has focus', () => {
+  const screens = [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: true }];
+  assert.equal(State.notchScreen({ screens, focused: 'DP-1', home: 'eDP-1' }), 'eDP-1');
+  // Open (a peek, the expanded notch) it still follows focus.
+  assert.equal(State.notchScreen({ screens, focused: 'DP-1', home: 'eDP-1', open: true }), 'DP-1');
+  // A home whose workspace does not take the notch, or that is gone, falls back.
+  const busy = [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: false }];
+  assert.equal(State.notchScreen({ screens: busy, focused: 'eDP-1', home: 'eDP-1' }), 'DP-1');
+  assert.equal(State.notchScreen({ screens, focused: 'DP-1', home: 'HDMI-A-1' }), 'DP-1');
+});
+
+test('reserveScreens: only the home screen while the notch can hang there', () => {
+  const screens = [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: true }, { name: 'HDMI-A-1', allowed: false }];
+  assert.deepEqual(plain(State.reserveScreens(screens, 'eDP-1')), ['eDP-1']);
+  assert.deepEqual(plain(State.reserveScreens(screens, '')), ['DP-1', 'eDP-1']);
+  assert.deepEqual(plain(State.reserveScreens(screens, 'HDMI-A-1')), ['DP-1', 'eDP-1']);
+});

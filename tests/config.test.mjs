@@ -62,3 +62,18 @@ test('resolve reads and clamps the core keys', () => {
   assert.equal(Config.resolve({ workspaces: 3 }, []).workspaces, null);
   assert.deepEqual(plain(Config.resolve({ workspaces: [2, '', null, 'x'] }, []).workspaces), [2, 'x']);
 });
+
+// Bug: a notch dragged onto a screen showing a workspace left out of
+// `workspaces` landed there and went straight back to the other screen.
+// The drop lets that workspace in.
+test('withWorkspace adds the workspace a notch was dropped on', () => {
+  assert.deepEqual(plain(Config.withWorkspace([1, 2, 3], { id: 4, name: '4' })), [1, 2, 3, 4]);
+  assert.deepEqual(plain(Config.withWorkspace([3, 'code'], { id: 1, name: '1' })), [1, 3, 'code']);
+  assert.deepEqual(plain(Config.withWorkspace([1], { id: 7, name: 'mail' })), [1, 'mail']);
+  assert.deepEqual(plain(Config.withWorkspace([1, 2], { id: 2, name: '2' })), [1, 2]);
+  assert.deepEqual(plain(Config.withWorkspace(['web'], { id: 9, name: 'web' })), ['web']);
+  assert.equal(Config.withWorkspace(null, { id: 4, name: '4' }), null);
+  assert.deepEqual(plain(Config.withWorkspace([1], null)), [1]);
+  // A list that went through a QML var property is array-like, not an Array.
+  assert.deepEqual(plain(Config.withWorkspace({ length: 2, 0: 1, 1: 3 }, { id: 2, name: '2' })), [1, 2, 3]);
+});

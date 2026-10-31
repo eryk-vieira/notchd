@@ -92,3 +92,25 @@ function resolve(cfg, defaultModules) {
     workspaces: workspaceList(cfg.workspaces)
   }
 }
+
+// The `workspaces` list with workspace `ws` ({ id, name }) let in, for a
+// notch dropped on a screen showing it. null (every workspace) and a list
+// that already has it come back unchanged; otherwise it is added as the
+// settings window stores it: a number for a numbered workspace, else its
+// name, the list in order (numbers, then names). `list` may be a sequence
+// (a list that went through a QML var property).
+function withWorkspace(list, ws) {
+  if (!list || !ws) return list
+  for (var i = 0; i < list.length; i++)
+    if (String(list[i]) === String(ws.id) || String(list[i]) === String(ws.name)) return list
+  var name = String(ws.name === undefined || ws.name === null ? "" : ws.name)
+  var value = /^[0-9]+$/.test(name) ? Number(name) : (name !== "" ? name : ws.id)
+  var out = Array.prototype.slice.call(list)
+  out.push(value)
+  return out.sort(function(a, b) {
+    var an = typeof a === "number", bn = typeof b === "number"
+    if (an && bn) return a - b
+    if (an !== bn) return an ? -1 : 1
+    return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0
+  })
+}

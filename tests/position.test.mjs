@@ -5,18 +5,18 @@ import { load, plain } from './load.mjs';
 const Position = load('core/Position.js');
 
 test('resolve: a missing or broken value is top-center', () => {
-  assert.deepEqual(plain(Position.resolve(undefined)), { edge: 'top', offset: 0.5 });
-  assert.deepEqual(plain(Position.resolve('left')), { edge: 'top', offset: 0.5 });
-  assert.deepEqual(plain(Position.resolve({ edge: 'middle', offset: 'x' })), { edge: 'top', offset: 0.5 });
-  assert.deepEqual(plain(Position.resolve({ offset: null })), { edge: 'top', offset: 0.5 });
+  assert.deepEqual(plain(Position.resolve(undefined)), { edge: 'top', offset: 0.5, screen: '' });
+  assert.deepEqual(plain(Position.resolve('left')), { edge: 'top', offset: 0.5, screen: '' });
+  assert.deepEqual(plain(Position.resolve({ edge: 'middle', offset: 'x' })), { edge: 'top', offset: 0.5, screen: '' });
+  assert.deepEqual(plain(Position.resolve({ offset: null })), { edge: 'top', offset: 0.5, screen: '' });
 });
 
 test('resolve keeps a known edge and clamps the offset to 0..1', () => {
-  assert.deepEqual(plain(Position.resolve({ edge: 'left' })), { edge: 'left', offset: 0.5 });
-  assert.deepEqual(plain(Position.resolve({ edge: 'bottom', offset: 0.2 })), { edge: 'bottom', offset: 0.2 });
-  assert.deepEqual(plain(Position.resolve({ edge: 'right', offset: 3 })), { edge: 'right', offset: 1 });
-  assert.deepEqual(plain(Position.resolve({ edge: 'top', offset: -1 })), { edge: 'top', offset: 0 });
-  assert.deepEqual(plain(Position.resolve({ offset: '0.25' })), { edge: 'top', offset: 0.25 });
+  assert.deepEqual(plain(Position.resolve({ edge: 'left' })), { edge: 'left', offset: 0.5, screen: '' });
+  assert.deepEqual(plain(Position.resolve({ edge: 'bottom', offset: 0.2 })), { edge: 'bottom', offset: 0.2, screen: '' });
+  assert.deepEqual(plain(Position.resolve({ edge: 'right', offset: 3 })), { edge: 'right', offset: 1, screen: '' });
+  assert.deepEqual(plain(Position.resolve({ edge: 'top', offset: -1 })), { edge: 'top', offset: 0, screen: '' });
+  assert.deepEqual(plain(Position.resolve({ offset: '0.25' })), { edge: 'top', offset: 0.25, screen: '' });
 });
 
 test('isVertical: only the side edges', () => {
@@ -28,9 +28,9 @@ test('isVertical: only the side edges', () => {
 
 test('effective: bar style locks the notch to the middle of the bar', () => {
   const pos = { edge: 'left', offset: 0.1 };
-  assert.deepEqual(plain(Position.effective(pos, 'bar', 'bottom')), { edge: 'bottom', offset: 0.5 });
-  assert.deepEqual(plain(Position.effective(pos, 'bar', undefined)), { edge: 'top', offset: 0.5 });
-  assert.deepEqual(plain(Position.effective(pos, 'notch', 'bottom')), { edge: 'left', offset: 0.1 });
+  assert.deepEqual(plain(Position.effective(pos, 'bar', 'bottom')), { edge: 'bottom', offset: 0.5, screen: '' });
+  assert.deepEqual(plain(Position.effective(pos, 'bar', undefined)), { edge: 'top', offset: 0.5, screen: '' });
+  assert.deepEqual(plain(Position.effective(pos, 'notch', 'bottom')), { edge: 'left', offset: 0.1, screen: '' });
 });
 
 test('insets: only the bar edge, only while the bar shows', () => {
@@ -128,4 +128,29 @@ test('place: no rounding, so a growing card grows evenly on both sides', () => {
   assert.equal(at(200.4).x, 399.8);
   assert.equal(at(200.4).x + 200.4, 600.2);
   assert.equal(at(200).x, 400);
+});
+
+test('resolve keeps the home screen by name', () => {
+  assert.deepEqual(plain(Position.resolve({ edge: 'left', screen: 'eDP-1' })), { edge: 'left', offset: 0.5, screen: 'eDP-1' });
+  assert.equal(Position.resolve({ screen: 3 }).screen, '');
+  assert.equal(Position.effective({ screen: 'eDP-1' }, 'bar', 'top').screen, '');
+  assert.equal(Position.effective({ screen: 'eDP-1' }, 'notch', 'top').screen, 'eDP-1');
+});
+
+test('configValue keeps the home screen, even at top-center', () => {
+  assert.deepEqual(plain(Position.configValue({ edge: 'top', offset: 0.5, screen: 'eDP-1' })), { screen: 'eDP-1' });
+  assert.deepEqual(plain(Position.configValue({ edge: 'left', screen: 'DP-1' })), { edge: 'left', screen: 'DP-1' });
+});
+
+test('screenAt: the screen containing a desktop point, else the nearest', () => {
+  // DP-1 3440x1440 at 0,0; eDP-1 1600x1000 (scale 1.6) to its right.
+  const screens = [{ name: 'DP-1', x: 0, y: 0, width: 3440, height: 1440 },
+                   { name: 'eDP-1', x: 3440, y: 0, width: 1600, height: 1000 }];
+  assert.equal(Position.screenAt(screens, 100, 100), 'DP-1');
+  assert.equal(Position.screenAt(screens, 3500, 500), 'eDP-1');
+  assert.equal(Position.screenAt(screens, 3500, 1020), 'eDP-1');   // just below eDP-1
+  assert.equal(Position.screenAt(screens, 3500, 1200), 'DP-1');    // nearer DP-1's side
+  assert.equal(Position.screenAt(screens, 3300, 1300), 'DP-1');
+  assert.equal(Position.screenAt(screens, -50, 20), 'DP-1');
+  assert.equal(Position.screenAt([], 1, 1), '');
 });

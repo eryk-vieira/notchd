@@ -79,9 +79,10 @@ function workspaceAllowed(list, ws) {
 // The screen the notch goes on, by name; "" for none. `screens` are
 // { name, allowed } (allowed: its workspace takes the notch), `override` the
 // screen it was opened from (counts only while open), `open` whether it
-// peeks or is expanded. Open,
-// it shows on the focused screen whatever the workspace; closed, on the
-// focused screen if allowed there, else on the first screen that is.
+// peeks or is expanded, `home` the screen the config's position names.
+// Open, it shows on the focused screen whatever the workspace; closed, on
+// its home screen if allowed there, else on the focused screen if allowed
+// there, else on the first screen that is.
 function notchScreen(s) {
   var screens = s.screens || []
   function find(name) {
@@ -90,8 +91,21 @@ function notchScreen(s) {
   }
   var over = s.open && s.override ? find(s.override) : null
   if (over) return over.name
+  var home = !s.open && s.home ? find(s.home) : null
+  if (home && home.allowed) return home.name
   var focused = find(s.focused) || screens[0] || null
   if (s.open || (focused && focused.allowed)) return focused ? focused.name : ""
   for (var i = 0; i < screens.length; i++) if (screens[i].allowed) return screens[i].name
   return ""
+}
+
+// The screens that keep windows clear of the closed notch (reserveSpace),
+// by name: just its home screen while the notch can hang there, else every
+// screen it may hang on (it follows focus, and reserving only where it is
+// would reflow both screens on each focus change).
+function reserveScreens(screens, home) {
+  var allowed = (screens || []).filter(function(s) { return s.allowed })
+  for (var i = 0; i < allowed.length; i++)
+    if (home && allowed[i].name === home) return [home]
+  return allowed.map(function(s) { return s.name })
 }

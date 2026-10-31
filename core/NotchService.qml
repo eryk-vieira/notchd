@@ -233,6 +233,14 @@ Item {
       out.push({ page: "general", section: "Position", key: "position.offset", type: "number", display: "percent",
                  label: "Along the edge", default: 0.5, min: 0, max: 1, step: 0.01,
                  help: "Where on the edge: 0 % is its left (or top) end, 50 % the middle." })
+      var screens = Quickshell.screens || []
+      if (screens.length > 1)
+        out.push({ page: "general", section: "Position", key: "position.screen", type: "choice",
+                   label: "Screen", default: "",
+                   help: "Where the closed notch stays. Following focus, it moves to the screen you work on; peeks and the open notch always do.",
+                   options: [{ value: "", label: "Follow focus" }].concat(screens.map(function(s) {
+                     return { value: s.name, label: s.name }
+                   })) })
       out.push({ page: "general", section: "Position", key: "draggable", type: "boolean",
                  label: "Drag to move", default: Config.DEFAULTS.draggable,
                  help: "Hold the notch for a moment, then drag it to any edge of the screen; it snaps to the nearest one, and to the middle when close to it. A quick click only pins it." })
@@ -404,7 +412,8 @@ Item {
     function open(): void { svc.open() }
     function close(): void { svc.close() }
     function settings(): void { svc.settingsOpen = !svc.settingsOpen }
-    // Back to the middle of the top edge, after a drag that went astray.
+    // Back to the middle of the top edge, following focus, after a drag
+    // that went astray.
     function recenter(): void { svc.setConfigValue("position", undefined) }
     // Change one config key, as the settings window does. `value` is JSON
     // ("200", "\"notch\"", "[\"media\"]"); empty resets the key to its default.

@@ -6,6 +6,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
+- Drag the notch onto another monitor: a preview shows it there, and the drop makes that monitor its home (`position.screen`; settings: General › Position › Screen), where the closed notch stays whichever monitor has focus. Dropped on a workspace left out of `workspaces`, it adds that workspace, so the notch stays where it landed. Peeks and the open notch still show on the focused one; reserved space is kept on the home monitor only.
 - With a vertical Omarchy bar, the bar indicator shows the compact state down the bar (the module's vertical view, or a dot) instead of hiding, and the notch drops out of the side.
 - Settings window with a sidebar of pages (General, Modules, Appearance), fields grouped by section, compact style picked from picture cards, segmented choices and switches for modules.
 - Settings fields can be `boolean` or `note`, live on a `page`, and show a choice as picture cards (`display: "cards"`); hosts can add pages with `hostSettingsPages`.

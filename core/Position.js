@@ -1,9 +1,11 @@
 // Where the notch sits: a screen edge and how far along it. Pure functions
 // with no QML globals, so Node tests them too (tests/position.test.mjs).
 //
-// The config's `position` is { edge, offset }: edge "top" | "bottom" |
-// "left" | "right", offset 0..1 along the edge (left to right, top to
-// bottom), 0.5 the middle. A missing key is top-center.
+// The config's `position` is { edge, offset, screen }: edge "top" |
+// "bottom" | "left" | "right", offset 0..1 along the edge (left to right,
+// top to bottom), 0.5 the middle, and screen the monitor the closed notch
+// stays on ("" or missing: the focused one; State.notchScreen). A missing
+// key is top-center, following focus.
 
 var EDGES = ["top", "bottom", "left", "right"]
 var DEFAULT_EDGE = "top"
@@ -14,24 +16,25 @@ function isEdge(edge) { return EDGES.indexOf(edge) !== -1 }
 // Left and right: the notch runs down the edge instead of across it.
 function isVertical(edge) { return edge === "left" || edge === "right" }
 
-// The config value as { edge, offset }; anything unknown falls back to
-// top-center.
+// The config value as { edge, offset, screen }; anything unknown falls back
+// to top-center on the focused screen.
 function resolve(value) {
   var v = value && typeof value === "object" ? value : {}
   var offset = Number(v.offset)
   return {
     edge: isEdge(v.edge) ? v.edge : DEFAULT_EDGE,
     offset: v.offset === undefined || v.offset === null || !isFinite(offset)
-      ? DEFAULT_OFFSET : Math.max(0, Math.min(1, offset))
+      ? DEFAULT_OFFSET : Math.max(0, Math.min(1, offset)),
+    screen: typeof v.screen === "string" ? v.screen : ""
   }
 }
 
 // Where the notch actually goes. compactStyle "bar" locks it to the middle
-// of the host's bar (its compact state lives in the bar); otherwise the
-// configured position.
+// of the host's bar (its compact state lives in the bar, on every screen);
+// otherwise the configured position.
 function effective(position, compactStyle, barEdge) {
   if (compactStyle === "bar")
-    return { edge: isEdge(barEdge) ? barEdge : DEFAULT_EDGE, offset: DEFAULT_OFFSET }
+    return { edge: isEdge(barEdge) ? barEdge : DEFAULT_EDGE, offset: DEFAULT_OFFSET, screen: "" }
   return resolve(position)
 }
 
@@ -109,11 +112,28 @@ function dragTarget(s) {
 }
 
 // A position as the config stores it: defaults left out, and undefined
-// (no key) for top-center.
+// (no key) for top-center on the focused screen.
 function configValue(position) {
   var p = resolve(position)
   var out = {}
   if (p.edge !== DEFAULT_EDGE) out.edge = p.edge
   if (p.offset !== DEFAULT_OFFSET) out.offset = p.offset
+  if (p.screen !== "") out.screen = p.screen
   return Object.keys(out).length > 0 ? out : undefined
+}
+
+// The screen a point of the desktop (global layout coordinates) is on, by
+// name: the one containing it, else the nearest (a point in a gap between
+// screens). `screens` are { name, x, y, width, height }; "" for none.
+function screenAt(screens, x, y) {
+  var best = ""
+  var bestDistance = Infinity
+  for (var i = 0; i < (screens || []).length; i++) {
+    var s = screens[i]
+    var dx = Math.max(s.x - x, 0, x - (s.x + s.width))
+    var dy = Math.max(s.y - y, 0, y - (s.y + s.height))
+    var d = dx * dx + dy * dy
+    if (d < bestDistance) { best = s.name; bestDistance = d }
+  }
+  return best
 }

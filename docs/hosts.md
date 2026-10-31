@@ -28,7 +28,7 @@ A host reads its own config keys from `service.config`. `service.edge` and `serv
 
 ## NotchSurface
 
-The layer-shell overlay that puts the notch on screen: it picks the screen, places a `NotchCard` (the notch itself, which also renders offscreen) on its edge, off the bar where they share one, and routes the pointer. It also moves the notch when it is dragged (`NotchCard` reports the drag, `Position.dragTarget` picks the edge and offset) and stores the drop as `position`.
+The layer-shell overlay that puts the notch on screen: it picks the screen, places a `NotchCard` (the notch itself, which also renders offscreen) on its edge, off the bar where they share one, and routes the pointer. It also moves the notch when it is dragged (`NotchCard` reports the drag, `Position.dragTarget` picks the edge and offset) and stores the drop as `position`. The pointer stays with the notch's window while the button is down, even over another screen, so a drag there is followed too: `Position.screenAt` finds the screen, a preview window (namespace `<layerNamespace>-drag`) shows the notch on it, and the drop names it as the home screen.
 
 | Property | Meaning |
 |---|---|

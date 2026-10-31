@@ -13,7 +13,7 @@ Every host exposes the same methods on its `ipcTarget`. The CLI depends on the h
 | `clear <id>` | remove one; `""` removes all |
 | `open`, `close`, `toggle` | pin the notch open, close it, flip |
 | `settings` | open or close the settings window |
-| `recenter` | put the notch back in the middle of the top edge (removes `position`) |
+| `recenter` | put the notch back in the middle of the top edge, following focus (removes `position`) |
 | `set <key> <json>` | change one config key, as the settings window does; an empty value resets it |
 | `state` | mode, compact style, reserved space, workspaces, position (where the notch is, bar style applied), whether it can be dragged, current peek and modules, as JSON |
 
