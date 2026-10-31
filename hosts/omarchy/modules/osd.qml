@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell.Io
-import "../core"
+import "../../../core"
 
 // Volume, brightness, mic, keyboard light... Every `omarchy osd` call arrives
 // as `omarchy-shell osd show <json>` on the "osd" IPC target, which this module

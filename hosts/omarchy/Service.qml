@@ -1,6 +1,6 @@
 import QtQuick
 import qs.Commons
-import "core"
+import "../../core"
 
 // Omarchy host: the notch service as an Omarchy shell plugin. Wires the core
 // to Omarchy: its IPC name, the osd module that receives `omarchy osd`, the

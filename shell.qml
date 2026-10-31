@@ -3,7 +3,11 @@ import Quickshell
 import "core"
 
 // Standalone host: the notch as its own Quickshell config, for any Wayland
-// compositor with layer-shell. Run it with `qs -p <this directory>`.
+// compositor with layer-shell. Run it with `qs -p <repo root>`.
+//
+// It sits at the repo root, not under hosts/, because Quickshell only
+// resolves types from files inside the config folder: `import "../../core"`
+// from hosts/standalone fails with "NotchSurface is not a type".
 //
 // No desktop shell to lean on, so: no bar indicator (compactStyle is always
 // "notch"), the theme comes from the config's "theme" object, and the gap
@@ -13,14 +17,14 @@ import "core"
 ShellRoot {
   id: shell
 
-  readonly property var config: svc.config || ({})
+  readonly property var config: service.config || ({})
   readonly property var themeConfig: shell.config.theme || ({})
 
   NotchService {
-    id: svc
+    id: service
     ipcTarget: "notchd"
     logName: "notchd"
-    configPath: Quickshell.env("NOTCHD_CONFIG") || svc.defaultConfigPath
+    configPath: Quickshell.env("NOTCHD_CONFIG") || service.defaultConfigPath
     hostSettingsSchema: [
       { page: "general", section: "Layout", key: "topOffset", type: "integer", label: "Top offset",
         default: 0, min: 0, max: 120, step: 1, unit: "px",
@@ -46,15 +50,15 @@ ShellRoot {
 
   readonly property bool onHyprland: !!Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")
   Loader {
-    id: compositor
+    id: compositorLoader
     sourceComponent: shell.onHyprland ? hyprlandAdapter : genericAdapter
   }
   Component { id: hyprlandAdapter; HyprlandCompositor {} }
   Component { id: genericAdapter; GenericCompositor {} }
 
   NotchSurface {
-    svc: svc
-    compositor: compositor.item
+    svc: service
+    compositor: compositorLoader.item
     barHeight: Math.max(0, Number(shell.config.topOffset) || 0)
   }
 }

@@ -1,6 +1,6 @@
 import QtQuick
 import qs.Commons
-import "core"
+import "../../core"
 
 // Omarchy host: the notch overlay. Finds the service, then hands the core
 // surface Omarchy's bar geometry and the Hyprland adapter.
