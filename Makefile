@@ -1,0 +1,53 @@
+# Development entry points. `make check` is the gate: run it before every
+# commit. See DEVELOPMENT.md.
+
+QMLLINT ?= $(firstword $(wildcard /usr/lib/qt6/bin/qmllint /usr/lib64/qt6/bin/qmllint) \
+	$(shell command -v qmllint6 2>/dev/null) $(shell command -v qmllint 2>/dev/null))
+
+# The Omarchy host imports qs.Commons/qs.Ui, which only exist inside the
+# Omarchy shell, so lint skips it; `make restart` and the shell log cover it.
+LINT_FILES = shell.qml core/*.qml core/settings/*.qml core/settings/previews/*.qml \
+	core/modules/*.qml
+
+# Dev config for `make dev`, so it never touches ~/.config/notchd.
+DEV_CONFIG ?= $(CURDIR)/build/dev-config.json
+
+.PHONY: check test visual lint validate dev restart clean
+
+check: test lint validate visual
+
+# Node tests of the pure-JS rules (core/*.js, core/settings/*.js).
+test:
+	node --test tests/*.test.mjs
+
+# Renders the settings window offscreen into build/visual/; fails on any QML
+# warning, so it also proves the core loads.
+visual:
+	scripts/visual-test.sh
+
+# --unqualified disable: delegates read outer ids by design.
+# The filtered line is a qmllint false positive: it ignores a qmldir without
+# a `module` line when linting the singleton itself.
+lint:
+	@test -x "$(QMLLINT)" || { echo "Qt 6 qmllint not found" >&2; exit 1; }
+	@out=$$("$(QMLLINT)" --unqualified disable $(LINT_FILES) 2>&1 \
+	  | grep -v 'Type Theme not declared as singleton in qmldir'); \
+	if printf '%s\n' "$$out" | grep -qE '^(Warning|Error)'; then \
+	  printf '%s\n' "$$out"; exit 1; fi; \
+	echo "qmllint: clean"
+
+# The repo root is the Omarchy plugin.
+validate:
+	omarchy plugin validate .
+
+# The standalone host (shell.qml) against a scratch config; hot-reloads.
+dev:
+	@mkdir -p build
+	NOTCHD_CONFIG="$(DEV_CONFIG)" quickshell -p .
+
+# The Omarchy shell does not hot-reload plugin QML.
+restart:
+	omarchy restart shell
+
+clean:
+	rm -rf build

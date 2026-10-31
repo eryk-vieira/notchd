@@ -87,8 +87,8 @@ Item {
   readonly property real shoulder: Theme.space(10)
 
   readonly property real maxWidth: window.width - Theme.space(64)
-  readonly property real targetWidth: Math.min(root.maxWidth, (content.item ? content.item.implicitWidth : 0) + root.padX * 2)
-  readonly property real targetHeight: (content.item ? content.item.implicitHeight : 0) + root.padTop + root.padBottom
+  readonly property real targetWidth: Math.min(root.maxWidth, (content.item ? (content.item as Item).implicitWidth : 0) + root.padX * 2)
+  readonly property real targetHeight: (content.item ? (content.item as Item).implicitHeight : 0) + root.padTop + root.padBottom
 
   // ----------------------------------------------------------------- views
   Component {

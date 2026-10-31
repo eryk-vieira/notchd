@@ -54,7 +54,8 @@ QtObject {
     return Math.max(1, Math.round(n))
   }
 
-  readonly property QtObject font: QtObject {
+  // Typed (not a bare QtObject) so tooling sees `Theme.font.body` and co.
+  component FontScale: QtObject {
     readonly property string family: theme.pick("fontFamily", "monospace")
     readonly property int caption: theme.pick("fontCaption", 10)
     readonly property int bodySmall: theme.pick("fontBodySmall", 11)
@@ -62,4 +63,5 @@ QtObject {
     readonly property int heading: theme.pick("fontHeading", 16)
     readonly property int display: theme.pick("fontDisplay", 24)
   }
+  readonly property FontScale font: FontScale {}
 }

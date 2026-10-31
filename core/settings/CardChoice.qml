@@ -4,7 +4,7 @@ import ".."
 
 // `choice` field with `display: "cards"`: one card per option, each with a
 // picture of what it does. An option's `preview` is the url of a QML file
-// whose root takes `selected`; options without one show just the label.
+// whose root is a CardPreview; options without one show just the label.
 Flow {
   id: control
 
@@ -49,7 +49,7 @@ Flow {
             anchors.margins: 1
             active: !!card.modelData.preview
             source: card.modelData.preview || ""
-            onLoaded: item.selected = Qt.binding(function() { return card.isSelected })
+            onLoaded: (item as CardPreview).selected = Qt.binding(function() { return card.isSelected })
           }
         }
 

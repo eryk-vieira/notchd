@@ -2,6 +2,9 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "settings"
+import "Config.js" as Config
+import "State.js" as State
+import "settings/Settings.js" as Settings
 
 // The notch's single source of truth: config, modules, mode, peeks, hover and
 // IPC. Every surface that shows the notch (NotchSurface, a host's bar
@@ -65,33 +68,32 @@ Item {
   // The parsed config, so hosts can read their own keys from it.
   property var config: ({})
   property var moduleIds: svc.defaultModules
-  property int hoverOpenDelay: 120
-  property int hoverCloseDelay: 300
+  property int hoverOpenDelay: Config.DEFAULTS.hoverOpenDelay
+  property int hoverCloseDelay: Config.DEFAULTS.hoverCloseDelay
   // Where the compact state lives: "bar" (in the host's bar indicator; the
   // notch only drops out to peek or expand) or "notch" (hanging under the
   // top edge all the time).
-  property string configuredStyle: "bar"
+  property string configuredStyle: Config.DEFAULTS.compactStyle
   readonly property string compactStyle: svc.barStyleAvailable && svc.configuredStyle === "bar" ? "bar" : "notch"
 
   // Keys missing from the config fall back to their defaults, so deleting a
-  // key in the file (or the settings window) resets it.
+  // key in the file (or the settings window) resets it. Config.resolve has
+  // the rules.
   function applyConfig(cfg) {
+    var r = Config.resolve(cfg, svc.defaultModules)
     svc.config = cfg
-    svc.moduleIds = Array.isArray(cfg.modules) ? cfg.modules.map(String) : svc.defaultModules
-    svc.hoverOpenDelay = cfg.hoverOpenDelay === undefined ? 120 : Math.max(0, Number(cfg.hoverOpenDelay) || 0)
-    svc.hoverCloseDelay = cfg.hoverCloseDelay === undefined ? 300 : Math.max(0, Number(cfg.hoverCloseDelay) || 0)
-    svc.configuredStyle = cfg.compactStyle === "notch" ? "notch" : "bar"
+    svc.moduleIds = r.moduleIds
+    svc.hoverOpenDelay = r.hoverOpenDelay
+    svc.hoverCloseDelay = r.hoverCloseDelay
+    svc.configuredStyle = r.compactStyle
   }
 
   function loadConfig(text) {
     // Our own pending edit is newer than whatever the file says right now.
     if (saveTimer.running) return
-    try {
-      var cfg = JSON.parse(String(text || "{}"))
-      svc.applyConfig(cfg && typeof cfg === "object" && !Array.isArray(cfg) ? cfg : {})
-    } catch (e) {
-      console.warn(svc.logName + ": " + svc.configPath + " is not valid JSON:", e)
-    }
+    var parsed = Config.parse(text)
+    if (parsed.ok) svc.applyConfig(parsed.config)
+    else console.warn(svc.logName + ": ignoring " + svc.configPath + ": " + parsed.error)
   }
 
   FileView {
@@ -119,38 +121,13 @@ Item {
 
   // ------------------------------------------------------- config editing
   // Dotted keys reach into objects: "theme.foreground".
-  function configValue(key) {
-    var parts = String(key).split(".")
-    var node = svc.config
-    for (var i = 0; i < parts.length; i++) {
-      if (!node || typeof node !== "object") return undefined
-      node = node[parts[i]]
-    }
-    return node
-  }
+  function configValue(key) { return Config.valueAt(svc.config, key) }
 
   // Applies at once and writes the file shortly after, so dragging a slider
   // doesn't write on every step. `undefined` removes the key (back to its
   // default); emptied parent objects are removed too.
   function setConfigValue(key, value) {
-    var cfg = JSON.parse(JSON.stringify(svc.config || {}))
-    var parts = String(key).split(".")
-    var chain = [cfg]
-    var node = cfg
-    for (var i = 0; i < parts.length - 1; i++) {
-      if (!node[parts[i]] || typeof node[parts[i]] !== "object") {
-        if (value === undefined) return
-        node[parts[i]] = {}
-      }
-      node = node[parts[i]]
-      chain.push(node)
-    }
-    var leaf = parts[parts.length - 1]
-    if (value === undefined) delete node[leaf]
-    else node[leaf] = value
-    for (var j = chain.length - 1; j > 0; j--)
-      if (Object.keys(chain[j]).length === 0) delete chain[j - 1][parts[j - 1]]
-    svc.applyConfig(cfg)
+    svc.applyConfig(Config.withValue(svc.config, key, value))
     saveTimer.restart()
   }
 
@@ -182,16 +159,7 @@ Item {
     { id: "modules", label: "Modules", icon: 0xF0A66 },     // nf-md-puzzle_outline
     { id: "appearance", label: "Appearance", icon: 0xF0E0C } // nf-md-palette_outline
   ]
-  readonly property var settingsPages: {
-    var out = svc.corePages.map(function(p) { return Object.assign({}, p) })
-    var host = svc.hostSettingsPages || []
-    for (var i = 0; i < host.length; i++) {
-      var at = out.findIndex(function(p) { return p.id === host[i].id })
-      if (at === -1) out.push(host[i])
-      else out[at] = Object.assign(out[at], host[i])
-    }
-    return out
-  }
+  readonly property var settingsPages: Settings.mergePages(svc.corePages, svc.hostSettingsPages)
 
   // The fields the settings window shows, built from these descriptors:
   //   key        config key (dotted for nested objects)
@@ -209,7 +177,7 @@ Item {
     var out = []
     if (svc.barStyleAvailable)
       out.push({ page: "general", section: "Layout", key: "compactStyle", type: "choice", display: "cards",
-                 label: "Compact style", default: "bar",
+                 label: "Compact style", default: Config.DEFAULTS.compactStyle,
                  help: "Where an active module lives when the notch is closed.",
                  options: [
                    { value: "bar", label: "In the bar", preview: Qt.resolvedUrl("settings/previews/CompactBar.qml") },
@@ -217,10 +185,10 @@ Item {
                  ] })
     out.push({ page: "general", section: "Hover", key: "hoverOpenDelay", type: "integer", label: "Open delay",
                help: "How long the pointer rests on the notch before it expands.",
-               default: 120, min: 0, max: 1000, step: 10, unit: "ms" })
+               default: Config.DEFAULTS.hoverOpenDelay, min: 0, max: 1000, step: 10, unit: "ms" })
     out.push({ page: "general", section: "Hover", key: "hoverCloseDelay", type: "integer", label: "Close delay",
                help: "How long it stays open after the pointer leaves.",
-               default: 300, min: 0, max: 2000, step: 10, unit: "ms" })
+               default: Config.DEFAULTS.hoverCloseDelay, min: 0, max: 2000, step: 10, unit: "ms" })
     out.push({ page: "modules", key: "modules", type: "modules", label: "Loaded modules",
                default: svc.defaultModules,
                help: "Switched-on modules load. Their order breaks ties in the expanded view." })
@@ -271,8 +239,10 @@ Item {
       required property string modelData
       source: svc.moduleUrl(modelData)
       onLoaded: {
-        item.notch = svc
-        if (item.moduleId === "") item.moduleId = modelData
+        var module = item as NotchModule
+        if (!module) { console.warn(svc.logName + ": module '" + modelData + "' is not a NotchModule"); return }
+        module.notch = svc
+        if (module.moduleId === "") module.moduleId = modelData
         svc.rebuildModules()
       }
       onStatusChanged: if (status === Loader.Error) console.warn(svc.logName + ": module '" + modelData + "' failed to load")
@@ -283,21 +253,9 @@ Item {
 
   // Bindings read each module's `active` and `priority`, so they re-run when
   // any module changes state.
-  readonly property var activeModules: {
-    var out = []
-    for (var i = 0; i < svc.modules.length; i++) {
-      var m = svc.modules[i]
-      if (m && m.active) out.push(m)
-    }
-    out.sort(function(a, b) { return b.priority - a.priority })
-    return out
-  }
-
-  readonly property var compactModule: {
-    for (var i = 0; i < svc.activeModules.length; i++)
-      if (svc.activeModules[i].compact || svc.activeModules[i].barView) return svc.activeModules[i]
-    return null
-  }
+  // State.js has the rules.
+  readonly property var activeModules: State.activeModules(svc.modules)
+  readonly property var compactModule: State.compactModule(svc.activeModules)
 
   readonly property var expandedModules: svc.activeModules.filter(function(m) { return !!m.expanded })
 
@@ -305,12 +263,8 @@ Item {
   property var peekModule: null
 
   function requestPeek(module, ms) {
-    if (!module || !module.peek || svc.pinned) return
-    if (svc.hovered && !module.urgentPeek) return
-    // A higher-priority peek on screen (the OSD) is not cut short by a
-    // lower one (a track change).
-    if (svc.peekModule && svc.peekModule !== module && peekTimer.running
-        && svc.peekModule.priority > module.priority) return
+    if (!State.canPeek(module, { pinned: svc.pinned, hovered: svc.hovered,
+                                 current: svc.peekModule, currentShowing: peekTimer.running })) return
     svc.peekModule = module
     peekTimer.interval = Math.max(400, Number(ms) || 2500)
     peekTimer.restart()
@@ -364,9 +318,8 @@ Item {
   }
 
   // ------------------------------------------------------------------ mode
-  readonly property string mode: (svc.peekModule && !svc.pinned) ? "peek"
-    : ((svc.pinned || svc.hovered) ? "expanded"
-    : (svc.compactModule ? "compact" : "rest"))
+  readonly property string mode: State.mode({ peekModule: svc.peekModule, pinned: svc.pinned,
+                                             hovered: svc.hovered, compactModule: svc.compactModule })
 
   // ------------------------------------------------------------------- IPC
   IpcHandler {

@@ -1,10 +1,10 @@
 import QtQuick
 import "../.."
+import ".."
 
 // Card picture for compactStyle "notch": a pill hangs under the top edge.
-Item {
+CardPreview {
   id: preview
-  property bool selected: false
   readonly property color ink: preview.selected ? Theme.foreground : Theme.muted
 
   Rectangle {

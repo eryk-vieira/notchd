@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import ".."
+import "Settings.js" as Settings
 
 // `modules` field: every module the host can load, enabled ones first and in
 // order. The switch loads or unloads one; the arrows reorder enabled ones.
@@ -12,37 +13,12 @@ Rectangle {
   property var svc: null
   signal edited(var value)
 
-  // A field that went through a Repeater model arrives as a sequence, not
-  // an Array, so copy it element by element.
-  readonly property var enabledIds: {
-    var v = control.value
-    if (!v || typeof v === "string" || typeof v.length !== "number") return []
-    return Array.prototype.map.call(v, String)
-  }
-  readonly property var available: control.svc ? control.svc.availableModuleIds : []
-  readonly property var all: {
-    var out = control.enabledIds.slice()
-    for (var i = 0; i < control.available.length; i++)
-      if (out.indexOf(control.available[i]) === -1) out.push(control.available[i])
-    return out
-  }
+  readonly property var enabledIds: Settings.toList(control.value)
+  readonly property var available: control.svc ? Settings.toList(control.svc.availableModuleIds) : []
+  readonly property var all: Settings.allIds(control.enabledIds, control.available)
 
-  function toggle(id) {
-    var next = control.enabledIds.slice()
-    var at = next.indexOf(id)
-    if (at === -1) next.push(id)
-    else next.splice(at, 1)
-    control.edited(next)
-  }
-  function move(id, delta) {
-    var next = control.enabledIds.slice()
-    var at = next.indexOf(id)
-    var to = at + delta
-    if (at === -1 || to < 0 || to >= next.length) return
-    next.splice(at, 1)
-    next.splice(to, 0, id)
-    control.edited(next)
-  }
+  function toggle(id) { control.edited(Settings.toggleId(control.enabledIds, id)) }
+  function move(id, delta) { control.edited(Settings.moveId(control.enabledIds, id, delta)) }
   // A loaded module's own title; unloaded ones only have their id.
   function titleOf(id) {
     var m = control.svc ? control.svc.moduleById(id) : null

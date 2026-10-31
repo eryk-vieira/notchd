@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import ".."
+import "Settings.js" as Settings
 
 // The settings window: a sidebar of pages and, for the current page, its
 // fields grouped by section. Built from NotchService.settingsPages and
@@ -28,42 +29,14 @@ FloatingWindow {
   onClosed: if (win.svc) win.svc.closeSettings()
 
   // ----------------------------------------------------------------- pages
+  // Settings.js has the rules.
   readonly property var schema: win.svc ? win.svc.settingsSchema : []
-  function pageOf(field) { return field.page || "general" }
+  readonly property var pages: Settings.visiblePages(win.svc ? win.svc.settingsPages : [], win.schema)
+  readonly property string currentPage: Settings.resolvePage(win.pages, win.svc ? win.svc.settingsPage : "")
+  readonly property var sections: Settings.sections(win.schema, win.currentPage)
 
-  // Pages that have at least one field, in declared order.
-  readonly property var pages: {
-    var all = win.svc ? win.svc.settingsPages : []
-    return all.filter(function(p) {
-      return win.schema.some(function(f) { return win.pageOf(f) === p.id })
-    })
-  }
-  readonly property string currentPage: {
-    var want = win.svc ? win.svc.settingsPage : ""
-    for (var i = 0; i < win.pages.length; i++)
-      if (win.pages[i].id === want) return want
-    return win.pages.length ? win.pages[0].id : ""
-  }
   function showPage(id) { if (win.svc) win.svc.settingsPage = id }
-  function cyclePage(delta) {
-    var ids = win.pages.map(function(p) { return p.id })
-    var at = ids.indexOf(win.currentPage)
-    if (ids.length) win.showPage(ids[(at + delta + ids.length) % ids.length])
-  }
-
-  // The current page's fields, grouped by section in first-seen order.
-  readonly property var sections: {
-    var out = []
-    var byName = {}
-    for (var i = 0; i < win.schema.length; i++) {
-      var f = win.schema[i]
-      if (win.pageOf(f) !== win.currentPage) continue
-      var name = f.section || ""
-      if (!(name in byName)) { byName[name] = { name: name, fields: [] }; out.push(byName[name]) }
-      byName[name].fields.push(f)
-    }
-    return out
-  }
+  function cyclePage(delta) { win.showPage(Settings.cyclePage(win.pages, win.currentPage, delta)) }
 
   // Opens the config file, or its folder while the file doesn't exist yet.
   Process {
@@ -73,8 +46,10 @@ FloatingWindow {
   }
 
   // ---------------------------------------------------------------- layout
-  Item {
+  // Painted here as well as on the window, so grabs (tests/visual) match.
+  Rectangle {
     anchors.fill: parent
+    color: Theme.background
     focus: true
     Keys.onEscapePressed: if (win.svc) win.svc.closeSettings()
     Keys.onPressed: function(event) {
