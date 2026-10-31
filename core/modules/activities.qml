@@ -54,6 +54,7 @@ NotchModule {
       item: acts.items.length > 0 ? acts.items[acts.items.length - 1] : null
       implicitWidth: Theme.space(220)
       showSubtitle: false
+      iconSize: Theme.font.body
     }
   }
 
@@ -117,6 +118,8 @@ NotchModule {
     id: row
     property var item: null
     property bool showSubtitle: true
+    // The compact row uses body size, so the icon doesn't make it taller.
+    property int iconSize: Theme.font.heading
     readonly property bool hasProgress: !!item && item.progress >= 0
     readonly property real naturalWidth: iconText.implicitWidth + Theme.space(12)
       + Math.max(titleText.implicitWidth, subtitleText.implicitWidth)
@@ -137,7 +140,7 @@ NotchModule {
           text: row.item ? row.item.icon : ""
           color: Theme.accent
           font.family: Theme.font.family
-          font.pixelSize: Theme.font.heading
+          font.pixelSize: row.iconSize
         }
         ColumnLayout {
           Layout.fillWidth: true

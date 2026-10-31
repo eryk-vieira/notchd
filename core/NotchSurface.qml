@@ -54,8 +54,8 @@ Item {
   readonly property bool pinned: !!root.svc && root.svc.pinned
 
   // ------------------------------------------------------- reserved space
-  // A media compact view's height (22) plus the card's compact padding.
-  readonly property real compactBaseline: Theme.space(22) + card.compactPadTop + card.compactPadBottom
+  // A media compact view's height (18) plus the card's compact padding.
+  readonly property real compactBaseline: Theme.space(18) + card.compactPadTop + card.compactPadBottom
   // The tallest compact view shown so far; reset when the theme rescales.
   property real tallestCompact: 0
   onCompactBaselineChanged: root.tallestCompact = 0

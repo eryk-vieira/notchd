@@ -57,11 +57,15 @@ Item {
   // -------------------------------------------------------------- geometry
   readonly property bool roomy: card.mode === "peek" || card.mode === "compact" || card.mode === "expanded"
   readonly property real padX: !card.roomy ? 0 : Theme.space(card.mode === "expanded" ? 20 : 14)
-  readonly property real compactPadTop: Theme.space(6)
-  readonly property real compactPadBottom: Theme.space(8)
-  readonly property real padTop: !card.roomy ? 0 : card.mode === "expanded" ? Theme.space(14) : card.compactPadTop
-  readonly property real padBottom: !card.roomy ? 0 : card.mode === "expanded" ? Theme.space(18) : card.compactPadBottom
-  readonly property real cornerRadius: !card.roomy ? 0 : Theme.space(card.mode === "expanded" ? 26 : 16)
+  // Compact stays close to a bar's height: it hangs there all the time.
+  readonly property real compactPadTop: Theme.space(4)
+  readonly property real compactPadBottom: Theme.space(6)
+  readonly property real padTop: !card.roomy ? 0
+    : card.mode === "expanded" ? Theme.space(14) : card.mode === "peek" ? Theme.space(6) : card.compactPadTop
+  readonly property real padBottom: !card.roomy ? 0
+    : card.mode === "expanded" ? Theme.space(18) : card.mode === "peek" ? Theme.space(8) : card.compactPadBottom
+  readonly property real cornerRadius: !card.roomy ? 0
+    : Theme.space(card.mode === "expanded" ? 26 : card.mode === "peek" ? 16 : 12)
   // The concave flare into the bar, drawn outside the card's own width.
   readonly property real shoulder: Theme.space(10)
 

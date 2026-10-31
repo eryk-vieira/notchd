@@ -81,9 +81,9 @@ NotchModule {
   compact: Component {
     Item {
       implicitWidth: Theme.space(220)
-      implicitHeight: Theme.space(22)
-      Art { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; size: Theme.space(20); radius: Theme.space(5) }
-      Equalizer { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; barHeight: Theme.space(14) }
+      implicitHeight: Theme.space(18)
+      Art { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; size: Theme.space(16); radius: Theme.space(4) }
+      Equalizer { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; barHeight: Theme.space(12) }
     }
   }
 

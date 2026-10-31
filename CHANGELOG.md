@@ -18,6 +18,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 - The repository root is the Omarchy plugin (`manifest.json` at the root). Point `~/.config/omarchy/plugins/eryk.notchd` at the checkout instead of `hosts/omarchy`.
 - The standalone host is `shell.qml` at the repository root: run `qs -p <checkout>` instead of `qs -p hosts/standalone`.
 - Documentation split into README (users), `docs/` (reference), DEVELOPMENT.md and CLAUDE.md.
+- The compact notch is shorter (28 design px instead of 36), close to a bar's height: tighter padding, smaller corners, and smaller media artwork and activity icon.
 
 ### Fixed
 
