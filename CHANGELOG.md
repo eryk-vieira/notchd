@@ -10,6 +10,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 - Settings fields can be `boolean` or `note`, live on a `page`, and show a choice as picture cards (`display: "cards"`); hosts can add pages with `hostSettingsPages`.
 - Theme tokens derived from the host's colors (`muted`, `faint`, `line`, `hover`, `selected`, `surface`, `danger`, radii).
 - `make check`: Node tests, qmllint, plugin validation and offscreen visual scenarios.
+- `reserveSpace` (settings: General › Layout › Keep windows clear): with the notch hanging in `"notch"` style, windows tile below it instead of under it.
 - README image of the notch in its four states, rendered from the real QML with `make hero`, in Omarchy's Gruvbox theme and wallpaper.
 
 ### Changed

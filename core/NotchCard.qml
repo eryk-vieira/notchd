@@ -32,27 +32,46 @@ Item {
   // Fade the old content out, swap, then fade the new one in while the
   // outline springs to its size.
   property Component shownComponent: null
+  // The mode the shown content belongs to; it trails `mode` by the fade, so
+  // it matches targetHeight while `mode` may already have moved on. Both
+  // change in one step; `swapping` is true in between, when they don't match.
+  property string shownMode: ""
+  property bool swapping: false
   onModeComponentChanged: swapAnim.restart()
-  Component.onCompleted: card.shownComponent = card.modeComponent
+  Component.onCompleted: { card.shownComponent = card.modeComponent; card.shownMode = card.mode }
 
   SequentialAnimation {
     id: swapAnim
     NumberAnimation { target: content; property: "opacity"; to: 0; duration: 70 }
-    ScriptAction { script: card.shownComponent = card.modeComponent }
+    ScriptAction {
+      script: {
+        card.swapping = true
+        card.shownComponent = card.modeComponent
+        card.shownMode = card.mode
+        card.swapping = false
+      }
+    }
     NumberAnimation { target: content; property: "opacity"; to: 1; duration: 180 }
   }
 
   // -------------------------------------------------------------- geometry
   readonly property bool roomy: card.mode === "peek" || card.mode === "compact" || card.mode === "expanded"
   readonly property real padX: !card.roomy ? 0 : Theme.space(card.mode === "expanded" ? 20 : 14)
-  readonly property real padTop: !card.roomy ? 0 : Theme.space(card.mode === "expanded" ? 14 : 6)
-  readonly property real padBottom: !card.roomy ? 0 : Theme.space(card.mode === "expanded" ? 18 : 8)
+  readonly property real compactPadTop: Theme.space(6)
+  readonly property real compactPadBottom: Theme.space(8)
+  readonly property real padTop: !card.roomy ? 0 : card.mode === "expanded" ? Theme.space(14) : card.compactPadTop
+  readonly property real padBottom: !card.roomy ? 0 : card.mode === "expanded" ? Theme.space(18) : card.compactPadBottom
   readonly property real cornerRadius: !card.roomy ? 0 : Theme.space(card.mode === "expanded" ? 26 : 16)
   // The concave flare into the bar, drawn outside the card's own width.
   readonly property real shoulder: Theme.space(10)
 
   readonly property real targetWidth: Math.min(card.maxWidth, (content.item ? (content.item as Item).implicitWidth : 0) + card.padX * 2)
   readonly property real targetHeight: (content.item ? (content.item as Item).implicitHeight : 0) + card.padTop + card.padBottom
+  // Height of the closed notch while it shows a compact view, else 0. The
+  // padding follows `mode` at once (the outline springs while the content
+  // fades), so this adds the compact padding itself.
+  readonly property real compactHeight: !card.swapping && card.shownMode === "compact" && content.item
+    ? (content.item as Item).implicitHeight + card.compactPadTop + card.compactPadBottom : 0
 
   width: card.targetWidth
   height: card.targetHeight

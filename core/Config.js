@@ -6,7 +6,8 @@
 var DEFAULTS = {
   hoverOpenDelay: 120,
   hoverCloseDelay: 300,
-  compactStyle: "bar"
+  compactStyle: "bar",
+  reserveSpace: false
 }
 
 // A config file's text as an object. Anything but a JSON object is an error;
@@ -70,6 +71,7 @@ function resolve(cfg, defaultModules) {
     moduleIds: Array.isArray(cfg.modules) ? cfg.modules.map(String) : defaultModules,
     hoverOpenDelay: delay(cfg.hoverOpenDelay, DEFAULTS.hoverOpenDelay),
     hoverCloseDelay: delay(cfg.hoverCloseDelay, DEFAULTS.hoverCloseDelay),
-    compactStyle: cfg.compactStyle === "notch" ? "notch" : DEFAULTS.compactStyle
+    compactStyle: cfg.compactStyle === "notch" ? "notch" : DEFAULTS.compactStyle,
+    reserveSpace: cfg.reserveSpace === true
   }
 }

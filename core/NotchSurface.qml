@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import "State.js" as State
 
 // Puts the notch on screen: a layer-shell overlay at the top edge of the
 // focused screen (under the host's bar, if it has one). All state lives in
@@ -11,6 +12,10 @@ import Quickshell.Wayland
 //
 // The window covers the whole screen on the overlay layer but its input mask
 // is just the notch, so everything else stays click-through.
+//
+// With reserveSpace on, a second, empty window per screen holds a layer-shell
+// exclusive zone as deep as a compact notch, so windows tile below it. The
+// compositor stacks it under the host bar's own zone, where the notch hangs.
 Item {
   id: root
 
@@ -47,6 +52,46 @@ Item {
   readonly property bool concealed: root.mode === "hidden"
     || (root.fullscreenOnScreen && (root.mode === "rest" || root.mode === "compact"))
   readonly property bool pinned: !!root.svc && root.svc.pinned
+
+  // ------------------------------------------------------- reserved space
+  // A media compact view's height (22) plus the card's compact padding.
+  readonly property real compactBaseline: Theme.space(22) + card.compactPadTop + card.compactPadBottom
+  // The tallest compact view shown so far; reset when the theme rescales.
+  property real tallestCompact: 0
+  onCompactBaselineChanged: root.tallestCompact = 0
+  readonly property int reservedSpace: State.reservedSpace({
+    enabled: !!root.svc && root.svc.reserveSpace,
+    compactStyle: root.svc ? root.svc.compactStyle : "",
+    baseline: root.compactBaseline,
+    tallest: root.tallestCompact
+  })
+
+  readonly property real compactHeight: card.compactHeight
+  onCompactHeightChanged: if (root.compactHeight > root.tallestCompact) root.tallestCompact = root.compactHeight
+
+  // Every screen, not just the notch's: it follows focus, and reserving only
+  // there would reflow both screens on each focus change. Anchored to the
+  // top like the notch: with the host's bar at the bottom, both sit at the
+  // screen edge.
+  Variants {
+    model: root.reservedSpace > 0 ? Quickshell.screens : []
+    PanelWindow {
+      required property var modelData
+      screen: modelData
+      anchors { top: true; left: true; right: true }
+      implicitHeight: root.reservedSpace
+      color: "transparent"
+      exclusionMode: ExclusionMode.Normal
+      exclusiveZone: root.reservedSpace
+      // Overlay, so it is arranged after the bar (top layer) and stacks
+      // under it rather than pushing the bar down.
+      WlrLayershell.namespace: root.layerNamespace + "-reserve"
+      WlrLayershell.layer: WlrLayer.Overlay
+      WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+      // Draws nothing and takes no input.
+      mask: Region {}
+    }
+  }
 
   // ---------------------------------------------------------------- window
   PanelWindow {

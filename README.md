@@ -29,6 +29,8 @@ Over a fullscreen app only peeks show.
 - `"bar"`: in the host's bar indicator. The notch only drops out to peek or expand. Only hosts with a bar indicator support it; that is only the Omarchy host today.
 - `"notch"`: compact hangs from the top edge all the time, Mac style.
 
+A hanging notch covers the top of the windows under it. `reserveSpace: true` keeps windows below it instead: the compositor reserves a strip as deep as the compact notch, across the whole width of every screen (layer-shell can only reserve whole edges). Peeks and the expanded notch still open over windows. It does nothing in `"bar"` style.
+
 ## Config
 
 The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/notchd/config.json`), outside the source tree, so plugin updates never touch it. A missing file means every key is at its default. A file you create by hand is picked up within a couple of seconds, and edits apply live.
@@ -39,6 +41,7 @@ The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/no
 | `compactStyle` | `"bar"` | see above |
 | `hoverOpenDelay` | `120` | ms |
 | `hoverCloseDelay` | `300` | ms |
+| `reserveSpace` | `false` | keep windows below the closed notch (`"notch"` style); see above |
 
 Hosts add their own keys; the standalone host, for example, adds `topOffset` and `theme`. A key missing from the file falls back to its default.
 

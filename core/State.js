@@ -39,3 +39,13 @@ function mode(s) {
   if (s.compactModule) return "compact"
   return "rest"
 }
+
+// How far windows are kept from the notch's edge (the layer-shell exclusive
+// zone), in px; 0 reserves nothing. Only a notch that hangs there when
+// closed (compactStyle "notch") needs it. It is the tallest compact view
+// seen (`tallest`), never less than `baseline`, so windows move once rather
+// than every time a module comes and goes.
+function reservedSpace(s) {
+  if (!s.enabled || s.compactStyle !== "notch") return 0
+  return Math.ceil(Math.max(Number(s.baseline) || 0, Number(s.tallest) || 0))
+}

@@ -75,6 +75,9 @@ Item {
   // top edge all the time).
   property string configuredStyle: Config.DEFAULTS.compactStyle
   readonly property string compactStyle: svc.barStyleAvailable && svc.configuredStyle === "bar" ? "bar" : "notch"
+  // Keep windows out of the strip a closed notch hangs into (compactStyle
+  // "notch" only); NotchSurface reserves it.
+  property bool reserveSpace: Config.DEFAULTS.reserveSpace
 
   // Keys missing from the config fall back to their defaults, so deleting a
   // key in the file (or the settings window) resets it. Config.resolve has
@@ -86,6 +89,7 @@ Item {
     svc.hoverOpenDelay = r.hoverOpenDelay
     svc.hoverCloseDelay = r.hoverCloseDelay
     svc.configuredStyle = r.compactStyle
+    svc.reserveSpace = r.reserveSpace
   }
 
   function loadConfig(text) {
@@ -183,6 +187,11 @@ Item {
                    { value: "bar", label: "In the bar", preview: Qt.resolvedUrl("settings/previews/CompactBar.qml") },
                    { value: "notch", label: "Hanging notch", preview: Qt.resolvedUrl("settings/previews/CompactNotch.qml") }
                  ] })
+    // Only a notch that hangs below the edge while closed has a strip to keep.
+    if (svc.compactStyle === "notch")
+      out.push({ page: "general", section: "Layout", key: "reserveSpace", type: "boolean",
+                 label: "Keep windows clear", default: Config.DEFAULTS.reserveSpace,
+                 help: "Windows stay below the closed notch instead of under it. They lose that strip across the whole screen; peeks and the open notch still cover them." })
     out.push({ page: "general", section: "Hover", key: "hoverOpenDelay", type: "integer", label: "Open delay",
                help: "How long the pointer rests on the notch before it expands.",
                default: Config.DEFAULTS.hoverOpenDelay, min: 0, max: 1000, step: 10, unit: "ms" })
@@ -349,6 +358,7 @@ Item {
       return JSON.stringify({
         mode: svc.mode,
         compactStyle: svc.compactStyle,
+        reserveSpace: svc.reserveSpace,
         peek: svc.peekModule ? svc.peekModule.moduleId : null,
         modules: svc.modules.map(function(m) { return { id: m.moduleId, active: m.active, priority: m.priority } })
       })

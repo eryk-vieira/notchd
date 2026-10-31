@@ -43,3 +43,12 @@ test('mode: peek beats expanded unless pinned, then compact, then rest', () => {
   assert.equal(State.mode({ compactModule: m }), 'compact');
   assert.equal(State.mode({}), 'rest');
 });
+
+test('reservedSpace: only when enabled in notch style, never below the baseline', () => {
+  const on = { enabled: true, compactStyle: 'notch', baseline: 36, tallest: 0 };
+  assert.equal(State.reservedSpace(on), 36);
+  assert.equal(State.reservedSpace({ ...on, tallest: 41.2 }), 42);
+  assert.equal(State.reservedSpace({ ...on, tallest: 20 }), 36);
+  assert.equal(State.reservedSpace({ ...on, enabled: false }), 0);
+  assert.equal(State.reservedSpace({ ...on, compactStyle: 'bar' }), 0);
+});
