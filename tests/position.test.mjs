@@ -118,3 +118,14 @@ test('configValue leaves defaults out; top-center is no key at all', () => {
   assert.deepEqual(plain(Position.configValue({ edge: 'top', offset: 0.2 })), { offset: 0.2 });
   assert.deepEqual(plain(Position.configValue({ edge: 'right', offset: 0.75 })), { edge: 'right', offset: 0.75 });
 });
+
+// The notch's size animates in fractions of a pixel. Rounding its corner
+// made one side step a whole pixel at a time while the other glided, which
+// read as a low frame rate at the slow end of each animation.
+test('place: no rounding, so a growing card grows evenly on both sides', () => {
+  const at = (w) => Position.place({ edge: 'top', offset: 0.5, width: 1000, height: 600, cardWidth: w, cardHeight: 40,
+                                     insets: { top: 30 }, margin: 10 });
+  assert.equal(at(200.4).x, 399.8);
+  assert.equal(at(200.4).x + 200.4, 600.2);
+  assert.equal(at(200).x, 400);
+});

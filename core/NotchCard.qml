@@ -125,10 +125,13 @@ Item {
 
   readonly property real contentWidth: content.item ? (content.item as Item).implicitWidth : 0
   readonly property real contentHeight: content.item ? (content.item as Item).implicitHeight : 0
-  readonly property real targetAlong: Math.min(card.vertical ? card.maxHeight : card.maxWidth,
-    (card.vertical ? card.contentHeight : card.contentWidth) + card.alongPad * 2)
-  readonly property real targetDepth: Math.min(card.vertical ? card.maxWidth : card.maxHeight,
-    (card.vertical ? card.contentWidth : card.contentHeight) + card.nearPad + card.farPad)
+  // Whole pixels, and an even length, so the card centred on a whole pixel
+  // settles on whole pixels too: crisp edges at rest. In between, the
+  // springs run in fractions of a pixel.
+  readonly property real targetAlong: 2 * Math.ceil(Math.min(card.vertical ? card.maxHeight : card.maxWidth,
+    (card.vertical ? card.contentHeight : card.contentWidth) + card.alongPad * 2) / 2)
+  readonly property real targetDepth: Math.ceil(Math.min(card.vertical ? card.maxWidth : card.maxHeight,
+    (card.vertical ? card.contentWidth : card.contentHeight) + card.nearPad + card.farPad))
   // Depth of the closed notch while it shows a compact view, else 0. The
   // padding follows `mode` at once (the outline springs while the content
   // fades), so this adds the compact padding itself.
@@ -320,13 +323,15 @@ Item {
     anchors.fill: parent
     clip: true
 
-    // Against the edge past `nearPad`, centered along it.
+    // Against the edge past `nearPad`, centered along it, on whole pixels of
+    // the card's parent so text stays sharp while the card itself sits on
+    // fractions of a pixel (Position.place).
     Loader {
       id: content
-      x: Math.round(card.edge === "left" ? card.nearPad
-        : card.edge === "right" ? card.width - card.nearPad - width : (card.width - width) / 2)
-      y: Math.round(card.edge === "top" ? card.nearPad
-        : card.edge === "bottom" ? card.height - card.nearPad - height : (card.height - height) / 2)
+      x: Math.round(card.x + (card.edge === "left" ? card.nearPad
+        : card.edge === "right" ? card.width - card.nearPad - width : (card.width - width) / 2)) - card.x
+      y: Math.round(card.y + (card.edge === "top" ? card.nearPad
+        : card.edge === "bottom" ? card.height - card.nearPad - height : (card.height - height) / 2)) - card.y
       sourceComponent: card.shownComponent
     }
   }

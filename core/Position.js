@@ -45,6 +45,9 @@ function effective(position, compactStyle, barEdge) {
 //   margin              kept free at both ends of the edge (the shoulders)
 // The card's middle goes at `offset` along the free stretch, clamped so the
 // card stays inside it; a card longer than the stretch is centered on it.
+// Not rounded: the card's size animates in fractions of a pixel, and a
+// rounded corner would step a pixel at a time while the opposite one glides
+// (NotchCard snaps its content to whole pixels instead).
 function place(s) {
   var edge = isEdge(s.edge) ? s.edge : DEFAULT_EDGE
   var offset = resolve({ offset: s.offset }).offset
@@ -65,8 +68,6 @@ function place(s) {
   else if (edge === "bottom") depth = s.height - inset("bottom") - s.cardHeight
   else if (edge === "left") depth = inset("left")
   else depth = s.width - inset("right") - s.cardWidth
-  pos = Math.round(pos)
-  depth = Math.round(depth)
   return vertical ? { x: depth, y: pos } : { x: pos, y: depth }
 }
 
