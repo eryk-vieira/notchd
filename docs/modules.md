@@ -12,7 +12,7 @@ NotchModule {
   priority: 60          // higher wins the compact slot / outranks lower peeks
   active: true          // show in compact/expanded while true
   // urgentPeek: true   // peek even while expanded by hover
-  // peekOnFocusedScreen: true  // peek once, on the focused screen only (feedback, like the OSD)
+  // peekOnFocusedScreen: true  // peek once, on the focused screen only (feedback on what you just did there)
 
   compact: Component { Text { text: "hi"; color: Theme.foreground } }
   barView: Component { Text { text: "hi"; color: Theme.foreground } }  // optional, for the bar
@@ -29,17 +29,35 @@ A module that is `active` but has no `compact` view right now leaves the closed 
 
 ## Settings
 
-A module lists fields of its own in `settings`, in the settings schema's format (see [settings.md](settings.md)) with `key` relative to the module, and reads them with `setting(key)`: the config's value, else the field's default. They are stored under the module's id and show on the General page, under the module's title, while some notch loads it.
+A module's title, settings fields and whether it is standalone live in a JSON file next to its QML, with the same name (`resources.json` for `resources.qml`, the same for a host's modules). The service reads it whether the module loads or not, so the module has its page in the settings window (Modules, then its gear) even while no notch shows it. `settings` uses the settings schema's format (see [settings.md](settings.md)) with `key` relative to the module; values are stored under the module's id, and the module reads them with `setting(key)`: the config's value, else the field's default. A field that names another `page` shows there, under the module's title. A `title` set in the QML wins over the file's; without either, the title is the id. `tests/settings.test.mjs` checks every module file.
+
+```json
+{
+  "title": "Resources",
+  "settings": [
+    { "key": "compact", "type": "choice", "label": "Closed notch", "default": "always",
+      "options": [{ "value": "always", "label": "Always" }, { "value": "short", "label": "When running short" }] }
+  ]
+}
+```
 
 ```qml
-settings: [
-  { key: "compact", type: "choice", label: "Closed notch", default: "always",
-    options: [{ value: "always", label: "Always" }, { value: "short", label: "When running short" }] }
-]
 readonly property bool alwaysCompact: m.setting("compact") !== "short"   // config: "resources": { "compact": "short" }
 ```
 
 A module's settings apply to every notch, since it loads once. Pick an id that isn't a config key (`modules`, `position`, `theme`...).
+
+## Standalone modules
+
+A module with a fixed job and a place of its own, the way an OSD always shows volume and brightness in the same spot, sets `"standalone": true` in its JSON file (the Omarchy `osd` does). Then:
+
+- No notch shows it, even one whose `modules` list it; the settings window leaves it out of a notch's module list.
+- It loads on its own, unless the config switches it off: `"<id>": { "enabled": false }`.
+- The service gives it a notch of its own (`NotchService.standaloneNotch(id)`), a copy on every screen, hidden until the module peeks; the peek shows on the focused screen. `"<id>": { "position": { "edge", "offset" } }` places it, top center by default; there is no `screen`, since it follows focus.
+- It draws over the notches it overlaps there, which hide while it shows (`Position.coveredByStandalone`), and stays out of the side-by-side packing.
+- Its page in the settings window starts with an Enabled switch and its position (`Settings.standaloneFields`), then its own fields. `enabled` and `position` are taken: don't name a field of its own after them.
+
+Give it a `peek` view (and a `verticalPeek` for a side edge); it has no closed or expanded state of its own to show.
 
 ## The scope rule
 
@@ -62,7 +80,7 @@ A module **shows** state, it does not **own** it. A notifications module mirrors
 | `barView` | as `compact`, in the host's bar indicator (compactStyle `"bar"`); falls back to `compact` |
 | `verticalCompact` | as `compact`, with the notch on a side edge, and in a vertical bar: narrow and tall. Without one the notch shows a dot there |
 | `verticalPeek` | as `peek`, on a side edge: narrow and tall. Without one, `peek` shows there |
-| `peek` | the module called `requestPeek(ms)` and won: a pinned notch never peeks, hover only lets `urgentPeek` modules through, and a peek on screen is not cut short by a lower-priority one. It shows in every notch that lists the module (on the focused monitor for a notch on every monitor), and at the top of the focused monitor when no notch with the module is there. With `peekOnFocusedScreen` it shows once, on the focused monitor only: in the first notch there that lists the module, else at the top. A host's system module (`systemModules`, like the Omarchy OSD) loads even when no notch lists it, and its peek borrows any notch on the focused monitor before falling back to the top |
+| `peek` | the module called `requestPeek(ms)` and won: a pinned notch never peeks, hover only lets `urgentPeek` modules through, and a peek on screen is not cut short by a lower-priority one. It shows in every notch that lists the module (on the focused monitor for a notch on every monitor), and at the top of the focused monitor when no notch with the module is there. With `peekOnFocusedScreen` it shows once, on the focused monitor only: in the first notch there that lists the module, else at the top. A standalone module's peek shows in its own notch, on the focused monitor (see [Standalone modules](#standalone-modules)) |
 | `expanded` | the notch is expanded and the module is active; every active module's view stacks, highest priority first |
 
 The rules live in `core/State.js` and are tested in `tests/state.test.mjs`.

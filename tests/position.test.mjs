@@ -320,3 +320,18 @@ test('corners: only flush notches on one screen that show count', () => {
   assert.deepEqual(r[1], { start: 0, end: 0 });
   assert.deepEqual(r[3], { start: 0, end: 0 });
 });
+
+test('coveredByStandalone: a shown standalone card hides the notches it overlaps there', () => {
+  const items = [
+    { group: 'A|top', start: 400, end: 600 },                          // under the OSD
+    { group: 'A|top', start: 900, end: 1000 },                         // beside it
+    { group: 'B|top', start: 400, end: 600 },                          // another screen
+    { group: 'A|top', start: 450, end: 550, cover: true, shown: true } // the OSD
+  ];
+  assert.deepEqual(plain(Position.coveredByStandalone(items)), [true, false, false, false]);
+  items[3].shown = false;
+  assert.deepEqual(plain(Position.coveredByStandalone(items)), [false, false, false, false]);
+  assert.deepEqual(plain(Position.coveredByStandalone([{ group: 'A|top', start: 0, end: 10 }, { group: 'A|top', start: 10, end: 20, cover: true, shown: true }])),
+    [false, false], 'touching is not overlapping');
+  assert.deepEqual(plain(Position.coveredByStandalone(undefined)), []);
+});

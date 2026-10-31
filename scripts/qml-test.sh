@@ -13,6 +13,7 @@ scratch=$(mktemp -d "${TMPDIR:-/tmp}/notchd-qmltest.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 mkdir -- "$scratch/config" "$scratch/data" "$scratch/runtime"
 ln -s -- "$root/core" "$scratch/config/core"
+ln -s -- "$root/hosts" "$scratch/config/hosts"
 ln -s -- "$root/tests/qml/shell.qml" "$scratch/config/shell.qml"
 
 NOTCHD_QMLTEST_DIR="$scratch/data" "$root/scripts/isolated.sh" "$scratch/runtime" \

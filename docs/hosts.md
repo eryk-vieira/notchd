@@ -22,7 +22,6 @@ The single source of truth: config, modules, the notches and IPC. It makes a `No
 | `compositor` | a compositor adapter: the focused screen, fullscreen windows and workspaces; the `workspaces` setting needs one that knows workspaces |
 | `screens` | the screens a notch can be on; Quickshell's (tests give their own) |
 | `defaultModules` | modules to load when the config lists none |
-| `systemModules` | modules that show what the system does (the Omarchy host's `osd`): always loaded, listed by a notch or not. Their peeks show on the focused screen: in a notch there that lists them, else in any notch there, else in the default notch at the top |
 | `hostSettingsSchema` | settings-window fields for the host's own config keys (see [settings.md](settings.md)) |
 | `hostSettingsPages` | extra settings-window pages, or new labels/icons for the core ones |
 

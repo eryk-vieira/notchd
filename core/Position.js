@@ -330,3 +330,19 @@ function corners(items) {
     return { start: deepest(it.screen, "left", near), end: deepest(it.screen, "right", near) }
   })
 }
+
+// Which notches a standalone module's card covers while it shows: it draws
+// in its own place, over whatever hangs there, and the notches under it
+// hide until it goes. `items`, each { group, start, end, cover, shown }:
+// the group ("<screen>|<edge>"), its span along the edge, whether it is a
+// standalone card and whether it shows. Returns, per item, whether a shown
+// cover in its group overlaps it; never for a cover.
+function coveredByStandalone(items) {
+  items = items || []
+  return items.map(function(it) {
+    if (!it || it.cover) return false
+    return items.some(function(c) {
+      return !!c && c.cover && c.shown && c.group === it.group && c.start < it.end && it.start < c.end
+    })
+  })
+}

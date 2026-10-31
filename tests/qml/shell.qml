@@ -85,8 +85,9 @@ ShellRoot {
       { name: "only the first notch asking for the bar gets it", run: root.oneBarNotch },
       { name: "a notch kept on a screen stays there and a peek also shows where you work", run: root.peekBesideHomedNotch },
       { name: "an OSD peek shows once, on the focused screen only", run: root.osdPeekOnFocusedScreen },
-      { name: "a system module no notch lists loads and always peeks, never over a notch", run: root.systemModuleAlwaysShows },
-      { name: "a notch's settings all sit on one page, under its picker", run: root.notchSettingsOnOnePage },
+      { name: "a standalone module shows in its own place, never in a notch", run: root.standaloneOwnPlace },
+      { name: "a notch's settings all sit on its own page, under the Notches list", run: root.notchSettingsOnOnePage },
+      { name: "a module no notch loads still has its settings page and title", run: root.unloadedModuleSettings },
       { name: "resources read the system", run: root.resourcesRead },
       { name: "resources show closed by default, or only once one runs short", run: root.resourcesCompactWhenShort },
       { name: "a timer counts down closed, peeks when it ends and goes back to rest", run: root.timerRunsAndEnds },
@@ -804,65 +805,109 @@ ShellRoot {
     ], function() { root.done() })
   }
 
-  // Bug: with the OSD taken out of every notch, the module did not load and
-  // the volume and brightness showed nowhere. A host's system module loads
-  // anyway and peeks in the default notch, at the top of the focused screen.
-  function systemModuleAlwaysShows() {
-    var visitor = multi.visitor
+  // Standalone modules (the OSD) are never in a notch, even one whose
+  // `modules` list them: they load on their own (unless switched off) and
+  // peek in a notch of their own, on the focused screen, where
+  // "<id>.position" says.
+  NotchService {
+    id: standaloneSvc
+    ipcTarget: "notchd-qmltest-standalone"
+    configPath: root.dir + "/standalone.json"
+    compositor: twoScreens
+    screens: [{ name: "A" }, { name: "B" }]
+    defaultModules: ["activities"]
+    hostModules: ({ osd: Qt.resolvedUrl("hosts/omarchy/modules/osd.qml") })
+  }
+
+  function standaloneOwnPlace() {
+    var svc = standaloneSvc
+    function own() { return svc.standaloneNotch("osd") }
+    function osd() { return svc.moduleById("osd") }
+    // Bug: in the Omarchy shell the OSD did not load at startup; the module
+    // list was rebuilt before the standalone ids followed the module files.
+    root.check(!!osd() && !!own(), "the OSD did not load at startup")
     root.steps([
       [0, function() {
-        multi.replaceConfig({ modules: [], position: { screen: "A" } })
+        svc.replaceConfig({ modules: ["osd", "activities"], position: { screen: "all" } })
         twoScreens.focusedScreenName = "B"
       }],
       [100, function() {
-        root.check(multi.moduleById("activities") === null, "loaded a module no notch lists (test setup)")
-        multi.systemModules = ["activities"]
+        root.check(!!osd(), "the OSD did not load")
+        root.check(svc.isStandalone("osd"), "the OSD is not standalone")
+        root.check(svc.notches[0].modules.indexOf(osd()) === -1, "the notch took the OSD")
+        root.check(!!own() && own().edge === "top" && own().placement.offset === 0.5, "no OSD place at the top center")
+        osd().show(JSON.stringify({ icon: "volume", value: "40" }))
       }],
       [100, function() {
-        root.check(multi.moduleById("activities") !== null, "the system module did not load")
-        root.check(multi.notches[0].modules.length === 0, "the notch took the system module")
-        root.push("volume", true)
-      }],
-      [100, function() {
-        root.check(visitor.copyOn("B").mode === "peek", "no peek at the top of B: " + visitor.copyOn("B").mode)
-        root.check(multi.notches[0].copies[0].mode === "rest", "the notch on A shows " + multi.notches[0].copies[0].mode)
-        multi.dismissPeek(null)
+        root.check(own().copyOn("B").mode === "peek", "no peek on B: " + own().copyOn("B").mode)
+        root.check(own().copyOn("A").mode !== "peek", "the OSD peeked on A too")
+        root.check(svc.notches[0].copies.every(function(c) { return c.mode !== "peek" }), "a notch peeked")
+        svc.dismissPeek(null)
+        svc.setConfigValue("osd.position", { edge: "bottom", offset: 0.2 })
         twoScreens.focusedScreenName = "A"
-        root.push("brightness", true)
       }],
-      // Bug: on a screen with a notch that doesn't list the OSD, the default
-      // notch drew the volume right over it. The notch there shows it.
       [100, function() {
-        root.check(multi.notches[0].copies[0].mode === "peek", "the notch on A did not show the peek: " + multi.notches[0].copies[0].mode)
-        root.check(visitor.copyOn("A").mode !== "peek", "the default notch drew over the notch on A")
-        multi.dismissPeek(null)
-        multi.systemModules = []
+        root.check(own().edge === "bottom" && own().placement.offset === 0.2, "position: " + JSON.stringify(own().placement))
+        osd().show(JSON.stringify({ icon: "brightness", value: "70" }))
+      }],
+      [100, function() {
+        root.check(own().copyOn("A").mode === "peek", "no peek on A: " + own().copyOn("A").mode)
+        svc.dismissPeek(null)
+        svc.setConfigValue("osd.enabled", false)
+      }],
+      [100, function() {
+        root.check(osd() === null && own() === null, "switched off, the OSD still loads")
+        root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "osd" && m.standalone }), "the OSD left the catalog")
+        root.check(svc.settingsSchema.some(function(f) { return f.key === "osd.enabled" && f.page === "modules/osd" }), "no switch on its page")
+        svc.setConfigValue("osd.enabled", undefined)
+      }],
+      [100, function() {
+        root.check(!!osd() && !!own(), "switched back on, the OSD did not load")
+        svc.replaceConfig({})
       }]
     ], function() { root.done() })
   }
 
   // A notch's keys were split between General and Modules, each with its own
-  // picker. Every field for the picked notch's keys sits on the "notch" page,
-  // under a single picker; the other pages only have keys for every notch.
+  // picker. The Notches page lists the notches; every field for the picked
+  // notch's keys sits on its own page, "notch/<index>"; the other pages only
+  // have keys for every notch.
   function notchSettingsOnOnePage() {
     multi.replaceConfig({ notches: [{ modules: ["activities"] }, { id: "side", position: { edge: "bottom" } }] })
-    multi.settingsNotch = 1
+    multi.settingsPage = "notch/1"
+    root.check(multi.settingsNotch === 1, "showing notch/1 edits notch " + multi.settingsNotch)
     var schema = multi.settingsSchema
-    var pickers = schema.filter(function(f) { return f.type === "notches" })
-    root.check(pickers.length === 1 && pickers[0].page === "notch", "pickers: " + JSON.stringify(pickers.map(function(f) { return f.page })))
-    var notchPage = schema.filter(function(f) { return f.page === "notch" })
-    root.check(notchPage.length > 0 && notchPage[0].type === "notches", "the picker is not first on the notch page")
+    var lists = schema.filter(function(f) { return f.type === "notches" })
+    root.check(lists.length === 1 && lists[0].page === "notch", "lists: " + JSON.stringify(lists.map(function(f) { return f.page })))
     schema.forEach(function(f) {
       var own = !!f.key && f.key.indexOf("notches.") === 0
-      if (own) root.check(f.page === "notch", f.key + " is on " + f.page)
-      else if (f.key && f.key !== "notches") root.check(f.page !== "notch", f.key + " applies to every notch but is on the notch page")
+      if (own) root.check(f.page === "notch/1", f.key + " is on " + f.page)
+      else if (f.key && f.key !== "notches") root.check(f.page.indexOf("notch") !== 0, f.key + " applies to every notch but is on " + f.page)
     })
     root.check(schema.some(function(f) { return f.key === "notches.1.modules" }), "the notch's modules are missing")
+    root.check(multi.settingsPages.some(function(p) { return p.id === "notch/1" && p.label === "side" }), "no page for side")
     multi.settingsPage = "general"
     multi.openSettings(0)
-    root.check(multi.settingsPage === "notch", "the gear opened " + multi.settingsPage)
+    root.check(multi.settingsPage === "notch/0" && multi.settingsNotch === 0, "the gear opened " + multi.settingsPage)
     multi.closeSettings()
-    multi.settingsNotch = 0
+    multi.replaceConfig({})
+    root.done()
+  }
+
+  // A module's settings were read from the loaded module, so one no notch
+  // showed had no page and no gear. They come from its JSON file now.
+  function unloadedModuleSettings() {
+    root.check(multi.moduleById("timer") === null, "timer is loaded (test setup)")
+    var fields = multi.settingsSchema.filter(function(f) { return f.page === "modules/timer" })
+    root.check(fields.some(function(f) { return f.key === "timer.focus" }), "timer fields: " + JSON.stringify(fields.map(function(f) { return f.key })))
+    root.check(multi.settingsPages.some(function(p) { return p.id === "modules/timer" && p.label === "Timer" }), "no page for timer")
+    root.check(multi.moduleSetting("timer", "focus") === 25, "default: " + multi.moduleSetting("timer", "focus"))
+    multi.setConfigValue("timer.focus", 50)
+    root.check(multi.moduleSetting("timer", "focus") === 50, "set: " + multi.moduleSetting("timer", "focus"))
+    var media = multi.moduleCatalog.filter(function(m) { return m.moduleId === "media" })[0]
+    root.check(!!media && media.title === "Now playing", "media: " + JSON.stringify(media))
+    var activities = multi.moduleById("activities")
+    root.check(!!activities && activities.title === "Activities", "loaded title: " + (activities ? activities.title : ""))
     multi.replaceConfig({})
     root.done()
   }
@@ -892,7 +937,7 @@ ShellRoot {
   // By default the closed notch always shows the three. With `compact` at
   // "short" it rests while every resource is fine; one running short peeks
   // once and takes the compact slot until it drops back. The setting is on
-  // the General page, under the module's id.
+  // the module's own page, under the module's id.
   function resourcesCompactWhenShort() {
     var m = resourced.moduleById("resources")
     var notch = resourced.notches[0]
@@ -902,7 +947,7 @@ ShellRoot {
     m.record("memory", 0.5)
     root.check(notch.compactModule === m && m.compactRows.length === 3, "not shown by default")
     var field = resourced.settingsSchema.filter(function(f) { return f.key === "resources.compact" })[0]
-    root.check(!!field && field.page === "general" && field.section === "Resources", "field: " + JSON.stringify(field))
+    root.check(!!field && field.page === "modules/resources", "field: " + JSON.stringify(field))
 
     resourced.setConfigValue("resources.compact", "short")
     root.check(notch.compactModule === null, "the notch shows resources with nothing short")
@@ -965,7 +1010,7 @@ ShellRoot {
     root.check(m.remaining === left + 5 * 60000, "added time lost while paused")
     m.command("skip")
     root.check(m.countdown.phase === "short" && m.status === "running", "skip: " + JSON.stringify(m.countdown))
-    var keys = timed.settingsSchema.filter(function(f) { return f.section === "Timer" }).map(function(f) { return f.key })
+    var keys = timed.settingsSchema.filter(function(f) { return f.page === "modules/timer" }).map(function(f) { return f.key })
     root.check(keys.indexOf("timer.focus") !== -1 && keys.indexOf("timer.notify") !== -1, "settings: " + keys)
     m.command("stop")
     timed.dismissPeek(null)

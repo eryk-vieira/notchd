@@ -153,8 +153,7 @@ function notches(cfg, defaultModules) {
 }
 
 // Every module any notch shows, in order of first appearance, then the
-// `extra` ones (the host's system modules) no notch lists: the ones the
-// service loads.
+// `extra` ones no notch lists.
 function moduleUnion(specs, extra) {
   var out = []
   for (var i = 0; i < specs.length; i++)
@@ -162,6 +161,17 @@ function moduleUnion(specs, extra) {
       if (out.indexOf(specs[i].moduleIds[j]) === -1) out.push(specs[i].moduleIds[j])
   for (var k = 0; k < (extra || []).length; k++)
     if (out.indexOf(String(extra[k])) === -1) out.push(String(extra[k]))
+  return out
+}
+
+// The modules to load: every one a notch shows, in order of first
+// appearance, except standalone ones, which no notch can show; then the
+// standalone ones switched on (`enabled`).
+function moduleLoadList(specs, standalone, enabled) {
+  standalone = standalone || []
+  var out = moduleUnion(specs).filter(function(id) { return standalone.indexOf(id) === -1 })
+  for (var i = 0; i < (enabled || []).length; i++)
+    if (standalone.indexOf(enabled[i]) !== -1 && out.indexOf(enabled[i]) === -1) out.push(enabled[i])
   return out
 }
 

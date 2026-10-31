@@ -3,8 +3,9 @@ import QtQuick.Layouts
 import ".."
 import "Settings.js" as Settings
 
-// `modules` field: every module the host can load, enabled ones first and in
-// order. The switch loads or unloads one; the arrows reorder enabled ones.
+// `modules` field: every module the host can load but the standalone ones,
+// enabled ones first and in order. The switch loads or unloads one; the
+// arrows reorder enabled ones.
 Rectangle {
   id: control
 
@@ -13,17 +14,17 @@ Rectangle {
   property var svc: null
   signal edited(var value)
 
-  readonly property var enabledIds: Settings.toList(control.value)
-  readonly property var available: control.svc ? Settings.toList(control.svc.availableModuleIds) : []
+  // Standalone modules have a place of their own: no notch lists them, and
+  // an edit drops one an old config still lists.
+  function listable(id) { return !control.svc || !control.svc.isStandalone(id) }
+  readonly property var enabledIds: Settings.toList(control.value).filter(control.listable)
+  readonly property var available: control.svc ? Settings.toList(control.svc.availableModuleIds).filter(control.listable) : []
   readonly property var all: Settings.allIds(control.enabledIds, control.available)
 
   function toggle(id) { control.edited(Settings.toggleId(control.enabledIds, id)) }
   function move(id, delta) { control.edited(Settings.moveId(control.enabledIds, id, delta)) }
-  // A loaded module's own title; unloaded ones only have their id.
-  function titleOf(id) {
-    var m = control.svc ? control.svc.moduleById(id) : null
-    return m && m.title ? m.title : id.charAt(0).toUpperCase() + id.slice(1)
-  }
+  // A module's title, from its JSON file, else its id.
+  function titleOf(id) { return Settings.moduleTitle(id, control.svc ? control.svc.moduleInfo[id] : null) }
 
   implicitHeight: list.implicitHeight
   radius: Theme.radius

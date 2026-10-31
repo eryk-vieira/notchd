@@ -16,7 +16,9 @@ import "Position.js" as Position
 //
 // The service also makes one `visitor`: no config of its own, every module,
 // a copy per screen at the top, each hidden until it shows a peek on a
-// screen where no notch with that module does (State.needsVisitor).
+// screen where no notch with that module does (State.needsVisitor). And one
+// per standalone module switched on (`standaloneId`): only that module, on
+// every screen where "<id>.position" says, hidden until it peeks.
 Item {
   id: notch
   visible: false
@@ -25,26 +27,38 @@ Item {
   property string notchId: ""
   // The visitor, rather than a notch of the config.
   property bool visitor: false
+  // A standalone module's own notch: it shows only that module, where the
+  // module's "<id>.position" says.
+  property string standaloneId: ""
+  // The visitor or a standalone notch: hidden while closed, a copy on every
+  // screen, only there for peeks (NotchCopy.guest).
+  readonly property bool guest: notch.visitor || notch.standaloneId !== ""
 
   // ---------------------------------------------------------------- config
   // The resolved entry (Config.notches); keeps the last one while the id is
   // on its way out.
   readonly property var spec: notch.svc ? notch.svc.notchSpec(notch.notchId) : null
   readonly property int index: notch.spec ? notch.spec.index : 0
-  readonly property var moduleIds: notch.visitor ? (notch.svc ? notch.svc.moduleIds : [])
-    : notch.spec ? notch.spec.moduleIds : []
+  // Never a standalone module, but in its own notch.
+  readonly property var moduleIds: {
+    if (notch.standaloneId !== "") return [notch.standaloneId]
+    var list = notch.visitor ? (notch.svc ? notch.svc.moduleIds : []) : notch.spec ? notch.spec.moduleIds : []
+    var service = notch.svc
+    return service ? list.filter(function(id) { return !service.isStandalone(id) }) : list
+  }
   readonly property string configuredStyle: notch.spec ? notch.spec.compactStyle : Config.DEFAULTS.compactStyle
   // Where the compact state lives: "bar" (in the host's bar indicator; the
   // notch only drops out to peek or expand) or "notch" (hanging from its
   // edge all the time). One notch at most gets the bar (State.compactStyles).
-  readonly property string compactStyle: notch.svc && !notch.visitor ? notch.svc.compactStyleAt(notch.index) : "notch"
+  readonly property string compactStyle: notch.svc && !notch.guest ? notch.svc.compactStyleAt(notch.index) : "notch"
   // Keep windows out of the strip the closed notch hangs into (compactStyle
   // "notch" only); NotchSurface reserves it.
   readonly property bool reserveSpace: !!notch.spec && notch.spec.reserveSpace
   // Workspaces the closed notch hangs on (ids or names); null: every one.
   readonly property var workspaces: notch.spec ? notch.spec.workspaces : null
   // The configured position, { edge, offset, screen } (Position.js).
-  readonly property var position: Position.resolve(notch.visitor ? { screen: Position.ALL_SCREENS }
+  readonly property var position: Position.resolve(notch.standaloneId !== "" ? (notch.svc ? notch.svc.standalonePosition(notch.standaloneId) : { screen: Position.ALL_SCREENS })
+    : notch.visitor ? { screen: Position.ALL_SCREENS }
     : notch.spec ? notch.spec.position : undefined)
   // Where it is: bar style locks it to the middle of the bar.
   readonly property var placement: Position.effective(notch.position, notch.compactStyle, notch.svc ? notch.svc.barEdge : "top")

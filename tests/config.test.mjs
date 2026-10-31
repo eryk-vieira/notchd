@@ -156,3 +156,11 @@ test('withWorkspace adds the workspace a notch was dropped on', () => {
   // A list that went through a QML var property is array-like, not an Array.
   assert.deepEqual(plain(Config.withWorkspace({ length: 2, 0: 1, 1: 3 }, { id: 2, name: '2' })), [1, 2, 3]);
 });
+
+test('moduleLoadList: what notches show, never a standalone module, then the standalone ones switched on', () => {
+  const specs = [{ moduleIds: ['osd', 'media'] }, { moduleIds: ['activities', 'media'] }];
+  assert.deepEqual(plain(Config.moduleLoadList(specs, ['osd', 'clock'], ['osd', 'clock'])), ['media', 'activities', 'osd', 'clock']);
+  assert.deepEqual(plain(Config.moduleLoadList(specs, ['osd', 'clock'], ['clock'])), ['media', 'activities', 'clock'], 'osd is off, even listed');
+  assert.deepEqual(plain(Config.moduleLoadList(specs, [], ['media'])), ['osd', 'media', 'activities'], 'enabled only counts for standalone ones');
+  assert.deepEqual(plain(Config.moduleLoadList([], undefined, undefined)), []);
+});

@@ -35,7 +35,7 @@ ShellRoot {
   Service { id: compactSvc; tag: "compact"; defaultModules: ["media"] }
   Service { id: activitySvc; tag: "activity"; defaultModules: ["activities"] }
   Service {
-    id: osdSvc; tag: "osd"; defaultModules: ["osd"]
+    id: osdSvc; tag: "osd"; defaultModules: []
     hostModules: ({ osd: Qt.resolvedUrl("hosts/omarchy/modules/osd.qml") })
   }
   Service { id: expandedSvc; tag: "expanded"; defaultModules: ["media", "activities"] }
@@ -44,6 +44,13 @@ ShellRoot {
   component Screen: Rectangle {
     id: screen
     property var svc: null
+    // The copy to draw: the service's first notch's; the OSD, standalone,
+    // has a notch of its own.
+    readonly property var copy: {
+      if (!screen.svc) return null
+      var own = screen.svc.standaloneNotch("osd")
+      return own && own.copies.length > 0 ? own.copies[0] : screen.svc.firstCopy
+    }
     readonly property int barHeight: Theme.space(26)
 
     readonly property real cornerRadius: Theme.space(14)
@@ -109,7 +116,7 @@ ShellRoot {
     }
 
     NotchCard {
-      notch: screen.svc ? screen.svc.firstCopy : null
+      notch: screen.copy
       maxWidth: screen.width - Theme.space(24)
       x: Math.round((screen.width - width) / 2)
       y: screen.barHeight

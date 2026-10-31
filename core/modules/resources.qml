@@ -15,7 +15,6 @@ import "../Resources.js" as Resources
 // Linux only. The rules live in core/Resources.js.
 NotchModule {
   id: res
-  title: "Resources"
   // Below media and activities: it only takes the closed notch when nothing
   // else wants it. What runs short still peeks.
   priority: 20
@@ -23,11 +22,6 @@ NotchModule {
 
   // The filesystem shown as Disk: the one holding this path.
   property string diskPath: "/"
-  settings: [
-    { key: "compact", type: "choice", label: "Closed notch", default: "always",
-      help: "What the closed notch shows: CPU, memory and disk all the time, or only one that runs short (90 % or more). One that runs short peeks either way.",
-      options: [{ value: "always", label: "Always" }, { value: "short", label: "When running short" }] }
-  ]
   readonly property bool alwaysCompact: res.setting("compact") !== "short"
 
   // Read the system. Off, the values stay as set from outside (the

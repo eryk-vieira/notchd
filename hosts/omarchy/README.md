@@ -3,7 +3,7 @@
 notchd as an Omarchy shell plugin. The repository root is the plugin folder: `manifest.json` there points at the QML in this directory. It adds three things to the core:
 
 - **Bar indicator** (`BarIndicator.qml`): compact lives in the bar, right after the clock (`compactStyle: "bar"`, the default; with several notches, the first one in bar style gets it); in a vertical bar it shows the module's vertical view, or a dot. Hovering it drops the notch on that monitor, out of whichever edge the bar is on, and clicking pins it. It hides on monitors showing a workspace left out of `workspaces`.
-- **`osd` module** (`modules/osd.qml`): volume, brightness, mic and keyboard light. With the notch on a side edge its bar stands up. It owns the `osd` IPC target that every `omarchy osd` call uses, so the stock OSD must stay disabled: `omarchy plugin disable omarchy.osd`. Undo it with `omarchy plugin enable omarchy.osd`.
+- **`osd` module** (`modules/osd.qml`): volume, brightness, mic and keyboard light. Standalone: no notch shows it; it has a place of its own on the monitor you work on, top center by default, over any notch there (`"osd": { "position": { "edge", "offset" } }`, or `"enabled": false` to switch it off; settings: Modules › OSD). On a side edge its bar stands up. It owns the `osd` IPC target that every `omarchy osd` call uses, so the stock OSD must stay disabled: `omarchy plugin disable omarchy.osd`. Undo it with `omarchy plugin enable omarchy.osd`.
 - **Omarchy's theme**: `Service.qml` maps `qs.Commons` `Color`/`Style` onto the core's `Theme`, so the notch follows theme switches and `[font] base-size`.
 
 ## Install
@@ -27,7 +27,7 @@ After changing QML, run `omarchy restart shell`, because the hot reload keeps se
 
 ## Config
 
-`~/.config/notchd/config.json`, edited by hand, through the settings window (the gear in the expanded notch) or with `omarchy-shell eryk.notchd set`. It takes the core keys (see the [README](../../README.md#config)); the default `modules` here include `osd`.
+`~/.config/notchd/config.json`, edited by hand, through the settings window (the gear in the expanded notch) or with `omarchy-shell eryk.notchd set`. It takes the core keys (see the [README](../../README.md#config)); the OSD is standalone, so it is in no notch's `modules`.
 
 ## IPC
 

@@ -130,8 +130,9 @@ Item {
   }
   // The screen the config's position names, where the closed notch stays.
   readonly property string homeScreen: copy.placement.screen === "all" ? copy.fixedScreen : copy.placement.screen
-  // A copy of the visitor: it only shows peeks and the open notch.
-  readonly property bool guest: !!copy.owner && copy.owner.visitor
+  // A copy of the visitor or of a standalone notch: it only shows peeks and
+  // the open notch.
+  readonly property bool guest: !!copy.owner && copy.owner.guest
   // The screen the copy wants, "" when it doesn't show the closed notch. A
   // copy on its own screen stays there, a guest only while open; the one
   // that moves goes where State.notchScreen says.

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { load, plain } from './load.mjs';
 
 const Settings = load('core/settings/Settings.js');
@@ -103,22 +104,161 @@ test('storedValue removes the key when an edit picks the default', () => {
   assert.equal(Settings.storedValue({ default: 'top' }, undefined), undefined);
 });
 
-test('moduleFields puts a module\'s fields under its id, on General under its title', () => {
+test('moduleFields puts a module\'s fields under its id, on its own page', () => {
   const fields = plain(Settings.moduleFields([
     { moduleId: 'resources', title: 'Resources', settings: [
       { key: 'compact', type: 'choice', default: 'always' },
       { key: 'disk', type: 'string', page: 'extra', section: 'Disk' },
+      { key: 'color', type: 'color', page: 'appearance' },
       { type: 'note', label: 'Linux only' }
     ] },
     { moduleId: 'media', title: 'Now playing', settings: [] },
     { moduleId: 'bare', settings: [{ key: 'x', type: 'boolean' }] }
   ]));
   assert.deepEqual(fields.map((f) => [f.key, f.page, f.section]), [
-    ['resources.compact', 'general', 'Resources'],
+    ['resources.compact', 'modules/resources', undefined],
     ['resources.disk', 'extra', 'Disk'],
-    [undefined, 'general', 'Resources'],
-    ['bare.x', 'general', 'bare']
+    ['resources.color', 'appearance', 'Resources'],
+    [undefined, 'modules/resources', undefined],
+    ['bare.x', 'modules/bare', undefined]
   ]);
   assert.equal(fields[0].default, 'always');
   assert.deepEqual(plain(Settings.moduleFields(undefined)), []);
+});
+
+test('modulePages gives each loaded module a page under Modules', () => {
+  assert.deepEqual(plain(Settings.modulePages([{ moduleId: 'media', title: 'Now playing' }, { moduleId: 'bare' }, null])),
+    [{ id: 'modules/media', label: 'Now playing' }, { id: 'modules/bare', label: 'bare' }]);
+});
+
+const withSub = [
+  { id: 'general' }, { id: 'modules' }, { id: 'modules/media' }, { id: 'appearance' }
+];
+
+test('a module page is a sub-page: off the sidebar, under its parent', () => {
+  assert.deepEqual(Settings.navPages(withSub).map((p) => p.id), ['general', 'modules', 'appearance']);
+  assert.equal(Settings.parentPage('modules/media'), 'modules');
+  assert.equal(Settings.parentPage('general'), 'general');
+  assert.equal(Settings.parentPage(undefined), '');
+});
+
+test('resolvePage falls back from a gone sub-page to its parent', () => {
+  assert.equal(Settings.resolvePage(withSub, 'modules/media'), 'modules/media');
+  assert.equal(Settings.resolvePage(withSub, 'modules/timer'), 'modules');
+  assert.equal(Settings.resolvePage(withSub, 'gone/x'), 'general');
+  assert.equal(Settings.resolvePage([{ id: 'a/b' }], 'x'), 'a/b');
+});
+
+test('cyclePage steps through the sidebar, from a sub-page\'s parent', () => {
+  assert.equal(Settings.cyclePage(withSub, 'modules', 1), 'appearance');
+  assert.equal(Settings.cyclePage(withSub, 'modules/media', 1), 'appearance');
+  assert.equal(Settings.cyclePage(withSub, 'modules/media', -1), 'general');
+});
+
+test('moduleTitle uses the loaded module\'s title, else its id', () => {
+  assert.equal(Settings.moduleTitle('media', { title: 'Now playing' }), 'Now playing');
+  assert.equal(Settings.moduleTitle('timer', null), 'Timer');
+});
+
+test('moduleStatus says where a module shows, or that it is standalone', () => {
+  const one = [{ id: 'main', moduleIds: ['media'] }];
+  const two = [{ id: 'main', moduleIds: ['media', 'osd'] }, { id: 'jobs', moduleIds: ['activities', 'media'] }];
+  assert.equal(Settings.moduleStatus('media', one), 'On');
+  assert.equal(Settings.moduleStatus('timer', one), 'Off');
+  assert.equal(Settings.moduleStatus('media', two), 'In main, jobs');
+  assert.equal(Settings.moduleStatus('activities', two), 'In jobs');
+  assert.equal(Settings.moduleStatus('osd', two, true, true), 'Standalone', 'a notch listing it does not count');
+  assert.equal(Settings.moduleStatus('osd', one, true, false), 'Standalone · off');
+  assert.equal(Settings.moduleStatus('timer', undefined), 'Off');
+});
+
+test('parseModuleInfo keeps a title and well-formed fields, drops the rest', () => {
+  assert.deepEqual(plain(Settings.parseModuleInfo('{ "title": "Timer", "settings": [{ "key": "a", "type": "boolean" }, 3, { "key": "b" }] }')),
+    { title: 'Timer', settings: [{ key: 'a', type: 'boolean' }] });
+  assert.deepEqual(plain(Settings.parseModuleInfo('{ "settings": {} }')), { title: '', settings: [] });
+  assert.equal(Settings.parseModuleInfo('{ "standalone": true }').standalone, true);
+  assert.equal(Settings.parseModuleInfo('{ "standalone": "yes" }').standalone, undefined);
+  const bad = plain(Settings.parseModuleInfo('{ nope'));
+  assert.deepEqual([bad.title, bad.settings], ['', []]);
+  assert.ok(bad.error);
+  assert.equal(plain(Settings.parseModuleInfo('[]')).error, 'not an object');
+});
+
+test('settingDefault finds a field\'s default by key', () => {
+  const fields = [{ key: 'focus', default: 25 }, { key: 'notify', default: false }];
+  assert.equal(Settings.settingDefault(fields, 'focus'), 25);
+  assert.equal(Settings.settingDefault(fields, 'notify'), false);
+  assert.equal(Settings.settingDefault(fields, 'gone'), undefined);
+  assert.equal(Settings.settingDefault(undefined, 'focus'), undefined);
+});
+
+test('notch pages are sub-pages of Notches, by index', () => {
+  assert.equal(Settings.notchPageId(2), 'notch/2');
+  assert.equal(Settings.notchIndexOfPage('notch/2'), 2);
+  assert.equal(Settings.notchIndexOfPage('notch'), -1);
+  assert.equal(Settings.notchIndexOfPage('modules/media'), -1);
+  assert.equal(Settings.notchIndexOfPage('notch/x'), -1);
+  assert.equal(Settings.parentPage(Settings.notchPageId(0)), 'notch');
+});
+
+test('notchSummary says where a notch is and what it shows', () => {
+  const titles = { media: 'Now playing' };
+  assert.equal(Settings.notchSummary({ edge: 'bottom', compactStyle: 'notch', moduleIds: ['media', 'timer'] }, titles),
+    'Bottom edge · Now playing, Timer');
+  assert.equal(Settings.notchSummary({ edge: 'top', compactStyle: 'bar', moduleIds: [] }, titles), 'In the bar · no modules');
+  assert.equal(Settings.notchSummary(null, titles), '');
+});
+
+// Every module's JSON file parses, and each field the window can save has
+// a key, a type and a default within its range.
+test('every module JSON file is well-formed', () => {
+  const files = ['core/modules', 'hosts/omarchy/modules'].flatMap((dir) =>
+    fs.readdirSync(new URL(`../${dir}`, import.meta.url)).filter((f) => f.endsWith('.json')).map((f) => `${dir}/${f}`));
+  assert.ok(files.length >= 5, 'files: ' + files);
+  for (const file of files) {
+    const text = fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    const info = plain(Settings.parseModuleInfo(text));
+    assert.equal(info.error, undefined, file);
+    assert.ok(info.title, `${file}: no title`);
+    const keys = Object.keys(JSON.parse(text));
+    assert.deepEqual(keys.filter((k) => !['title', 'settings', 'standalone'].includes(k)), [], `${file}: unknown keys`);
+    if (info.standalone)
+      for (const f of info.settings) assert.ok(!['enabled', 'position'].includes(String(f.key).split('.')[0]), `${file}: ${f.key} is the standalone switch's or position's`);
+    assert.equal(info.settings.length, JSON.parse(text).settings?.length ?? 0, `${file}: a field was dropped`);
+    for (const f of info.settings) {
+      if (f.type === 'note') continue;
+      assert.ok(f.key && f.default !== undefined, `${file}: ${JSON.stringify(f)}`);
+      if (f.min !== undefined) assert.ok(f.default >= f.min && f.default <= f.max, `${file}: ${f.key} out of range`);
+      if (f.options) assert.ok(f.options.some((o) => o.value === f.default), `${file}: ${f.key} default not an option`);
+    }
+  }
+  const qml = ['core/modules', 'hosts/omarchy/modules'].flatMap((dir) =>
+    fs.readdirSync(new URL(`../${dir}`, import.meta.url)).filter((f) => f.endsWith('.qml')).map((f) => `${dir}/${f.replace(/\.qml$/, '.json')}`));
+  for (const json of qml) assert.ok(files.includes(json), `${json} is missing`);
+});
+
+test('moduleInfoPath finds the JSON file next to a module, file or qs: url', () => {
+  assert.equal(Settings.moduleInfoPath('file:///p/core/modules/media.qml', '/c'), '/p/core/modules/media.json');
+  assert.equal(Settings.moduleInfoPath('file:///p/my%20mods/a.qml', ''), '/p/my mods/a.json');
+  assert.equal(Settings.moduleInfoPath('qs:@/qs/core/modules/timer.qml', '/home/u/.config/qs/'), '/home/u/.config/qs/core/modules/timer.json');
+  assert.equal(Settings.moduleInfoPath('qs:@/qs/core/modules/timer.qml', ''), '');
+  // The Omarchy shell names a plugin's core modules this way; their files
+  // were not found, so their titles and settings were missing there.
+  assert.equal(Settings.moduleInfoPath('qs:///home/u/plugins/notchd/core/modules/media.qml', '/usr/share/omarchy/shell'),
+    '/home/u/plugins/notchd/core/modules/media.json');
+  assert.equal(Settings.moduleInfoPath('https://x/y.qml', '/c'), '');
+  assert.equal(Settings.moduleInfoPath('', '/c'), '');
+});
+
+test('a standalone module\'s page starts with its switch and position', () => {
+  const fields = plain(Settings.moduleFields([
+    { moduleId: 'osd', title: 'OSD', standalone: true, settings: [{ key: 'size', type: 'integer', default: 1 }] }
+  ], 'edge.qml'));
+  assert.deepEqual(fields.map((f) => [f.key, f.page, f.section, f.default]), [
+    ['osd.enabled', 'modules/osd', undefined, true],
+    ['osd.position.edge', 'modules/osd', 'Position', 'top'],
+    ['osd.position.offset', 'modules/osd', 'Position', 0.5],
+    ['osd.size', 'modules/osd', undefined, 1]
+  ]);
+  assert.equal(fields[1].options[0].preview, 'edge.qml');
 });

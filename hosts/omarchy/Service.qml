@@ -3,7 +3,8 @@ import qs.Commons
 import "../../core"
 
 // Omarchy host: the notch service as an Omarchy shell plugin. Wires the core
-// to Omarchy: its IPC name, the osd module that receives `omarchy osd`, the
+// to Omarchy: its IPC name, the osd module that receives `omarchy osd` (a
+// standalone module: its own place, top-center by default), the
 // bar indicator (so compactStyle "bar" works), Hyprland (for workspaces) and
 // Omarchy's theme.
 NotchService {
@@ -17,9 +18,7 @@ NotchService {
   barStyleAvailable: true
   barEdge: svc.shell && svc.shell.bar ? String(svc.shell.bar.position || "top") : "top"
   compositor: hyprland
-  defaultModules: ["osd", "media", "activities"]
-  // `omarchy osd` always shows, whatever the notches list.
-  systemModules: ["osd"]
+  defaultModules: ["media", "activities"]
   hostModules: ({
     osd: Qt.resolvedUrl("modules/osd.qml")
   })

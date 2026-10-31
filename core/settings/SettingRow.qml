@@ -5,7 +5,7 @@ import "Settings.js" as Settings
 
 // One field of the schema: title and help on the left, the control on the
 // right. Controls that need room (cards, module lists) go under the text
-// instead. A `note` has no control at all.
+// instead. A `note` has no control at all, nor a key.
 //
 // Every control takes `field` and `value` (the effective value: config or
 // default) and emits `edited(value)`; `undefined` removes the key, and so
@@ -19,7 +19,7 @@ ColumnLayout {
   readonly property var stored: row.svc ? row.svc.configValue(row.field.key) : undefined
   readonly property var value: row.stored === undefined ? row.field["default"] : row.stored
   readonly property bool wide: row.field.type === "modules" || row.field.type === "workspaces"
-    || row.field.type === "notches"
+    || row.field.type === "notches" || row.field.type === "moduleCatalog"
     || (row.field.type === "choice" && row.field.display === "cards")
 
   readonly property Component control: {
@@ -33,6 +33,7 @@ ColumnLayout {
       case "modules": return modulesControl
       case "workspaces": return workspacesControl
       case "notches": return notchesControl
+      case "moduleCatalog": return moduleCatalogControl
       case "note": return null
       default: return unknownControl
     }
@@ -115,10 +116,14 @@ ColumnLayout {
   }
   Component {
     id: notchesControl
-    NotchPicker {
+    NotchCatalog {
       field: row.field; value: row.value; svc: row.svc
       onEdited: function(v) { row.edit(v) }
     }
+  }
+  Component {
+    id: moduleCatalogControl
+    ModuleCatalog { field: row.field; value: row.value; svc: row.svc }
   }
   Component {
     id: unknownControl

@@ -9,7 +9,9 @@ import "Position.js" as Position
 // space the closed notches keep clear of windows. Notches on one edge of a
 // screen go side by side, never on each other (Position.pack): each as
 // near its offset as the others let it, ones that come close joined flush
-// into one shape, and an open one hides those it grows over.
+// into one shape, and an open one hides those it grows over. A standalone
+// module's card stays out of that: it shows in its own place, over the
+// notches there, which hide until it goes.
 //
 // With reserveSpace on, an empty window per screen edge holds a layer-shell
 // exclusive zone as deep as the deepest closed notch there (ReservedSpace,
@@ -42,7 +44,7 @@ Item {
       layerNamespace: root.layerNamespace
       readonly property var packed: root.packOf(modelData)
       packShift: packed ? packed.shift : 0
-      covered: !!packed && packed.covered
+      covered: (!!packed && packed.covered) || root.coveredByStandalone(modelData)
       joinStart: root.windowAt(packed ? packed.joinStart : -1)
       joinEnd: root.windowAt(packed ? packed.joinEnd : -1)
       rowDepth: root.rowDepthOf(modelData)
@@ -88,6 +90,15 @@ Item {
     var list = root.windows
     for (var i = 0; i < list.length; i++) if (list[i].copy === copy) return root.packing[i] || null
     return null
+  }
+
+  // A standalone module's card (the OSD) keeps its own place and draws over
+  // the notches it overlaps, which hide while it shows.
+  readonly property var standaloneCovers: Position.coveredByStandalone(root.windows.map(function(w) { return w.coverItem }))
+  function coveredByStandalone(copy) {
+    var list = root.windows
+    for (var i = 0; i < list.length; i++) if (list[i].copy === copy) return !!root.standaloneCovers[i]
+    return false
   }
 
   // ------------------------------------------------------- reserved space

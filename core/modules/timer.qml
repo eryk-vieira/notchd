@@ -18,7 +18,6 @@ import "../Countdown.js" as Countdown
 // live in core/Countdown.js.
 NotchModule {
   id: t
-  title: "Timer"
   // Above media: a running timer is what you started on purpose.
   priority: 60
   // Its end must show even while the notch is open.
@@ -26,18 +25,6 @@ NotchModule {
   // Idle, the expanded notch offers the quick starts.
   active: true
 
-  settings: [
-    { key: "focus", type: "integer", label: "Focus", default: 25, min: 5, max: 120, step: 5, unit: "min",
-      help: "How long a pomodoro's focus rounds last." },
-    { key: "shortBreak", type: "integer", label: "Short break", default: 5, min: 1, max: 30, step: 1, unit: "min" },
-    { key: "longBreak", type: "integer", label: "Long break", default: 15, min: 5, max: 60, step: 5, unit: "min" },
-    { key: "rounds", type: "integer", label: "Rounds", default: 4, min: 1, max: 10, step: 1,
-      help: "Focus rounds before the long break, which ends the pomodoro." },
-    { key: "autoAdvance", type: "boolean", label: "Start the next phase on its own", default: true,
-      help: "Off, a pomodoro waits for you to start each break and focus round." },
-    { key: "notify", type: "boolean", label: "Notify when time is up", default: true,
-      help: "A desktop notification as well as the peek, for when you are away from the screen." }
-  ]
   readonly property var pomodoro: ({
     focus: t.setting("focus"), shortBreak: t.setting("shortBreak"), longBreak: t.setting("longBreak"),
     rounds: t.setting("rounds"), autoAdvance: t.setting("autoAdvance")

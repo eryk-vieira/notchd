@@ -17,6 +17,17 @@ function mergePages(core, host) {
 
 function pageOf(field) { return field.page || "general" }
 
+// A page whose id has a "/" is a sub-page of the part before it
+// ("modules/media" of "modules"): it has no sidebar entry of its own, and
+// the sidebar marks its parent while it shows.
+function parentPage(id) {
+  var s = String(id || "")
+  var at = s.indexOf("/")
+  return at === -1 ? s : s.slice(0, at)
+}
+
+function isSubPage(page) { return parentPage(page.id) !== page.id }
+
 // Pages with at least one field, in their declared order.
 function visiblePages(pages, schema) {
   return pages.filter(function(p) {
@@ -24,20 +35,36 @@ function visiblePages(pages, schema) {
   })
 }
 
-// The page to show: the wanted one if it is visible, else the first.
-function resolvePage(pages, wanted) {
-  for (var i = 0; i < pages.length; i++)
-    if (pages[i].id === wanted) return wanted
-  return pages.length ? pages[0].id : ""
+// The pages the sidebar lists: the visible ones that are not sub-pages.
+function navPages(pages) {
+  return pages.filter(function(p) { return !isSubPage(p) })
 }
 
-// The page `delta` steps from `current`, wrapping around.
+function findPage(pages, id) {
+  for (var i = 0; i < pages.length; i++) if (pages[i].id === id) return pages[i]
+  return null
+}
+
+// The page to show: the wanted one if it is visible, else its parent (a
+// module's page once the module unloads), else the first.
+function resolvePage(pages, wanted) {
+  if (findPage(pages, wanted)) return wanted
+  var parent = parentPage(wanted)
+  if (findPage(pages, parent)) return parent
+  var nav = navPages(pages)
+  return nav.length ? nav[0].id : (pages.length ? pages[0].id : "")
+}
+
+// The sidebar page `delta` steps from the one `current` sits under,
+// wrapping around.
 function cyclePage(pages, current, delta) {
-  if (!pages.length) return ""
+  var nav = navPages(pages)
+  if (!nav.length) return ""
+  var here = parentPage(current)
   var at = -1
-  for (var i = 0; i < pages.length; i++) if (pages[i].id === current) at = i
-  var n = pages.length
-  return pages[((at + delta) % n + n) % n].id
+  for (var i = 0; i < nav.length; i++) if (nav[i].id === here) at = i
+  var n = nav.length
+  return nav[((at + delta) % n + n) % n].id
 }
 
 // A page's fields grouped by section, sections in first-seen order.
@@ -57,22 +84,142 @@ function sections(schema, page) {
   return out
 }
 
-// The settings fields loaded modules declare (NotchModule.settings), with
-// their keys under the module's id, on the General page under its title
-// unless they say otherwise. `modules`: [{ moduleId, title, settings }].
-function moduleFields(modules) {
+// A module's own page, under Modules.
+function modulePageId(moduleId) { return "modules/" + moduleId }
+
+// A module's JSON file (media.json next to media.qml): its `title`,
+// `settings` fields and whether it is `standalone` (no notch shows it; it
+// has a place of its own). Anything malformed is dropped, so a bad file costs
+// the module its page and nothing else; `error` says why.
+function parseModuleInfo(text) {
+  var info = { title: "", settings: [] }
+  var data
+  try { data = JSON.parse(text) } catch (e) { info.error = String(e.message || e); return info }
+  if (!data || typeof data !== "object" || Array.isArray(data)) { info.error = "not an object"; return info }
+  if (typeof data.title === "string") info.title = data.title
+  if (data.standalone === true) info.standalone = true
+  if (Array.isArray(data.settings))
+    info.settings = data.settings.filter(function(f) { return f && typeof f === "object" && !Array.isArray(f) && typeof f.type === "string" })
+  return info
+}
+
+// The JSON file of the module at `url` (its .qml): the same path, .json.
+// Quickshell names files under the shell's folder `qs:@/qs/<path>`, which
+// resolve against `shellDir`, and others `qs:///<absolute path>` (the
+// Omarchy shell, for a plugin's core); "" for anything else.
+function moduleInfoPath(url, shellDir) {
+  var s = String(url || "")
+  if (!/\.qml$/.test(s)) return ""
+  var path = ""
+  if (s.indexOf("file://") === 0) path = s.slice(7)
+  else if (s.indexOf("qs:@/qs/") === 0 && shellDir) path = String(shellDir).replace(/\/$/, "") + "/" + s.slice(8)
+  else if (s.indexOf("qs:///") === 0) path = s.slice(5)
+  else return ""
+  return decodeURIComponent(path).replace(/\.qml$/, ".json")
+}
+
+// A module setting's default, from its fields.
+function settingDefault(fields, key) {
+  fields = fields || []
+  for (var i = 0; i < fields.length; i++)
+    if (fields[i] && fields[i].key === key) return fields[i]["default"]
+  return undefined
+}
+
+// What a standalone module's page has before its own fields: a switch, and
+// where it shows. Keys under its id: "<id>.enabled", "<id>.position".
+// `edgePreview`: the url of the edge cards' picture.
+function standaloneFields(id, edgePreview) {
+  var page = modulePageId(id)
+  return [
+    { page: page, key: id + ".enabled", type: "boolean", label: "Enabled", "default": true,
+      help: "Off, it does not load at all." },
+    { page: page, section: "Position", key: id + ".position.edge", type: "choice", display: "cards",
+      label: "Edge", "default": "top",
+      help: "Where it shows, on the screen you work on. No notch shows it: it has a place of its own, over any notch that hangs there.",
+      options: ["top", "bottom", "left", "right"].map(function(e) {
+        return { value: e, label: e.charAt(0).toUpperCase() + e.slice(1), preview: edgePreview }
+      }) },
+    { page: page, section: "Position", key: id + ".position.offset", type: "number", display: "percent",
+      label: "Along the edge", "default": 0.5, min: 0, max: 1, step: 0.01,
+      help: "0 % is its left (or top) end, 50 % the middle." }
+  ]
+}
+
+// The settings fields of every module (`modules`: [{ moduleId, title,
+// settings, standalone }], from their JSON files), with their keys under
+// the module's id, on the module's own page unless they name another (then
+// under its title); a standalone module's switch and position first.
+function moduleFields(modules, edgePreview) {
   var out = []
   Array.prototype.forEach.call(modules || [], function(m) {
     if (!m || !m.moduleId) return
+    if (m.standalone) out = out.concat(standaloneFields(m.moduleId, edgePreview))
     Array.prototype.forEach.call(m.settings || [], function(f) {
       var field = Object.assign({}, f)
       if (f.key) field.key = m.moduleId + "." + f.key
-      if (!field.page) field.page = "general"
-      if (!field.section) field.section = m.title || m.moduleId
+      if (!field.page) field.page = modulePageId(m.moduleId)
+      else if (!field.section) field.section = m.title || m.moduleId
       out.push(field)
     })
   })
   return out
+}
+
+// A page per module, titled after it; one without fields stays hidden,
+// like any page.
+function modulePages(modules) {
+  var out = []
+  Array.prototype.forEach.call(modules || [], function(m) {
+    if (m && m.moduleId) out.push({ id: modulePageId(m.moduleId), label: m.title || m.moduleId })
+  })
+  return out
+}
+
+// A module's title: its own (the loaded module's, or its JSON file's),
+// else its id capitalized.
+function moduleTitle(id, module) {
+  if (module && module.title) return module.title
+  var s = String(id)
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+// Where a module shows, for the Modules page: "Standalone" (or
+// "Standalone · off") for a standalone one, whose `enabled` says whether it
+// is on; "On" or "Off" with one notch, else the notches that list it.
+function moduleStatus(id, specs, standalone, enabled) {
+  if (standalone) return enabled === false ? "Standalone · off" : "Standalone"
+  specs = specs || []
+  var where = []
+  for (var i = 0; i < specs.length; i++)
+    if (indexIn(specs[i].moduleIds, id) !== -1) where.push(specs[i].id)
+  if (where.length === 0) return "Off"
+  return specs.length > 1 ? "In " + where.join(", ") : "On"
+}
+
+function indexIn(list, id) {
+  return Array.prototype.indexOf.call(list || [], id)
+}
+
+// A notch's own page, under Notches, by its index.
+function notchPageId(index) { return "notch/" + index }
+
+// The notch index a page is for: "notch/2" is 2; -1 for any other page.
+function notchIndexOfPage(id) {
+  var m = /^notch\/([0-9]+)$/.exec(String(id || ""))
+  return m ? Number(m[1]) : -1
+}
+
+// One line about a notch, for the Notches page: where it is and what it
+// shows. `notch`: { edge, compactStyle, moduleIds }; `titles`: id -> title.
+function notchSummary(notch, titles) {
+  if (!notch) return ""
+  titles = titles || {}
+  var edge = String(notch.edge || "top")
+  var where = notch.compactStyle === "bar" ? "In the bar" : edge.charAt(0).toUpperCase() + edge.slice(1) + " edge"
+  var ids = toList(notch.moduleIds)
+  var shows = ids.length === 0 ? "no modules" : ids.map(function(id) { return titles[id] || moduleTitle(id, null) }).join(", ")
+  return where + " · " + shows
 }
 
 // A list value as a plain array of strings. Values that went through a

@@ -9,14 +9,8 @@ import ".."
 // title, progress and transport controls.
 NotchModule {
   id: media
-  title: "Now playing"
   priority: 50
 
-  settings: [
-    { key: "equalizer", type: "choice", label: "Equalizer", default: "smooth",
-      help: "Smooth eases the bars 60 times a second, about 8 % of one CPU core while music plays. Light makes them jump about six times a second, about 1 %.",
-      options: [{ value: "smooth", label: "Smooth" }, { value: "light", label: "Light" }] }
-  ]
   readonly property bool smoothEqualizer: media.setting("equalizer") !== "light"
 
   // Prefer whatever is playing; otherwise the first player with a track.

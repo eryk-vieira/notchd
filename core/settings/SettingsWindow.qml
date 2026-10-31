@@ -34,11 +34,20 @@ FloatingWindow {
   // Settings.js has the rules.
   readonly property var schema: win.svc ? win.svc.settingsSchema : []
   readonly property var pages: Settings.visiblePages(win.svc ? win.svc.settingsPages : [], win.schema)
+  readonly property var navPages: Settings.navPages(win.pages)
   readonly property string currentPage: Settings.resolvePage(win.pages, win.svc ? win.svc.settingsPage : "")
+  // The sidebar entry to mark: the page, or the one a sub-page sits under.
+  readonly property string currentNav: Settings.parentPage(win.currentPage)
+  readonly property var currentSub: win.currentNav !== win.currentPage ? Settings.findPage(win.pages, win.currentPage) : null
   readonly property var sections: Settings.sections(win.schema, win.currentPage)
 
   function showPage(id) { if (win.svc) win.svc.settingsPage = id }
   function cyclePage(delta) { win.showPage(Settings.cyclePage(win.pages, win.currentPage, delta)) }
+  // Escape leaves a sub-page for its parent, else closes the window.
+  function back() {
+    if (win.currentSub) win.showPage(win.currentNav)
+    else if (win.svc) win.svc.closeSettings()
+  }
 
   // Opens the config file, or its folder while the file doesn't exist yet.
   Process {
@@ -53,7 +62,7 @@ FloatingWindow {
     anchors.fill: parent
     color: Theme.background
     focus: true
-    Keys.onEscapePressed: if (win.svc) win.svc.closeSettings()
+    Keys.onEscapePressed: win.back()
     Keys.onPressed: function(event) {
       if ((event.modifiers & Qt.ControlModifier) && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
         win.cyclePage(event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier) ? -1 : 1)
@@ -86,13 +95,13 @@ FloatingWindow {
           }
 
           Repeater {
-            model: win.pages
+            model: win.navPages
             delegate: NavItem {
               required property var modelData
               Layout.fillWidth: true
               icon: modelData.icon
               label: modelData.label
-              current: modelData.id === win.currentPage
+              current: modelData.id === win.currentNav
               onActivated: win.showPage(modelData.id)
             }
           }
@@ -144,6 +153,60 @@ FloatingWindow {
           y: Theme.space(28)
           width: flick.width - Theme.space(64)
           spacing: Theme.space(30)
+
+          // A sub-page's way back: "‹ Modules / Now playing".
+          RowLayout {
+            visible: !!win.currentSub
+            Layout.fillWidth: true
+            Layout.bottomMargin: -Theme.space(10)
+            spacing: Theme.space(6)
+
+            Rectangle {
+              id: backLink
+              Layout.preferredHeight: Theme.space(28)
+              Layout.preferredWidth: backRow.implicitWidth + Theme.space(14)
+              Layout.leftMargin: -Theme.space(8)
+              radius: Theme.radiusSmall
+              color: backArea.containsMouse ? Theme.hover : "transparent"
+              RowLayout {
+                id: backRow
+                anchors.centerIn: parent
+                spacing: Theme.space(4)
+                Icon {
+                  glyph: 0xF0141  // nf-md-chevron_left
+                  size: Theme.font.heading
+                  color: backArea.containsMouse ? Theme.foreground : Theme.muted
+                }
+                Label {
+                  wrapMode: Text.NoWrap
+                  color: backArea.containsMouse ? Theme.foreground : Theme.muted
+                  text: {
+                    var parent = Settings.findPage(win.pages, win.currentNav)
+                    return parent ? parent.label : win.currentNav
+                  }
+                }
+              }
+              MouseArea {
+                id: backArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: win.showPage(win.currentNav)
+              }
+            }
+            Label {
+              wrapMode: Text.NoWrap
+              color: Theme.faint
+              text: "/"
+            }
+            Label {
+              Layout.fillWidth: true
+              role: "title"
+              wrapMode: Text.NoWrap
+              elide: Text.ElideRight
+              text: win.currentSub ? win.currentSub.label : ""
+            }
+          }
 
           Repeater {
             model: win.sections

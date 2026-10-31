@@ -27,6 +27,7 @@ Item {
 
   // Defaults to the file name.
   property string moduleId: ""
+  // Defaults to the `title` in its JSON file, else its id.
   property string title: ""
 
   // Higher wins the compact slot and outranks lower peeks.
@@ -56,19 +57,14 @@ Item {
   property Component verticalPeek: null
   property Component expanded: null
 
-  // Settings fields of its own, in the settings schema's format (see
-  // NotchService.coreSettingsSchema) with `key` relative to the module: they
-  // are stored under its id ("resources": { "compact": "short" }) and show
-  // on the General page, under the module's title, while it is loaded.
-  property var settings: []
-
-  // A setting's value: the config's, else the field's default.
+  // A setting of its own: the config's value, else the field's default.
+  // The fields are declared in the JSON file next to the module's QML
+  // (media.json for media.qml), with `title` and `settings` in the settings
+  // schema's format and `key` relative to the module; the service reads it
+  // without loading the module, so its page shows while no notch loads it.
+  // Values are stored under the module's id ("resources": { "compact": "short" }).
   function setting(key) {
-    var v = notch ? notch.configValue(moduleId + "." + key) : undefined
-    if (v !== undefined) return v
-    for (var i = 0; i < settings.length; i++)
-      if (settings[i].key === key) return settings[i]["default"]
-    return undefined
+    return notch ? notch.moduleSetting(moduleId, key) : undefined
   }
 
   function requestPeek(ms) {

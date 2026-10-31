@@ -1,0 +1,22 @@
+{
+  "title": "Resources",
+  "settings": [
+    {
+      "key": "compact",
+      "type": "choice",
+      "label": "Closed notch",
+      "default": "always",
+      "help": "What the closed notch shows: CPU, memory and disk all the time, or only one that runs short (90 % or more). One that runs short peeks either way.",
+      "options": [
+        {
+          "value": "always",
+          "label": "Always"
+        },
+        {
+          "value": "short",
+          "label": "When running short"
+        }
+      ]
+    }
+  ]
+}

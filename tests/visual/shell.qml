@@ -38,19 +38,22 @@ ShellRoot {
   // to scroll the page to its end. Or, with `edge`, the notch on
   // that edge instead of the settings window.
   readonly property var scenarios: [
-    { name: "notch-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields },
-    { name: "notch-light", page: "notch", theme: root.light, bar: true, fields: root.omarchyFields },
-    { name: "notch-end-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields, scrollTo: "end" },
+    { name: "notches-list-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields,
+      config: { notches: [{}, { id: "jobs", modules: ["activities", "timer"], position: { edge: "bottom" } }] } },
+    { name: "notch-dark", page: "notch/0", theme: root.dark, bar: true, fields: root.omarchyFields },
+    { name: "notch-light", page: "notch/0", theme: root.light, bar: true, fields: root.omarchyFields },
+    { name: "notch-end-dark", page: "notch/0", theme: root.dark, bar: true, fields: root.omarchyFields, scrollTo: "end" },
     { name: "general-dark", page: "general", theme: root.dark, bar: true, fields: root.omarchyFields },
-    { name: "general-resources-light", page: "general", theme: root.light, bar: true, fields: root.omarchyFields,
-      config: { modules: ["media", "activities", "resources"] } },
+    { name: "modules-dark", page: "modules", theme: root.dark, bar: true, fields: root.omarchyFields,
+      config: { notches: [{}, { id: "jobs", modules: ["activities", "timer"] }] } },
+    { name: "module-resources-light", page: "modules/resources", theme: root.light, bar: true, fields: root.omarchyFields },
     { name: "appearance-omarchy-dark", page: "appearance", theme: root.dark, bar: true, fields: root.omarchyFields },
-    { name: "notch-hanging-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields,
+    { name: "notch-hanging-dark", page: "notch/0", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { compactStyle: "notch", position: { edge: "left", offset: 0.3 } }, scrollTo: "end" },
-    { name: "notches-dark", page: "notch", theme: root.dark, bar: true, fields: root.omarchyFields,
+    { name: "notches-dark", page: "notch/1", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { notches: [{}, { id: "jobs", modules: ["activities"], position: { edge: "bottom", screen: "all" } }] },
       notch: 1 },
-    { name: "notches-end-light", page: "notch", theme: root.light, bar: true, fields: root.omarchyFields,
+    { name: "notches-end-light", page: "notch/1", theme: root.light, bar: true, fields: root.omarchyFields,
       config: { notches: [{}, { id: "jobs", modules: ["activities"], position: { edge: "bottom" } }] },
       notch: 1, scrollTo: "end" },
     { name: "general-standalone-dark", page: "general", theme: root.dark, bar: false, fields: root.standaloneFields },
@@ -94,11 +97,18 @@ ShellRoot {
     ipcTarget: "notchd-visual-" + tag
     configPath: root.outDir + "/edge-" + tag + ".json"
     barStyleAvailable: false
-    hostModules: ({ osd: Qt.resolvedUrl("hosts/omarchy/modules/osd.qml") })
   }
   DemoService { id: mediaSvc; tag: "media"; defaultModules: ["media"] }
   DemoService { id: activitySvc; tag: "activity"; defaultModules: ["activities"] }
-  DemoService { id: osdSvc; tag: "osd"; defaultModules: ["osd"] }
+  // The OSD is standalone: no notch shows it, its own notch does.
+  DemoService {
+    id: osdSvc; tag: "osd"; defaultModules: []
+    hostModules: ({ osd: Qt.resolvedUrl("hosts/omarchy/modules/osd.qml") })
+  }
+  function standaloneCopy(service, id) {
+    var n = service.standaloneNotch(id)
+    return n && n.copies.length > 0 ? n.copies[0] : null
+  }
   DemoService { id: openSvc; tag: "open"; defaultModules: ["media", "activities"] }
   DemoService { id: resourcesSvc; tag: "resources"; defaultModules: ["resources"] }
   DemoService { id: resourcesOpenSvc; tag: "resources-open"; defaultModules: ["resources"] }
@@ -151,6 +161,8 @@ ShellRoot {
   component MockScreen: Rectangle {
     id: mock
     property var svc: null
+    // The copy to draw: the service's first notch's, unless given.
+    property var copy: mock.svc ? mock.svc.firstCopy : null
     property string caption: ""
     // Overrides the notch's own offset (NaN: keep it).
     property real offset: NaN
@@ -174,7 +186,7 @@ ShellRoot {
     }
     NotchCard {
       id: mockCard
-      notch: mock.svc ? mock.svc.firstCopy : null
+      notch: mock.copy
       maxWidth: mock.width - Theme.space(24)
       maxHeight: mock.height - Theme.space(24)
       readonly property var spot: Position.place({
@@ -340,7 +352,7 @@ ShellRoot {
       spacing: Theme.space(16)
       MockScreen { svc: mediaSvc; caption: "media, compact" }
       MockScreen { svc: activitySvc; caption: "activities, compact" }
-      MockScreen { svc: osdSvc; caption: "osd, peek" }
+      MockScreen { svc: osdSvc; copy: root.standaloneCopy(osdSvc, "osd"); caption: "osd, peek (standalone)" }
       MockScreen { svc: openSvc; caption: "expanded" }
       MockScreen { svc: resourcesSvc; caption: "resources, compact (memory short)" }
       MockScreen { svc: resourcesOpenSvc; caption: "resources, expanded" }
@@ -350,7 +362,7 @@ ShellRoot {
       MockScreen { svc: timerDoneSvc; caption: "timer, peek (time's up)" }
       MockScreen { svc: mediaSvc; offset: 0; caption: "media, in the corner" }
       JoinedScreen { caption: "timer, an empty notch and resources, joined" }
-      JoinedScreen { services: [timerSvc, osdSvc, resourcesSvc]; caption: "the middle one peeking pushes its row aside" }
+      JoinedScreen { services: [timerSvc, timerDoneSvc, resourcesSvc]; caption: "the middle one peeking pushes its row aside" }
       CornerScreen { caption: "a corner shared by two edges" }
     }
   }

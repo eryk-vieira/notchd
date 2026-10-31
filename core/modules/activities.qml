@@ -15,7 +15,6 @@ import ".."
 // duration (peek ms, default 3000).
 NotchModule {
   id: acts
-  title: "Activities"
   priority: 70
 
   property var items: []

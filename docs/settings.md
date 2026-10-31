@@ -9,7 +9,7 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | Key | |
 |---|---|
 | `key` | config key; dotted for nested objects (`theme.accent`) |
-| `type` | `choice`, `integer`, `number`, `boolean`, `string`, `color`, `modules`, `workspaces`, `notches` or `note` (text only, no key) |
+| `type` | `choice`, `integer`, `number`, `boolean`, `string`, `color`, `modules`, `workspaces`, `notches`, `moduleCatalog` or `note` (text only, no key) |
 | `label`, `help` | title and description |
 | `page` | sidebar page id; `general` when absent |
 | `section` | heading the field sits under, within its page; sections keep the order their first field appears in |
@@ -26,16 +26,21 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | `string`, `color` | `TextControl` (a color adds a swatch and is validated) |
 | `modules` | `ModuleList` |
 | `workspaces` | `WorkspaceChips`: 1 to 10, the compositor's workspaces and the picked ones; none picked removes the key |
-| `notches` | `NotchPicker`: a chip per notch, to pick the one the window edits, and Add/Remove; it edits the list through the service (`addNotch`, `removeNotch`) |
+| `notches` | `NotchCatalog`: a row per notch, where it is and what it shows (`Settings.notchSummary`), with a gear to its page, a trash can (with more than one) and Add, which opens the new notch's page; it edits the list through the service (`addNotch`, `removeNotch`) |
+| `moduleCatalog` | `ModuleCatalog`: every module the host can load, where it shows (`Settings.moduleStatus`) and a gear to its page; no key, edits nothing |
 | `note` | none; just the title and help |
 
 ## Several notches
 
-The window edits one notch at a time, `NotchService.settingsNotch` (its index), picked at the top of the Notches page (`notch`), which holds every field for a notch's own keys: name, modules, compact style, position, workspaces... Those fields take that notch's key: `position.edge` at the top level, `notches.1.position.edge` in a list, with the top-level value it inherits as the field's default. Picking that value removes the notch's own key, so it inherits again. The General page has what applies to every notch: the hover delays, the loaded modules' own fields (`NotchModule.settings`, under each module's title, keys under its id; `Settings.moduleFields`) and, unless they name another page, the host's fields. The gear in an expanded notch opens the window on that notch's page.
+The Notches page (`notch`) lists the notches. Each one's gear opens its page, `notch/<index>` (`Settings.notchPageId`), which holds every field for its own keys: name, modules, compact style, position, workspaces... Showing that page sets `NotchService.settingsNotch`, the notch the window edits. Those fields take that notch's key: `position.edge` at the top level, `notches.1.position.edge` in a list, with the top-level value it inherits as the field's default. Picking that value removes the notch's own key, so it inherits again. The General page has what applies to every notch: the hover delays and, unless they name another page, the host's fields. The gear in an expanded notch opens the window on that notch's page.
+
+## Modules
+
+The Modules page lists every module the host can load (`availableModuleIds`), with where it shows: on or off with one notch, the notches that list it with several, standalone (or standalone and off) for a [standalone module](modules.md#standalone-modules), whose page starts with its Enabled switch and position. Which modules a notch shows stays on each notch's page, since it is the notch's own key. A module with settings of its own has a gear that opens its page, `modules/<id>` (`Settings.modulePageId`), with its fields, keys under its id (`Settings.moduleFields`); a field that names another page goes there, under the module's title. The fields come from the module's JSON file ([modules.md](modules.md#settings)), read without loading it, so a module no notch shows can be set up before it is switched on.
 
 ## Pages
 
-`NotchService.settingsPages`: the core's (Notches, General, Appearance), then the host's `hostSettingsPages`, each `{ id, label, icon }` with `icon` a Nerd Font code point. A host page with a core page's id replaces its label or icon. A page with no fields is hidden. The page shown is kept on the service, so it survives closing the window.
+`NotchService.settingsPages`: the core's (General, Notches, Modules, Appearance), then the host's `hostSettingsPages`, each `{ id, label, icon }` with `icon` a Nerd Font code point, then a page per notch and per module. A host page with a core page's id replaces its label or icon. A page with no fields is hidden. A page whose id has a `/` is a sub-page of the part before it (`notch/1` of `notch`, `modules/media` of `modules`): it has no sidebar entry, the sidebar marks its parent while it shows, a link above its fields leads back, and so does Escape. A sub-page that goes away (its notch removed) falls back to its parent. The page shown is kept on the service, so it survives closing the window; it starts on General.
 
 ## Card pictures
 
@@ -50,7 +55,7 @@ Every control takes `field` (the schema entry) and `value` (the config value, or
 | File | |
 |---|---|
 | `SettingsWindow.qml` | window, sidebar, page content |
-| `Settings.js` | pages, sections, list edits and slider steps; pure, tested in `tests/settings.test.mjs` |
+| `Settings.js` | pages and sub-pages, sections, module files and pages, notch summaries, list edits and slider steps; pure, tested in `tests/settings.test.mjs` |
 | `SettingRow.qml` | one field: text and the control for its type |
-| `Label.qml`, `Icon.qml`, `Button.qml`, `NavItem.qml` | building blocks |
-| `*Control.qml`, `CardChoice.qml`, `Toggle.qml`, `ModuleList.qml`, `WorkspaceChips.qml` | the controls |
+| `Label.qml`, `Icon.qml`, `Button.qml`, `IconButton.qml`, `NavItem.qml`, `ListRow.qml` | building blocks; `ListRow` is a row of the Notches and Modules lists |
+| `*Control.qml`, `CardChoice.qml`, `Toggle.qml`, `ModuleList.qml`, `ModuleCatalog.qml`, `NotchCatalog.qml`, `WorkspaceChips.qml` | the controls |

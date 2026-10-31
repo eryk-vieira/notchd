@@ -18,7 +18,7 @@ Every host exposes the same methods on its `ipcTarget`. The CLI depends on the h
 | `settings` | open or close the settings window |
 | `recenter` | put every notch back in the middle of the top edge, following focus (removes each `position`) |
 | `set <key> <json>` | change one config key, as the settings window does; an empty value resets it |
-| `state` | as JSON: `notches`, each with its id, compact style, reserved space, workspaces, position (where it is, bar style applied), whether it can be dragged, its modules and its `copies` (screen, mode and current peek of each); and every loaded module |
+| `state` | as JSON: `notches`, each with its id, compact style, reserved space, workspaces, position (where it is, bar style applied), whether it can be dragged, its modules and its `copies` (screen, mode and current peek of each); each `standalone` module's place and the copies that show it; and every loaded module |
 
 ```sh
 omarchy-shell eryk.notchd set hoverOpenDelay 200
@@ -60,7 +60,7 @@ The `timer` module takes one argument, quoted when it has spaces:
 |---|---|
 | `25m`, `90s`, `1h30m`, `1:30`, `25` (minutes) | start a countdown |
 | `"3m Tea"` | with a label |
-| `pomodoro` | start a pomodoro (lengths and rounds in settings: General › Timer) |
+| `pomodoro` | start a pomodoro (lengths and rounds in settings: Modules › Timer) |
 | `toggle` (or nothing) | pause or resume; a pomodoro waiting for its next phase starts it |
 | `pause`, `resume` | |
 | `+5m` | add time |
