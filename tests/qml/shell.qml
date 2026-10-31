@@ -78,6 +78,7 @@ ShellRoot {
       { name: "a peek shows on the focused screen and leaves the other copies alone", run: root.peekOnFocusedCopy },
       { name: "a peek goes only to the notches that show the module", run: root.peekOnlyWhereShown },
       { name: "the visitor's hidden copies hold no compact view", run: root.visitorRestsWhileClosed },
+      { name: "a visitor copy has a window only while it shows, and shortly after", run: root.visitorWindowOnlyWhileShown },
       { name: "notches, copies and modules survive a config edit", run: root.survivesConfigEdits },
       { name: "adding a notch and removing it gives the config back", run: root.addAndRemoveNotch },
       { name: "only the first notch asking for the bar gets it", run: root.oneBarNotch },
@@ -577,6 +578,44 @@ ShellRoot {
         multi.dismissPeek(null)
       }]
     ], function() { root.done() })
+  }
+
+  // The visitor's copies held a fullscreen window each (its buffers, ~25 MB
+  // per screen) while hidden. A guest's window now goes when it closes,
+  // after `windowLinger`, so the close animation ends and a peek soon after
+  // reuses it.
+  function visitorWindowOnlyWhileShown() {
+    var visitor = multi.visitor
+    var copy = null
+    var saved = multi.config
+    visitor.copies.forEach(function(c) { c.windowLinger = 300 })
+    // A notch kept on A, focus on B: a peek there goes to the visitor.
+    multi.replaceConfig({ modules: ["activities"], position: { screen: "A" } })
+    twoScreens.focusedScreenName = "B"
+    root.steps([
+      [100, function() {
+        root.check(visitor.copies.every(function(c) { return !c.needsWindow }),
+                   "a closed visitor copy wants a window: " + visitor.copies.map(function(c) { return c.mode }))
+        root.check(multi.notches[0].copies.every(function(c) { return c.needsWindow }), "a notch of the config lost its window")
+        multi.requestPeek(multi.moduleById("activities"), 400)
+      }],
+      [100, function() {
+        copy = visitor.copyOn("B")
+        root.check(!!copy && copy.mode === "peek", "the visitor does not peek on B: " + (copy ? copy.mode : "no copy"))
+        root.check(!!copy && copy.needsWindow, "a peeking visitor copy has no window")
+      }],
+      [500, function() {
+        root.check(copy.mode !== "peek", "the peek did not end")
+        root.check(copy.needsWindow, "the window went before the notch finished closing")
+      }],
+      [400, function() {
+        root.check(!copy.needsWindow, "the window stayed after windowLinger")
+      }]
+    ], function() {
+      visitor.copies.forEach(function(c) { c.windowLinger = 5000 })
+      multi.replaceConfig(saved)
+      root.done()
+    })
   }
 
   function peekOnlyWhereShown() {

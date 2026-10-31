@@ -44,6 +44,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Fixed
 
+- The default notch kept a window covering each monitor even while it showed nothing, about 25 MB of buffers; its windows now exist only while it shows a peek, and for 5 s after. A peek that needs it again after that shows about 50 ms later.
 - A running timer redrew the notch four times a second; it now wakes as its clock turns, once a second, so the open notch's progress bar steps once a second too.
 - Music playing cost a quarter to a third of a CPU core (on a 160 Hz monitor) and kept the compositor busy: the hidden default notch drew the media view on every monitor, and the equalizer and the progress bar never stopped easing. It now costs about 1 %: hidden copies hold no view, the equalizer steps about six times a second, the progress bar moves once a second without easing, and a notch hidden over a fullscreen app stops its equalizer.
 - The notch's animations looked choppy at their slow end: one side of the outline moved a whole pixel at a time while the other glided. It now moves in fractions of a pixel and settles on whole pixels, with its content kept on whole pixels throughout.

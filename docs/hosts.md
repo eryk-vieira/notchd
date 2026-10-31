@@ -9,7 +9,7 @@ No symlinks: `omarchy plugin validate` rejects any inside the plugin folder.
 
 ## NotchService
 
-The single source of truth: config, modules, the notches and IPC. It makes a `Notch` per entry of the config's `notches` (one, from the top-level keys, without a list): its modules, compact style, position, workspaces. Each notch shows as one or more `NotchCopy`: one that moves (following focus, or kept on its home screen), or one per screen with `position.screen` `"all"` and in bar style. The service also has a default notch (`visitor`), with every module and a copy at the top of each screen; its copies (`guest`) stay hidden, at rest so they hold no live view, and only show a peek on a focused screen where no notch with that module is (`State.needsVisitor`). A copy holds the state the pointer and peeks change (hover, pin, peek, drag) and so its own mode.
+The single source of truth: config, modules, the notches and IPC. It makes a `Notch` per entry of the config's `notches` (one, from the top-level keys, without a list): its modules, compact style, position, workspaces. Each notch shows as one or more `NotchCopy`: one that moves (following focus, or kept on its home screen), or one per screen with `position.screen` `"all"` and in bar style. The service also has a default notch (`visitor`), with every module and a copy at the top of each screen; its copies (`guest`) stay hidden, at rest so they hold no live view, with no window on screen until they open (and for a few seconds after, `State.needsWindow`), and only show a peek on a focused screen where no notch with that module is (`State.needsVisitor`). A copy holds the state the pointer and peeks change (hover, pin, peek, drag) and so its own mode.
 
 | Property | Meaning |
 |---|---|

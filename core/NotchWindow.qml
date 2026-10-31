@@ -129,6 +129,9 @@ Scope {
   PanelWindow {
     id: window
     screen: root.targetScreen
+    // Off while its copy has nothing to show (a closed guest): a hidden
+    // window gives back its buffers.
+    visible: !root.copy || root.copy.needsWindow
 
     anchors { top: true; left: true; right: true; bottom: true }
     color: "transparent"

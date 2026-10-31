@@ -61,6 +61,15 @@ test('mode: a guest copy rests while closed, and only peeks or opens', () => {
   assert.equal(State.mode({ guest: true, compactModule: m, hovered: true }), 'expanded');
 });
 
+// The visitor's copies are a fullscreen window per screen, hidden while
+// closed: each held its buffers (~25 MB) for nothing on screen.
+test('needsWindow: a guest only while open or lingering after; a notch always', () => {
+  assert.equal(State.needsWindow({ guest: false }), true);
+  assert.equal(State.needsWindow({ guest: true }), false);
+  assert.equal(State.needsWindow({ guest: true, open: true }), true);
+  assert.equal(State.needsWindow({ guest: true, lingering: true }), true);
+});
+
 test('reservedSpace: only when enabled in notch style; compact never below the baseline', () => {
   const on = { enabled: true, compactStyle: 'notch', compact: true, baseline: 36, tallest: 0, rest: 5 };
   assert.equal(State.reservedSpace(on), 36);

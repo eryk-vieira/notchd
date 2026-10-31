@@ -108,6 +108,17 @@ Item {
                                              hovered: copy.hovered, compactModule: copy.compactModule, guest: copy.guest })
   readonly property bool isOpen: copy.mode === "peek" || copy.mode === "expanded"
 
+  // ---------------------------------------------------------------- window
+  // Whether its window is on screen (State.needsWindow): a guest's only
+  // while open and for `windowLinger` ms after it closes.
+  property int windowLinger: 5000
+  property bool lingering: false
+  onIsOpenChanged: if (!copy.isOpen) { copy.lingering = true; lingerTimer.restart() }
+  Timer { id: lingerTimer; interval: copy.windowLinger; onTriggered: copy.lingering = false }
+  readonly property bool needsWindow: State.needsWindow({ guest: copy.guest, open: copy.isOpen, lingering: copy.lingering })
+  // A window going away reports no pointer leaving it: forget what it had.
+  onNeedsWindowChanged: if (!copy.needsWindow) copy.pointerSources = ({})
+
   // ---------------------------------------------------------------- screen
   readonly property var compositor: copy.svc ? copy.svc.compositor : null
   readonly property string focusedScreenName: copy.owner ? copy.owner.focusedScreenName : ""

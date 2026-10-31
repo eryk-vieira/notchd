@@ -45,6 +45,16 @@ function mode(s) {
   return compact
 }
 
+// Whether a copy needs its window on screen. A notch of the config always
+// has one. A guest (a copy of the visitor) is hidden while closed, and its
+// window, which covers its screen, holds buffers (~25 MB) for nothing: it
+// has one while open, and `lingering` after, so it closes with its
+// animation and a peek soon after reuses it (showing the window again takes
+// ~50 ms).
+function needsWindow(s) {
+  return !s.guest || !!s.open || !!s.lingering
+}
+
 // How far windows are kept from the notch's edge (the layer-shell exclusive
 // zone), in px; 0 reserves nothing. Only a notch that hangs there when
 // closed (compactStyle "notch") needs it. It follows the closed notch, not
