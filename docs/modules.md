@@ -42,7 +42,7 @@ A module **shows** state, it does not **own** it. A notifications module mirrors
 |---|---|
 | `compact` | the module is the highest-priority active one with a compact view, and compactStyle is `"notch"` |
 | `barView` | as `compact`, in the host's bar indicator (compactStyle `"bar"`); falls back to `compact` |
-| `verticalCompact` | as `compact`, with the notch on a side edge (`notch.vertical`): narrow and tall. Without one the notch shows a dot there |
+| `verticalCompact` | as `compact`, with the notch on a side edge (`notch.vertical`), and in a vertical bar: narrow and tall. Without one the notch shows a dot there |
 | `verticalPeek` | as `peek`, on a side edge: narrow and tall. Without one, `peek` shows there |
 | `peek` | the module called `requestPeek(ms)` and won: a pinned notch never peeks, hover only lets `urgentPeek` modules through, and a peek on screen is not cut short by a lower-priority one |
 | `expanded` | the notch is expanded and the module is active; every active module's view stacks, highest priority first |
