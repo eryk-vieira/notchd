@@ -70,6 +70,16 @@ test('needsWindow: a guest only while open or lingering after; a notch always', 
   assert.equal(State.needsWindow({ guest: true, lingering: true }), true);
 });
 
+test('keyboardFocus: only pinned open on a module that types', () => {
+  const typing = mod('claude', 50, { wantsKeyboard: true });
+  const open = { pinned: true, mode: 'expanded', modules: [mod('media', 60), typing] };
+  assert.equal(State.keyboardFocus(open), 'exclusive');
+  assert.equal(State.keyboardFocus({ ...open, pinned: false }), 'none');   // hover alone
+  assert.equal(State.keyboardFocus({ ...open, mode: 'compact' }), 'none');
+  assert.equal(State.keyboardFocus({ ...open, modules: [mod('media', 60)] }), 'none');
+  assert.equal(State.keyboardFocus({ pinned: true, mode: 'expanded' }), 'none');
+});
+
 test('reservedSpace: only when enabled; compact never below the baseline', () => {
   const on = { enabled: true, compact: true, baseline: 36, tallest: 0, rest: 5 };
   assert.equal(State.reservedSpace(on), 36);

@@ -104,6 +104,10 @@ Item {
   readonly property string mode: State.mode({ peekModule: copy.peekModule, pinned: copy.pinned, dragging: copy.dragging,
                                              hovered: copy.hovered, compactModule: copy.compactModule, guest: copy.guest })
   readonly property bool isOpen: copy.mode === "peek" || copy.mode === "expanded"
+  // The keyboard its window takes (State.keyboardFocus): "exclusive" while
+  // pinned open on a module you type into, else "none".
+  readonly property string keyboardFocus: State.keyboardFocus({ pinned: copy.pinned, mode: copy.mode,
+                                                               modules: copy.expandedModules })
 
   // ---------------------------------------------------------------- window
   // Whether its window is on screen (State.needsWindow): a guest's only

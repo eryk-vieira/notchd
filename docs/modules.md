@@ -13,6 +13,8 @@ NotchModule {
   active: true          // show in compact/expanded while true
   // urgentPeek: true   // peek even while expanded by hover
   // peekOnFocusedScreen: true  // peek once, on the focused screen only (feedback on what you just did there)
+  // wantsKeyboard: true        // you type into its expanded view (see Typing)
+  // expandedWidth: 520         // its expanded view's width, unscaled px (default 400)
 
   compact: Component { Text { text: "hi"; color: Theme.foreground } }
   verticalCompact: Component { Text { text: "h\ni"; color: Theme.foreground } }  // optional, for a side edge
@@ -58,6 +60,19 @@ A module with a fixed job and a place of its own, the way an OSD always shows vo
 
 Give it a `peek` view (and a `verticalPeek` for a side edge); it has no closed or expanded state of its own to show.
 
+## Typing
+
+A module with a text field in its expanded view sets `wantsKeyboard: true`. The notch's window takes the keyboard (layer-shell exclusive focus) while it is pinned open on the module: a click on the notch, `toggleNotch <id>` from a shortcut, or the module calling `requestKeyboard()`, which pins every notch open on it. Call it when the field is pressed, since a notch opened by hover has no keyboard. Hover alone never takes the keyboard from the window you are typing in. Escape closes the notch: a field leaves it alone and it goes up to the card. The rule is `State.keyboardFocus`.
+
+```qml
+expanded: Component {
+  TextInput {
+    focus: true
+    TapHandler { onTapped: m.requestKeyboard() }
+  }
+}
+```
+
 ## The scope rule
 
 A module **shows** state, it does not **own** it. A notifications module mirrors toasts; it does not register as the notification server. The one exception today is the Omarchy `osd` module, which takes the `osd` IPC target from the stock OSD plugin (and says so in its README).
@@ -66,7 +81,7 @@ A module **shows** state, it does not **own** it. A notifications module mirrors
 
 - Sizes go through `Theme.space(px)` and text through `Theme.font.*`, so the module follows the host's density and fonts.
 - Colors come from the theme tokens (`Theme.foreground`, `Theme.muted`, `Theme.line`, …), never hard-coded or ad-hoc alphas. See [theming.md](theming.md).
-- Views are Components that size themselves through `implicitWidth`/`implicitHeight`; the notch springs to fit. Expanded views get a fixed width.
+- Views are Components that size themselves through `implicitWidth`/`implicitHeight`; the notch springs to fit. Expanded views get a fixed width: 400 px, or the module's `expandedWidth`.
 - `notch` (set by the service) is the `NotchService`; read state from it, never from another module's internals. A module may show in several notches at once, so the service answers for all of them: `notch.expanded` (some notch is open) and `notch.peeking(module)` (some notch shows that module's peek). Each notch picks the vertical views on a side edge itself.
 - Views never rotate. On a side edge the notch runs down the edge for `verticalCompact` and `verticalPeek`; `peek` (for a module without a `verticalPeek`) and `expanded` keep their layout and the notch grows sideways to hold them. Give a side-edge view when a module has something narrow to show: the built-ins stack artwork over the equalizer (media), an icon over a progress bar (activities), each short resource's icon over its number (resources), and stand the OSD's bar up.
 - Every change on screen redraws the notch's whole window, at the monitor's refresh rate while something moves. Don't animate without pause: a `Behavior` that never settles, or a timer of a few hundred ms easing into each value, keeps the window drawing frames for as long as it runs. Cap such a view at 60 fps with one `Timer` (interval 16) that moves it, as media's equalizer and progress bar do, instead of letting it run at the monitor's rate (160 Hz and up), and stop its timer while the view is hidden (`running: … && visible`): a notch concealed over a fullscreen app hides its card. An `Image` lands in the scene graph's texture atlas, which is sized to the window and the window covers the screen: the first one costs ~25 MB however small it is. Set `mipmap: true` on images, which keeps them out of it (media's artwork does). `make bench` measures what a view costs.

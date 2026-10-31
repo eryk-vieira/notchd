@@ -90,7 +90,10 @@ ShellRoot {
       { name: "resources read the system", run: root.resourcesRead },
       { name: "resources show closed by default, or only once one runs short", run: root.resourcesCompactWhenShort },
       { name: "a timer counts down closed, peeks when it ends and goes back to rest", run: root.timerRunsAndEnds },
-      { name: "timer commands: pomodoro phases, pause, errors and its settings", run: root.timerCommands }
+      { name: "timer commands: pomodoro phases, pause, errors and its settings", run: root.timerCommands },
+      { name: "a module you type into takes the keyboard only while pinned open", run: root.keyboardOnlyWhilePinned },
+      { name: "Escape in a field inside the notch closes it", run: root.escapeCloses },
+      { name: "a module sets the width of its expanded view", run: root.expandedWidthFromModule }
     ]
     Qt.callLater(root.next)
   }
@@ -434,8 +437,9 @@ ShellRoot {
     readonly property var peekModule: null
     readonly property var expandedModules: [controlModule]
     property int pins: 0
+    property int closes: 0
     function togglePinned(screenName) { pins++ }
-    function close() {}
+    function close() { closes++ }
   }
   FloatingWindow {
     id: pointerWin
@@ -991,5 +995,96 @@ ShellRoot {
     timed.dismissPeek(null)
     timed.replaceConfig({})
     root.done()
+  }
+
+  // ------------------------------------------------------------ keyboard
+  // A notch window takes the keyboard (layer-shell Exclusive) only while
+  // pinned open on a module you type into: hover alone must never take it
+  // from the window you are typing in.
+  NotchService {
+    id: typer
+    ipcTarget: "notchd-qmltest-typing"
+    configPath: root.dir + "/typing.json"
+    compositor: workspace4
+    hostModules: ({ typing: Qt.resolvedUrl("fixtures/typing.qml") })
+    defaultModules: ["typing"]
+  }
+
+  function keyboardOnlyWhilePinned() {
+    root.steps([[100, function() {}]], function() {
+      var module = typer.moduleById("typing")
+      var copy = typer.notches.length > 0 ? typer.notches[0].copies[0] : null
+      if (!root.check(!!module && !!copy, "the typing module or its notch did not load")) { root.done(); return }
+      root.check(copy.keyboardFocus === "none", "closed, it takes the keyboard: " + copy.keyboardFocus)
+      copy.hovered = true
+      root.check(copy.mode === "expanded", "hovered, it is " + copy.mode)
+      root.check(copy.keyboardFocus === "none", "hover alone took the keyboard")
+      module.requestKeyboard()
+      root.check(copy.pinned, "a press on the field did not pin the notch")
+      root.check(copy.keyboardFocus === "exclusive", "pinned on the field, it takes " + copy.keyboardFocus)
+      copy.close()
+      root.check(copy.keyboardFocus === "none", "closed again, it keeps the keyboard")
+      root.done()
+    })
+  }
+
+  function expandedWidthFromModule() {
+    var copy = typer.notches.length > 0 ? typer.notches[0].copies[0] : null
+    copy.open()
+    root.steps([[500, function() {}]], function() {
+      root.check(typingCard.mode === "expanded", "the card is " + typingCard.mode)
+      root.check(typingCard.width >= Theme.space(520) && typingCard.width < Theme.space(640),
+                 "a 520 px expanded view made a card " + typingCard.width + " wide")
+      copy.close()
+      root.done()
+    })
+  }
+  NotchCard {
+    id: typingCard
+    notch: typer.notches.length > 0 ? typer.notches[0].copies[0] : null
+  }
+
+  // Escape from a field in a view goes up to the card, which closes the
+  // notch.
+  QtObject {
+    id: escapeModule
+    property var field: null
+    readonly property Component expanded: Component {
+      TextInput {
+        text: "type here"
+        Component.onCompleted: escapeModule.field = this
+      }
+    }
+  }
+  QtObject {
+    id: escapeSvc
+    readonly property string mode: "expanded"
+    readonly property string edge: "top"
+    readonly property var compactModule: null
+    readonly property var peekModule: null
+    readonly property var expandedModules: [escapeModule]
+    property int closes: 0
+    function togglePinned(screenName) {}
+    function close() { closes++ }
+  }
+  FloatingWindow {
+    id: escapeWin
+    implicitWidth: 500
+    implicitHeight: 300
+    NotchCard { id: escapeCard; notch: escapeSvc; x: 50 }
+    // Keys go to a TestCase's own window: this one sits in it.
+    TestCase { id: keys; when: false }
+  }
+
+  function escapeCloses() {
+    root.steps([[500, function() {
+      if (!root.check(!!escapeModule.field, "the field did not load")) return
+      escapeModule.field.forceActiveFocus()
+      root.check(escapeModule.field.activeFocus, "the field did not take focus (test setup)")
+      keys.keyClick(Qt.Key_Escape)
+    }], [50, function() {}]], function() {
+      root.check(escapeSvc.closes === 1, "Escape closed it " + escapeSvc.closes + " times")
+      root.done()
+    })
   }
 }

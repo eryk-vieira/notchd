@@ -55,6 +55,19 @@ function needsWindow(s) {
   return !s.guest || !!s.open || !!s.lingering
 }
 
+// The keyboard a copy's window takes: "exclusive" while it is pinned open
+// (a click, a shortcut) on a module you type into (`wantsKeyboard`, among
+// the expanded ones in `modules`), else "none". Never on hover alone: the
+// pointer passing over the notch must not take the keyboard from the
+// window you are typing in.
+function keyboardFocus(s) {
+  if (!s.pinned || s.mode !== "expanded") return "none"
+  var modules = s.modules || []
+  for (var i = 0; i < modules.length; i++)
+    if (modules[i] && modules[i].wantsKeyboard) return "exclusive"
+  return "none"
+}
+
 // How far windows are kept from the notch's edge (the layer-shell exclusive
 // zone), in px; 0 reserves nothing. It follows the closed notch, not
 // what is on screen: peeks and the expanded notch open over the windows.
