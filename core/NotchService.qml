@@ -257,7 +257,7 @@ Item {
       if (screens.length > 1)
         out.push({ page: "general", section: "Position", key: key("position.screen"), type: "choice",
                    label: "Screen", default: inherited("position.screen", ""),
-                   help: "Where the notch stays. Following focus, it moves to the screen you work on, and its peeks show there. On a screen of its own, it peeks there too. On every screen, each screen has its own copy, and a peek shows on the focused one.",
+                   help: "Where the notch stays. Following focus, it moves to the screen you work on. On a screen of its own, it stays there, and a peek shows both there and on the screen you work on. On every screen, each screen has its own copy, and a peek shows on the focused one.",
                    options: [{ value: "", label: "Follow focus" }, { value: "all", label: "Every screen" }].concat(screens.map(function(s) {
                      return { value: s.name, label: s.name }
                    })) })

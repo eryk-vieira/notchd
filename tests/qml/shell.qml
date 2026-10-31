@@ -79,7 +79,8 @@ ShellRoot {
       { name: "a peek goes only to the notches that show the module", run: root.peekOnlyWhereShown },
       { name: "notches, copies and modules survive a config edit", run: root.survivesConfigEdits },
       { name: "adding a notch and removing it gives the config back", run: root.addAndRemoveNotch },
-      { name: "only the first notch asking for the bar gets it", run: root.oneBarNotch }
+      { name: "only the first notch asking for the bar gets it", run: root.oneBarNotch },
+      { name: "a notch kept on a screen stays there and a peek also shows where you work", run: root.peekBesideHomedNotch }
     ]
     Qt.callLater(root.next)
   }
@@ -606,5 +607,50 @@ ShellRoot {
       root.check(!!first.copyOn("B") && first.copyOn("B") !== first.copyOn("A"), "no copy for bar B")
       root.done()
     })
+  }
+
+  // Bug: the notch kept on the ultrawide (position.screen) showing music
+  // left it when the volume changed on the laptop screen; the first fix
+  // kept the volume on the ultrawide, out of sight. Now the notch stays and
+  // shows it, and so does a copy on the focused screen, gone once the peek
+  // is over.
+  function peekBesideHomedNotch() {
+    var notch = null
+    root.steps([
+      [0, function() {
+        multi.replaceConfig({ modules: ["activities"], position: { screen: "A" } })
+        twoScreens.focusedScreenName = "B"
+      }],
+      [100, function() {
+        notch = multi.notches[0]
+        var home = notch.copyOn("A"), guest = notch.copyOn("B")
+        root.check(notch.homed && notch.copies.length === 2, "a notch kept on A should have a copy per screen")
+        root.check(!home.guest && home.screenName === "A" && !home.offWorkspace, "the copy on A does not hang there")
+        root.check(guest.guest && guest.offWorkspace, "the copy on B shows while closed")
+        root.check(JSON.stringify(guest.reservedScreens) === "[]", "the copy on B reserves " + JSON.stringify(guest.reservedScreens))
+        root.push("music", false)
+        root.push("volume", true)
+      }],
+      [100, function() {
+        var home = notch.copyOn("A"), guest = notch.copyOn("B")
+        root.check(guest.mode === "peek" && guest.screenName === "B" && !guest.offWorkspace,
+                   "no peek on the focused screen: " + guest.mode)
+        root.check(home.mode === "peek" && home.screenName === "A", "the notch on A shows " + home.mode + " on " + home.screenName)
+        multi.dismissPeek(null)
+      }],
+      [100, function() {
+        var home = notch.copyOn("A"), guest = notch.copyOn("B")
+        root.check(home.mode === "compact" && !home.offWorkspace, "after the peek the notch on A shows " + home.mode)
+        root.check(guest.offWorkspace, "the copy on B stays after the peek")
+        twoScreens.focusedScreenName = "A"
+        root.push("again", true)
+      }],
+      [100, function() {
+        root.check(notch.copyOn("A").mode === "peek", "focused on its own screen, the notch does not peek")
+        root.check(notch.copyOn("B").mode !== "peek", "the copy on B peeks with focus on A")
+        multi.dismissPeek(null)
+        multi.moduleById("activities").clear("")
+      }]
+    ], function() { root.done() })
   }
 }

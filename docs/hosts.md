@@ -9,7 +9,7 @@ No symlinks: `omarchy plugin validate` rejects any inside the plugin folder.
 
 ## NotchService
 
-The single source of truth: config, modules, the notches and IPC. It makes a `Notch` per entry of the config's `notches` (one, from the top-level keys, without a list): its modules, compact style, position, workspaces. Each notch shows as one or more `NotchCopy`: one that moves (following focus, or kept on its home screen), or one per screen with `position.screen` `"all"` and in bar style. A copy holds the state the pointer and peeks change (hover, pin, peek, drag) and so its own mode.
+The single source of truth: config, modules, the notches and IPC. It makes a `Notch` per entry of the config's `notches` (one, from the top-level keys, without a list): its modules, compact style, position, workspaces. Each notch shows as one or more `NotchCopy`: one that moves (following focus), or one per screen. With `position.screen` `"all"` and in bar style each copy is a notch of its own; kept on a home screen, the copy where it hangs shows the closed notch and the others (`guest`) only its peeks and the open notch. A copy holds the state the pointer and peeks change (hover, pin, peek, drag) and so its own mode.
 
 | Property | Meaning |
 |---|---|
