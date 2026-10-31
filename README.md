@@ -4,25 +4,12 @@ A dynamic notch for Wayland desktops, built with Quickshell. It hangs from the t
 
 It is a **notch framework, not a shell**. Modules show what the system is already doing; they never take over a system service. The notch is not a notification daemon, a launcher or a lock screen, so it sits on top of whatever desktop you already have.
 
-## Layout
+## Install
 
-```
-core/                 the framework: no desktop-specific code
-  NotchService.qml    state: config, modules, mode, peeks, hover, IPC
-  NotchSurface.qml    the overlay that draws the notch
-  NotchModule.qml     base type for modules
-  Theme.qml           visual tokens (singleton), fed by the host
-  settings/           the settings window and its controls
-  *Compositor.qml     compositor adapters (Hyprland, generic)
-  modules/            built-in modules: media, activities
-hosts/
-  omarchy/            Omarchy shell plugin (eryk.notchd); see its README
-  standalone/         its own Quickshell config, for any compositor
-scripts/
-  build-omarchy.sh    self-contained Omarchy plugin in dist/
-```
+notchd runs inside a *host*: the desktop-specific wiring around the generic core.
 
-Each host links `core` in with a relative symlink (`hosts/*/core -> ../../core`), so `import "core"` works from the host folder.
+- **Omarchy**: the repository is an Omarchy shell plugin (`eryk.notchd`), with volume/brightness OSD and the compact view in the bar. See [hosts/omarchy](hosts/omarchy/README.md).
+- **Any other Wayland compositor with layer-shell**: the repository is also a standalone Quickshell config (`qs -p <checkout>`). See [docs/standalone.md](docs/standalone.md).
 
 ## States
 
@@ -40,36 +27,9 @@ Over a fullscreen app only peeks show.
 - `"bar"`: in the host's bar indicator. The notch only drops out to peek or expand. Only hosts with a bar indicator support it; that is only the Omarchy host today.
 - `"notch"`: compact hangs from the top edge all the time, Mac style.
 
-## What a host provides
-
-`NotchService`:
-
-| Property | Meaning |
-|---|---|
-| `ipcTarget` | IPC target name for scripts |
-| `configPath` | absolute path of the JSON config (watched, live); defaults to `$XDG_CONFIG_HOME/notchd/config.json` |
-| `hostModules` | `{ id: url }` of modules the host ships; they win over built-ins |
-| `barStyleAvailable` | whether the host has a bar indicator for `compactStyle: "bar"` |
-| `defaultModules` | modules to load when the config lists none |
-| `hostSettingsSchema` | settings-window fields for the host's own config keys (see [Settings](#settings)) |
-| `hostSettingsPages` | extra settings-window pages, or new labels/icons for the core ones |
-
-`NotchSurface`:
-
-| Property | Meaning |
-|---|---|
-| `svc` | the service |
-| `compositor` | a compositor adapter (see `core/GenericCompositor.qml` for the contract) |
-| `barHeight`, `barOnTop`, `barHidden` | the host's bar, so the notch hangs under it |
-| `layerNamespace` | layer-shell namespace |
-
-`Theme.provider`: an object with any of `foreground`, `background`, `accent`, `danger`, `fontFamily`, `fontCaption`, `fontBodySmall`, `fontBody`, `fontHeading`, `fontDisplay` and `spacingScale`. Missing keys use defaults.
-
-From those the theme derives the tones everything else uses: `muted` (secondary text), `faint` (hints, disabled), `line` (borders, dividers), `hover` and `selected` (fills), `surface` (raised panels), plus `radiusSmall` and `radius`. Use these rather than ad-hoc alphas, so the notch, modules and settings shade alike on any theme.
-
 ## Config
 
-The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/notchd/config.json`), outside the source tree, so plugin updates never touch it. A missing file means every key is at its default. The settings window creates the file on the first change, and a file you create by hand is picked up within a couple of seconds.
+The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/notchd/config.json`), outside the source tree, so plugin updates never touch it. A missing file means every key is at its default. A file you create by hand is picked up within a couple of seconds, and edits apply live.
 
 | Key | Default | |
 |---|---|---|
@@ -82,71 +42,26 @@ Hosts add their own keys; the standalone host, for example, adds `topOffset` and
 
 ## Settings
 
-The gear in the expanded notch (or the `settings` IPC method) opens a settings window. It is an ordinary toplevel window with a fixed size, so tiling compositors float it, and it takes keyboard input. Every change applies at once and is written back to the config file; there is no Apply button. Clearing a field removes the key, so it goes back to its default.
-
-The window has a sidebar of pages (General, Modules, Appearance) and, on each page, its fields grouped by section: title and description on the left, the control on the right. A page without fields is hidden. Ctrl+Tab cycles pages; Esc closes.
-
-The window is generated from `NotchService.settingsSchema`: the core's fields, then the host's `hostSettingsSchema`. Each field is an object:
-
-| Key | |
-|---|---|
-| `key` | config key; dotted for nested objects (`theme.accent`) |
-| `type` | `choice`, `integer`, `boolean`, `string`, `color`, `modules` or `note` (text only, no key) |
-| `label`, `help` | title and description |
-| `page` | sidebar page id; `general` when absent |
-| `section` | heading the field sits under, within its page |
-| `default` | value shown while the key is absent |
-| `options` | `[{ value, label, preview }]`, for `choice` |
-| `display` | `"cards"` shows a `choice` as picture cards; each option's `preview` is the url of a QML file drawn on its card (its root takes `selected`) |
-| `min`, `max`, `step`, `unit` | for `integer` (a slider) |
-
-Pages come from `NotchService.settingsPages`: the core's, then the host's `hostSettingsPages`, each `{ id, label, icon }` with `icon` a Nerd Font code point. A host page with a core page's id replaces its label or icon.
-
-## Writing a module
-
-A module is a QML file whose root is a `NotchModule`. Built-ins live in `core/modules/` and import the core with `import ".."`. A host's modules import it with `import "../core"` and register through `hostModules`.
-
-```qml
-import QtQuick
-import ".."
-
-NotchModule {
-  id: m
-  title: "Example"
-  priority: 60          // higher wins the compact slot / outranks lower peeks
-  active: true          // show in compact/expanded while true
-  // urgentPeek: true   // peek even while expanded by hover
-
-  compact: Component { Text { text: "hi"; color: Theme.foreground } }
-  barView: Component { Text { text: "hi"; color: Theme.foreground } }  // optional, for the bar
-  peek: Component { Text { text: "hello!"; color: Theme.foreground } }
-  expanded: Component { Text { text: "details"; color: Theme.foreground } }
-
-  // m.requestPeek(3000) pops the notch open with `peek` for 3 s.
-}
-```
-
-Use `Theme.space(px)` for sizes and `Theme.font.*` for text, so the module follows the host's density and fonts. Views are Components that size themselves through `implicitWidth`/`implicitHeight`; the notch springs to fit. Expanded views get a fixed width.
-
-The scope rule: a module **shows** state, it does not **own** it. A notifications module mirrors toasts; it does not register as the notification server.
+The gear in the expanded notch (or the `settings` IPC method) opens the settings window: a sidebar of pages, and on each page its fields grouped by section. Every change applies at once and is written back to the config file; there is no Apply button. Clearing a field removes the key, so it goes back to its default. Ctrl+Tab cycles pages; Esc closes.
 
 ## IPC
 
-Every host exposes the same methods on its `ipcTarget`:
+Scripts drive the notch through Quickshell IPC: push an activity, open the notch, change a config key. See [docs/ipc.md](docs/ipc.md).
 
-```
-push '<json>'    add or update an activity (see core/modules/activities.qml)
-clear <id>       remove one; "" removes all
-open | close | toggle
-settings         open or close the settings window
-set <key> <json> change one config key, e.g. set hoverOpenDelay 200;
-                 an empty value resets it to its default
-state            mode, current peek, modules
+```sh
+omarchy-shell eryk.notchd push '{"id":"deploy","title":"Deploying api","progress":40,"sticky":true}'
 ```
 
-For an array, put a space before the bracket: `set modules ' ["media","activities"]'`. Quickshell's CLI reads an argument that starts with `[` as a comma-separated list.
+## Documentation
 
-The CLI depends on the host: `omarchy-shell eryk.notchd ...` on Omarchy, `qs -p hosts/standalone ipc call notchd ...` standalone.
+- [docs/modules.md](docs/modules.md): writing a module
+- [docs/standalone.md](docs/standalone.md): the standalone host
+- [docs/hosts.md](docs/hosts.md): what a host provides, for porting notchd to another desktop
+- [docs/settings.md](docs/settings.md): the settings schema, pages and controls
+- [docs/theming.md](docs/theming.md): theme tokens
+- [docs/ipc.md](docs/ipc.md): IPC methods
+- [DEVELOPMENT.md](DEVELOPMENT.md): working on notchd itself
+- [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 

@@ -1,0 +1,137 @@
+# Development
+
+Working on notchd itself. For using it, see the [README](README.md); for the rules that must not break, [CLAUDE.md](CLAUDE.md).
+
+## Prerequisites
+
+| Tool | Package (Arch) | For |
+|---|---|---|
+| Quickshell | `quickshell` | running the notch, `make dev`, `make visual` |
+| Qt 6 `qmllint` | `qt6-declarative` | `make lint` |
+| Node.js 18+ | `nodejs` | `make test` (built-in `node:test`, no dependencies) |
+| Omarchy 4 | | the Omarchy host, `make validate`, `make restart` |
+
+## Layout
+
+```
+manifest.json         Omarchy plugin manifest: the repo root is the plugin
+shell.qml             standalone host: the repo root is also a Quickshell config
+core/                 the framework: no desktop-specific code
+  NotchService.qml    state: config, modules, mode, peeks, hover, IPC
+  NotchSurface.qml    the overlay that draws the notch
+  NotchModule.qml     base type for modules
+  Theme.qml           visual tokens (singleton), fed by the host
+  Config.js           config rules (pure JS)
+  State.js            mode and peek rules (pure JS)
+  *Compositor.qml     compositor adapters (Hyprland, generic)
+  modules/            built-in modules: media, activities
+  settings/           the settings window, its controls and Settings.js
+hosts/
+  omarchy/            Omarchy shell plugin entry points and the osd module
+tests/
+  *.test.mjs          Node tests of the pure-JS rules
+  load.mjs            loads a core .js file the way QML sees it
+  visual/shell.qml    offscreen scenarios of the settings window
+docs/                 reference: modules, hosts, settings, theming, IPC
+scripts/              visual-test.sh
+build/                generated (visual PNGs, dev config); ignored
+```
+
+## Running it
+
+### Omarchy host
+
+The plugin folder is a symlink to the checkout:
+
+```sh
+ln -sfn "$PWD" ~/.config/omarchy/plugins/eryk.notchd
+make restart                 # omarchy restart shell
+```
+
+The shell does not hot-reload plugin QML: run `make restart` after changing it. Config changes apply live. How the plugin gets enabled, and the stock OSD it replaces, are in [hosts/omarchy](hosts/omarchy/README.md).
+
+The shell's log:
+
+```sh
+qs log --pid "$(pgrep -xf 'quickshell -n -p /usr/share/omarchy/shell')" | grep -i notchd
+```
+
+### Standalone host
+
+```sh
+make dev                     # config in build/dev-config.json, never ~/.config
+qs -p . ipc call notchd settings
+```
+
+`make dev` hot-reloads on every QML change, core included. Next to the Omarchy host it draws a second notch, on IPC target `notchd`.
+
+## The gate
+
+Run `make check` before every commit. It is everything below:
+
+| Target | What it does |
+|---|---|
+| `make test` | Node tests of `core/*.js` and `core/settings/*.js` |
+| `make lint` | `qmllint` over `shell.qml` and the core; fails on any warning |
+| `make validate` | `omarchy plugin validate .` |
+| `make visual` | renders the settings window offscreen into `build/visual/`; fails on any QML warning, so it also proves the core loads |
+
+The Omarchy host's QML imports `qs.Commons`/`qs.Ui`, which only exist inside the Omarchy shell, so lint skips it; after changing it, `make restart` and read the log.
+
+## Tests
+
+**Rules go in plain JS, views in QML.** Anything that decides something (which peek wins, how a key is edited, which pages show) lives in a `.js` file with no QML globals, imported from QML with `import "X.js" as X`, and has a test in `tests/`. QML files bind those results to the screen. Keep the `.js` files plain functions and `var`s: QML imports them as is and `tests/load.mjs` evaluates them in a Node vm.
+
+```js
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { load, plain } from './load.mjs';
+
+const Config = load('core/Config.js');
+
+test('valueAt follows dotted keys', () => {
+  assert.equal(Config.valueAt({ theme: { accent: '#fff' } }, 'theme.accent'), '#fff');
+});
+```
+
+Objects and arrays built inside the vm have their own prototypes; compare them through `plain()`.
+
+**Tests are hermetic.** They never read or write `~/.config/notchd` or any real user path: the visual scenarios use a scratch dir, `make dev` uses `build/`. A test that needs a path gets it passed in.
+
+**For a bug fix, write the test first** and see it fail.
+
+### Visual scenarios
+
+`tests/visual/shell.qml` lists the scenarios: a page, a theme (dark or light), the host's fields. Add one when a page or control changes, run `make visual` and look at the PNGs in `build/visual/`. They are not committed; a visual change gets before/after images in its PR or commit discussion.
+
+## Conventions
+
+### Commits
+
+[Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, imperative, lowercase, no period.
+
+- Types: `feat`, `fix`, `refactor`, `docs`, `test`, `build` (Makefile, scripts, manifest), `chore`.
+- Scopes: `core`, `settings`, `theme`, `omarchy`, `standalone`, `modules/<id>`, `ipc`. Omit it when the change spans several.
+- The body says why, not what.
+
+```
+feat(settings): show compact style as picture cards
+fix(omarchy): keep the bar indicator on the hovered monitor
+```
+
+### Changelog
+
+Every user-visible change adds a line to `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md), under Added, Changed, Fixed or Removed. Released sections are never edited.
+
+### Versions
+
+`manifest.json`'s `version` is the version. A release:
+
+1. `make check`.
+2. Bump `version` in `manifest.json`.
+3. Rename `[Unreleased]` to `[X.Y.Z] — YYYY-MM-DD` and open a new empty `[Unreleased]`.
+4. `git commit -m "vX.Y.Z"`, `git tag -a vX.Y.Z -m "vX.Y.Z"`, push both. Tags are never moved.
+
+### Documentation
+
+A change updates the doc that describes it, in the same commit: `README.md` for users, `docs/` for reference, this file for workflow, `CLAUDE.md` for a new invariant. `grep` for the name you changed.
