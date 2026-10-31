@@ -83,6 +83,9 @@ ShellRoot {
     compositor: fakeCompositor
     configPath: root.outDir + "/config.json"
     hostSettingsSchema: root.scenario && root.scenario.fields ? root.scenario.fields : []
+    // The Omarchy host's standalone OSD, so the Modules page lists it apart;
+    // switched off (next()), since osdSvc's owns the `osd` IPC target.
+    hostModules: root.scenario && root.scenario.bar ? ({ osd: Qt.resolvedUrl("hosts/omarchy/modules/osd.qml") }) : ({})
     settingsPage: root.scenario && root.scenario.page ? root.scenario.page : "notch"
   }
 
@@ -372,6 +375,7 @@ ShellRoot {
     if (!root.scenario) { quitTimer.start(); return }
     Theme.provider = root.scenario.theme
     svc.setConfigValue("workspaces", root.scenario.bar ? [1, 2, 3] : undefined)
+    svc.setConfigValue("osd.enabled", false)
     var cfg = root.scenario.config || {}
     svc.setConfigValue("position", cfg.position)
     svc.setConfigValue("notches", cfg.notches)

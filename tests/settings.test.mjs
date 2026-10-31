@@ -160,16 +160,23 @@ test('moduleTitle uses the loaded module\'s title, else its id', () => {
   assert.equal(Settings.moduleTitle('timer', null), 'Timer');
 });
 
-test('moduleStatus says where a module shows, or that it is standalone', () => {
+test('moduleStatus says where a module shows, or whether a standalone one is on', () => {
   const one = [{ id: 'main', moduleIds: ['media'] }];
   const two = [{ id: 'main', moduleIds: ['media', 'osd'] }, { id: 'jobs', moduleIds: ['activities', 'media'] }];
   assert.equal(Settings.moduleStatus('media', one), 'On');
   assert.equal(Settings.moduleStatus('timer', one), 'Off');
   assert.equal(Settings.moduleStatus('media', two), 'In main, jobs');
   assert.equal(Settings.moduleStatus('activities', two), 'In jobs');
-  assert.equal(Settings.moduleStatus('osd', two, true, true), 'Standalone', 'a notch listing it does not count');
-  assert.equal(Settings.moduleStatus('osd', one, true, false), 'Standalone · off');
+  assert.equal(Settings.moduleStatus('osd', two, true, true), 'On', 'a notch listing it does not count');
+  assert.equal(Settings.moduleStatus('osd', one, true, false), 'Off');
   assert.equal(Settings.moduleStatus('timer', undefined), 'Off');
+});
+
+test('catalogPart splits the Modules page into notch and standalone modules', () => {
+  const catalog = [{ moduleId: 'media' }, { moduleId: 'osd', standalone: true }, { moduleId: 'timer', standalone: false }];
+  assert.deepEqual(plain(Settings.catalogPart(catalog, false).map((m) => m.moduleId)), ['media', 'timer']);
+  assert.deepEqual(plain(Settings.catalogPart(catalog, true).map((m) => m.moduleId)), ['osd']);
+  assert.deepEqual(plain(Settings.catalogPart(undefined, true)), []);
 });
 
 test('parseModuleInfo keeps a title and well-formed fields, drops the rest', () => {

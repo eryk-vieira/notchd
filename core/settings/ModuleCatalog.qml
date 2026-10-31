@@ -2,8 +2,9 @@ import QtQuick
 import ".."
 import "Settings.js" as Settings
 
-// `moduleCatalog` field: every module the host can load, where it shows
-// (or that it is standalone), and a gear that opens its own page
+// `moduleCatalog` field: the modules the host can load that notches show
+// or, with the field's `standalone`, the ones with a place of their own;
+// where (or whether) each shows, and a gear that opens its own page
 // ("modules/<id>") when it has settings, loaded or not. Edits nothing
 // itself.
 Rectangle {
@@ -14,7 +15,7 @@ Rectangle {
   property var svc: null
   signal edited(var value)
 
-  readonly property var modules: control.svc ? control.svc.moduleCatalog : []
+  readonly property var modules: control.svc ? Settings.catalogPart(control.svc.moduleCatalog, control.field.standalone) : []
   readonly property var schema: control.svc ? control.svc.settingsSchema : []
 
   function hasPage(id) {

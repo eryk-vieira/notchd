@@ -352,8 +352,11 @@ Item {
                help: several ? "How long it stays open after the pointer leaves. For every notch."
                              : "How long it stays open after the pointer leaves.",
                default: Config.DEFAULTS.hoverCloseDelay, min: 0, max: 2000, step: 10, unit: "ms" })
-    out.push({ page: "modules", type: "moduleCatalog", label: "Modules",
-               help: "Every module there is. Which ones a notch shows is set on the Notches page; a standalone module has a place of its own instead. The gear opens a module's own settings." })
+    out.push({ page: "modules", type: "moduleCatalog", label: "Notch modules",
+               help: "Shown by notches: which ones a notch shows is set on its page, under Notches. The gear opens a module's own settings." })
+    if (svc.standaloneIds.length > 0)
+      out.push({ page: "modules", type: "moduleCatalog", standalone: true, label: "Standalone modules",
+                 help: "Each has a place of its own, over any notch that hangs there, and no notch shows it. Its page switches it on and places it." })
     return out
   }
   readonly property var settingsSchema: svc.coreSettingsSchema

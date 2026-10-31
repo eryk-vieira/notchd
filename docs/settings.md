@@ -27,7 +27,7 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | `modules` | `ModuleList` |
 | `workspaces` | `WorkspaceChips`: 1 to 10, the compositor's workspaces and the picked ones; none picked removes the key |
 | `notches` | `NotchCatalog`: a row per notch, where it is and what it shows (`Settings.notchSummary`), with a gear to its page, a trash can (with more than one) and Add, which opens the new notch's page; it edits the list through the service (`addNotch`, `removeNotch`) |
-| `moduleCatalog` | `ModuleCatalog`: every module the host can load, where it shows (`Settings.moduleStatus`) and a gear to its page; no key, edits nothing |
+| `moduleCatalog` | `ModuleCatalog`: the modules the host can load that notches show, or with `standalone: true` the standalone ones (`Settings.catalogPart`), where each shows (`Settings.moduleStatus`) and a gear to its page; no key, edits nothing |
 | `note` | none; just the title and help |
 
 ## Several notches
@@ -36,7 +36,7 @@ The Notches page (`notch`) lists the notches. Each one's gear opens its page, `n
 
 ## Modules
 
-The Modules page lists every module the host can load (`availableModuleIds`), with where it shows: on or off with one notch, the notches that list it with several, standalone (or standalone and off) for a [standalone module](modules.md#standalone-modules), whose page starts with its Enabled switch and position. Which modules a notch shows stays on each notch's page, since it is the notch's own key. A module with settings of its own has a gear that opens its page, `modules/<id>` (`Settings.modulePageId`), with its fields, keys under its id (`Settings.moduleFields`); a field that names another page goes there, under the module's title. The fields come from the module's JSON file ([modules.md](modules.md#settings)), read without loading it, so a module no notch shows can be set up before it is switched on.
+The Modules page lists every module the host can load (`availableModuleIds`) in two lists. Notch modules says where each shows: on or off with one notch, the notches that list it with several. Standalone modules, there only when the host has a [standalone module](modules.md#standalone-modules), says whether each is on; a standalone module's page starts with its Enabled switch and position. Which modules a notch shows stays on each notch's page, since it is the notch's own key. A module with settings of its own has a gear that opens its page, `modules/<id>` (`Settings.modulePageId`), with its fields, keys under its id (`Settings.moduleFields`); a field that names another page goes there, under the module's title. The fields come from the module's JSON file ([modules.md](modules.md#settings)), read without loading it, so a module no notch shows can be set up before it is switched on.
 
 ## Pages
 

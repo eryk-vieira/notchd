@@ -831,6 +831,9 @@ ShellRoot {
         root.check(osd() === null && own() === null, "switched off, the OSD still loads")
         root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "osd" && m.standalone }), "the OSD left the catalog")
         root.check(svc.settingsSchema.some(function(f) { return f.key === "osd.enabled" && f.page === "modules/osd" }), "no switch on its page")
+        var lists = svc.settingsSchema.filter(function(f) { return f.type === "moduleCatalog" })
+        root.check(lists.length === 2 && !lists[0].standalone && lists[1].standalone === true,
+                   "the Modules page does not list standalone modules apart: " + JSON.stringify(lists))
         svc.setConfigValue("osd.enabled", undefined)
       }],
       [100, function() {

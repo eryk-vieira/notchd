@@ -184,11 +184,20 @@ function moduleTitle(id, module) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-// Where a module shows, for the Modules page: "Standalone" (or
-// "Standalone · off") for a standalone one, whose `enabled` says whether it
-// is on; "On" or "Off" with one notch, else the notches that list it.
+// The Modules page's two lists: the catalog's modules that notches show,
+// or (`standalone`) the ones with a place of their own, in catalog order.
+function catalogPart(catalog, standalone) {
+  return Array.prototype.filter.call(catalog || [], function(m) {
+    return !!(m && m.standalone) === !!standalone
+  })
+}
+
+// Where a module shows, for the Modules page: "On" or "Off" for a
+// standalone one, whose `enabled` says whether it is on (its own list says
+// it is standalone); "On" or "Off" with one notch, else the notches that
+// list it.
 function moduleStatus(id, specs, standalone, enabled) {
-  if (standalone) return enabled === false ? "Standalone · off" : "Standalone"
+  if (standalone) return enabled === false ? "Off" : "On"
   specs = specs || []
   var where = []
   for (var i = 0; i < specs.length; i++)
