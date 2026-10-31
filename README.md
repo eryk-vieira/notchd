@@ -1,5 +1,7 @@
 # notchd
 
+![notchd in its four states: compact, peek, OSD and expanded](docs/images/hero.png)
+
 A dynamic notch for Wayland desktops, built with Quickshell. It hangs from the top edge of the focused screen and shows modules: media, OSD, script activities, or anything you write.
 
 It is a **notch framework, not a shell**. Modules show what the system is already doing; they never take over a system service. The notch is not a notification daemon, a launcher or a lock screen, so it sits on top of whatever desktop you already have.

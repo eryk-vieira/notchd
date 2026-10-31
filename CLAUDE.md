@@ -32,3 +32,6 @@ invariants that are easy to break, not a project tour. The tour is
 - The Omarchy shell does not hot-reload plugin QML: `make restart`.
 - `qs ipc call` reads an argument starting with `[` as a list; put a space before JSON arrays.
 - `pkill -f` on a pattern also found in your own command line kills your shell.
+- Offscreen renders (`make visual`, `make hero`) use Qt's software renderer: no shaders, so `ClippingRectangle` and effects draw nothing there. Give shader-only visuals a `GraphicsInfo.api === GraphicsInfo.Software` fallback (see `Art` in `core/modules/media.qml`); real users on software rendering hit the same thing.
+- Never capture the live desktop for docs: it shows the user's windows and media. Render offscreen with demo data (`make hero`).
+- Offscreen runs go through `scripts/isolated.sh` (private D-Bus, own `XDG_RUNTIME_DIR`, no display). A private bus sharing the real runtime dir once replaced the session's AT-SPI socket and broke accessibility until `systemctl --user restart at-spi-dbus-bus`.

@@ -10,12 +10,17 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 - Settings fields can be `boolean` or `note`, live on a `page`, and show a choice as picture cards (`display: "cards"`); hosts can add pages with `hostSettingsPages`.
 - Theme tokens derived from the host's colors (`muted`, `faint`, `line`, `hover`, `selected`, `surface`, `danger`, radii).
 - `make check`: Node tests, qmllint, plugin validation and offscreen visual scenarios.
+- README image of the notch in its four states, rendered from the real QML with `make hero`.
 
 ### Changed
 
 - The repository root is the Omarchy plugin (`manifest.json` at the root). Point `~/.config/omarchy/plugins/eryk.notchd` at the checkout instead of `hosts/omarchy`.
 - The standalone host is `shell.qml` at the repository root: run `qs -p <checkout>` instead of `qs -p hosts/standalone`.
 - Documentation split into README (users), `docs/` (reference), DEVELOPMENT.md and CLAUDE.md.
+
+### Fixed
+
+- Media artwork, and its placeholder, vanished entirely under Qt's software renderer; it now shows with square corners there.
 
 ### Removed
 

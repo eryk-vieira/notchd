@@ -12,7 +12,7 @@ LINT_FILES = shell.qml core/*.qml core/settings/*.qml core/settings/previews/*.q
 # Dev config for `make dev`, so it never touches ~/.config/notchd.
 DEV_CONFIG ?= $(CURDIR)/build/dev-config.json
 
-.PHONY: check test visual lint validate dev restart clean
+.PHONY: check test visual hero lint validate dev restart clean
 
 check: test lint validate visual
 
@@ -24,6 +24,12 @@ test:
 # warning, so it also proves the core loads.
 visual:
 	scripts/visual-test.sh
+
+# The README image, docs/images/hero.png: the real notch offscreen, with a
+# demo media player on a private D-Bus. Rerun after a visual change to the
+# notch and commit the image.
+hero:
+	scripts/hero.sh
 
 # --unqualified disable: delegates read outer ids by design.
 # The filtered line is a qmllint false positive: it ignores a qmldir without
