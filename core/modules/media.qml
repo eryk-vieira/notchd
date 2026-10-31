@@ -12,6 +12,13 @@ NotchModule {
   title: "Now playing"
   priority: 50
 
+  settings: [
+    { key: "equalizer", type: "choice", label: "Equalizer", default: "smooth",
+      help: "Smooth eases the bars 60 times a second, about 8 % of one CPU core while music plays. Light makes them jump about six times a second, about 1 %.",
+      options: [{ value: "smooth", label: "Smooth" }, { value: "light", label: "Light" }] }
+  ]
+  readonly property bool smoothEqualizer: media.setting("equalizer") !== "light"
+
   // Prefer whatever is playing; otherwise the first player with a track.
   readonly property var players: Mpris.players ? Mpris.players.values : []
   readonly property var player: {
@@ -53,6 +60,11 @@ NotchModule {
   onTrackKeyChanged: if (media.playing && media.trackTitle !== "") peekDelay.restart()
   Timer { id: peekDelay; interval: 300; onTriggered: media.requestPeek(3500) }
 
+  // Read from the player once a second while some notch is open; in
+  // between, `shownPosition` runs on from it at 60 fps while playing, so the
+  // progress bar glides without easing at the monitor's rate.
+  property double positionReadAt: 0
+  property real shownPosition: 0
   Timer {
     interval: 1000
     repeat: true
@@ -62,7 +74,15 @@ NotchModule {
       media.player.positionChanged()
       var v = Number(media.player.position)
       media.position = isFinite(v) && v > 0 ? v : 0
+      media.positionReadAt = Date.now()
+      media.shownPosition = media.position
     }
+  }
+  Timer {
+    interval: 16
+    repeat: true
+    running: media.playing && media.length > 0 && !!media.notch && media.notch.expanded
+    onTriggered: media.shownPosition = Math.min(media.length, media.position + (Date.now() - media.positionReadAt) / 1000)
   }
 
   function togglePlay() { if (player && (player.canTogglePlaying || player.canPlay || player.canPause)) player.togglePlaying() }
@@ -238,12 +258,10 @@ NotchModule {
             color: Qt.rgba(Theme.foreground.r, Theme.foreground.g, Theme.foreground.b, 0.15)
           }
           Rectangle {
-            width: parent.width * Math.max(0, Math.min(1, media.position / Math.max(1, media.length)))
+            width: parent.width * Math.max(0, Math.min(1, media.shownPosition / Math.max(1, media.length)))
             height: parent.height
             radius: height / 2
             color: Theme.foreground
-            // No easing: `position` ticks every second, and a 900 ms ease
-            // kept the window drawing frames nine tenths of the time.
           }
         }
         RowLayout {
@@ -323,23 +341,39 @@ NotchModule {
     }
   }
 
-  // A fake equalizer: bars jump while playing and rest low when paused.
-  // Fixed-size box so the bars moving never resize the notch. All bars step
-  // at once, without easing: a frame per step, about six a second. Eased
-  // bars were always moving, a frame on every refresh of the screen for as
-  // long as music played. Hidden (a notch concealed over a fullscreen app),
-  // it stops.
+  // A fake equalizer: bars wander while playing and settle low when paused.
+  // Fixed-size box so the bars moving never resize the notch. Smooth (the
+  // default): one timer eases every bar toward its target 60 times a
+  // second, with new targets about six times a second; a `Behavior` would
+  // run at the monitor's rate (160 Hz and up) for as long as music plays.
+  // Light (the `equalizer` setting): the bars jump to new levels about six
+  // times a second, a frame per jump. Hidden (a notch concealed over a
+  // fullscreen app), it stops.
   component Equalizer: Item {
     id: eq
     property real barHeight: Theme.space(14)
-    property var levels: [0.25, 0.25, 0.25, 0.25]
+    readonly property real rest: 0.2
+    property var levels: [rest, rest, rest, rest]
+    property var targets: [rest, rest, rest, rest]
+    property int ticks: 0
+    property bool settled: true
     implicitWidth: eqRow.implicitWidth
     implicitHeight: barHeight
+    function step() {
+      var smooth = media.smoothEqualizer
+      if (!media.playing) eq.targets = [eq.rest, eq.rest, eq.rest, eq.rest]
+      else if (!smooth || ++eq.ticks % 10 === 0)
+        eq.targets = eq.targets.map(function(v) { return !smooth || Math.random() < 0.6 ? 0.25 + Math.random() * 0.75 : v })
+      var t = eq.targets
+      // Smooth closes ~23 % of the gap per 16 ms step: a ~60 ms time constant.
+      eq.levels = eq.levels.map(function(v, i) { return smooth ? v + (t[i] - v) * 0.23 : t[i] })
+      eq.settled = !media.playing && eq.levels.every(function(v) { return Math.abs(v - eq.rest) < 0.01 })
+    }
     Timer {
-      interval: 160
+      interval: media.smoothEqualizer ? 16 : 160
       repeat: true
-      running: media.playing && eq.visible
-      onTriggered: eq.levels = eq.levels.map(function() { return 0.25 + Math.random() * 0.75 })
+      running: eq.visible && (media.playing || !eq.settled)
+      onTriggered: eq.step()
     }
     Row {
       id: eqRow
@@ -352,7 +386,7 @@ NotchModule {
           anchors.bottom: parent.bottom
           width: Theme.space(3)
           radius: width / 2
-          height: Math.max(width, eq.barHeight * (media.playing ? eq.levels[index] : 0.2))
+          height: Math.max(width, eq.barHeight * eq.levels[index])
           color: Theme.accent
         }
       }

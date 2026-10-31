@@ -41,7 +41,7 @@ A hanging notch covers the windows under it. `reserveSpace: true` keeps windows 
 
 | Id | Shows |
 |---|---|
-| `media` | what's playing over MPRIS: artwork, title, progress and controls; peeks on a new track |
+| `media` | what's playing over MPRIS: artwork, title, progress and controls; peeks on a new track. Its equalizer glides at 60 fps; `"media": { "equalizer": "light" }` (settings: General › Now playing › Equalizer) makes it jump about six times a second instead, for about 1 % of a CPU core rather than 8 % while music plays |
 | `activities` | whatever scripts push over IPC: a deploy, a build, a download (see [docs/ipc.md](docs/ipc.md#activities)) |
 | `resources` | CPU, memory and the disk holding `/`: a bar each, expanded, and their percentages in the closed notch. One that runs short (90 % or more; the CPU for about 10 s in a row) turns red and peeks once. `"resources": { "compact": "short" }` (settings: General › Resources › Closed notch) keeps them out of the closed notch until one runs short. Linux only. Not loaded by default: add it to `modules` |
 | `timer` | a countdown or a pomodoro, started from the expanded notch (5, 15, 25 min, Pomodoro) or with `timer 25m` over [IPC](docs/ipc.md#timer). The closed notch shows the time left; at the end it peeks, even over the open notch, and sends a desktop notification. A pomodoro runs its focus rounds and short breaks, then a long break, and stops. Settings: General › Timer (lengths, rounds, starting each phase on its own, the notification). Not loaded by default |
