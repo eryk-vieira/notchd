@@ -2,10 +2,14 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import "State.js" as State
+import "Position.js" as Position
 
 // Puts the notches on screen: a NotchWindow for every copy of every notch
 // (NotchService.copies), which places it and routes its pointer, plus the
-// space the closed notches keep clear of windows.
+// space the closed notches keep clear of windows. Notches on one edge of a
+// screen go side by side, never on each other (Position.pack): each as
+// near its offset as the others let it, and an open one hides those it
+// grows over.
 //
 // With reserveSpace on, an empty window per screen edge holds a layer-shell
 // exclusive zone as deep as the deepest closed notch there (ReservedSpace,
@@ -36,7 +40,21 @@ Item {
       barHeight: root.barHeight
       barHidden: root.barHidden
       layerNamespace: root.layerNamespace
+      readonly property var packed: root.packOf(modelData)
+      packShift: packed ? packed.shift : 0
+      covered: !!packed && packed.covered
     }
+  }
+
+  // ---------------------------------------------------------- side by side
+  // Between two notches: both shoulders, which flare past the card, and a
+  // little air.
+  readonly property real packGap: 2 * Theme.space(10) + Theme.space(8)
+  readonly property var packing: Position.pack(root.windows.map(function(w) { return w.packItem }), root.packGap)
+  function packOf(copy) {
+    var list = root.windows
+    for (var i = 0; i < list.length; i++) if (list[i].copy === copy) return root.packing[i] || null
+    return null
   }
 
   // ------------------------------------------------------- reserved space

@@ -34,6 +34,8 @@ A bar indicator shows `service.barNotch`, the one notch in bar style (none when 
 
 Puts the notches on screen: a `NotchWindow` per copy, the layer-shell overlay that places a `NotchCard` (the notch itself, which also renders offscreen) on the screen the copy names, on its edge, off the bar where they share one, and routes the pointer. It also moves the notch when it is dragged (`NotchCard` reports the drag, `Position.dragTarget` picks the edge and offset) and stores the drop as `position`. The pointer stays with the notch's window while the button is down, even over another screen, so a drag there is followed too: `Position.screenAt` finds the screen, a preview window (namespace `<layerNamespace>-drag`) shows the notch on it, and the drop names it as the home screen. A notch on every screen only takes the drop's edge and offset: all its copies move.
 
+Notches on one edge of a screen go side by side (`Position.pack`): each window reports its card's wanted middle and closed length (`packItem`), the surface packs them per screen edge, at least two shoulders and a little air apart, and hands each its `packShift` along the edge. An open card keeps its closed length there, so it opens from where it was; the closed ones it grows over get `covered` and hide until it closes.
+
 | Property | Meaning |
 |---|---|
 | `svc` | the service |

@@ -63,9 +63,51 @@ Scope {
 
   // Hidden in bar style at rest/compact; over a fullscreen app, or with no
   // screen on an allowed workspace, only peeks and the open notch show.
-  readonly property bool concealed: root.mode === "hidden"
+  readonly property bool hidden: root.mode === "hidden"
     || ((root.fullscreenOnScreen || root.offWorkspace) && (root.mode === "rest" || root.mode === "compact"))
+  // Also hidden while another notch on its edge is open over it (`covered`).
+  readonly property bool concealed: root.hidden || (root.covered && !root.cardOpen)
   readonly property bool pinned: !!root.copy && root.copy.pinned
+
+  // ------------------------------------------------------------ side by side
+  // Notches on one edge of a screen never sit on each other: NotchSurface
+  // packs them (Position.pack) from what each says here, and hands back how
+  // far along the edge to move (`packShift`) and whether an open one covers
+  // this one (`covered`).
+  property real packShift: 0
+  property bool covered: false
+  readonly property bool cardOpen: root.mode === "peek" || root.mode === "expanded"
+  readonly property var stretch: Position.stretch({
+    edge: card.edge, width: window.width, height: window.height, insets: root.insets, margin: card.margin
+  })
+  // Where its middle wants to be along the edge: the configured offset.
+  readonly property real wishCenter: root.stretch.start + root.shownPlacement.offset * (root.stretch.end - root.stretch.start)
+  // Its length along the edge while closed. Open, it keeps the closed one,
+  // so it opens from where it was and its neighbors stay put.
+  property real closedAlong: 0
+  function trackClosed() { if (!root.cardOpen && !card.swapping) root.closedAlong = card.along }
+  onCardOpenChanged: root.trackClosed()
+  Connections {
+    target: card
+    function onAlongChanged() { root.trackClosed() }
+  }
+  readonly property var packItem: ({
+    group: root.windowScreenName + "|" + card.edge,
+    center: root.wishCenter,
+    size: root.cardOpen ? root.closedAlong : card.along,
+    openSize: card.along,
+    start: root.stretch.start,
+    end: root.stretch.end,
+    open: root.cardOpen,
+    skip: root.hidden || !!root.dragPlacement || root.windowScreenName === ""
+  })
+  // The offset the card is placed at: the configured one, moved by the
+  // packing (never while dragged, when it follows the pointer).
+  readonly property real shownOffset: {
+    var span = root.stretch.end - root.stretch.start
+    if (root.dragPlacement || span <= 0) return root.shownPlacement.offset
+    return (root.wishCenter + root.packShift - root.stretch.start) / span
+  }
 
   // ------------------------------------------------------- reserved space
   ReservedSpace {
@@ -151,12 +193,13 @@ Scope {
       // Position.js has the rules; the shoulders stay on screen.
       readonly property real margin: card.shoulder + Theme.space(4)
       readonly property var spot: Position.place({
-        edge: card.edge, offset: root.shownPlacement.offset,
+        edge: card.edge, offset: root.shownOffset,
         width: window.width, height: window.height, cardWidth: card.width, cardHeight: card.height,
         insets: root.insets, margin: card.margin
       })
       x: card.spot.x
       y: card.spot.y
+      Component.onCompleted: root.trackClosed()
 
       onHoveredChanged: if (root.copy) root.copy.setPointer("notch", card.hovered, window.screenName)
 

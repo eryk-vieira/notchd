@@ -139,3 +139,99 @@ function screenAt(screens, x, y) {
   }
   return best
 }
+
+// The stretch of an edge the notch's middle may take (place's rules): its
+// two ends, { start, end }, in px along the edge. `s` as place.
+function stretch(s) {
+  var edge = isEdge(s.edge) ? s.edge : DEFAULT_EDGE
+  var insets = s.insets || {}
+  function inset(e) { return Math.max(0, Number(insets[e]) || 0) }
+  var margin = Math.max(0, Number(s.margin) || 0)
+  var vertical = isVertical(edge)
+  var length = vertical ? s.height : s.width
+  return {
+    start: (vertical ? inset("top") : inset("left")) + margin,
+    end: length - (vertical ? inset("bottom") : inset("right")) - margin
+  }
+}
+
+// Notches sharing an edge of a screen, side by side: none sits on another.
+// `items`, each { group, center, size, start, end, open, skip }: the group
+// ("<screen>|<edge>"), where its middle wants to be and its length along
+// the edge (closed: open ones give the size they had closed, so they open
+// from where they were), the stretch it must stay in (stretch), whether it
+// is open, and whether it takes no part (hidden, being dragged). In each
+// group, in order of `center` (ties: list order), notches at least `gap`
+// apart, each moved as little as it takes. Returns, per item, { shift } to
+// add to its place along the edge and { covered }: a closed notch an open
+// one (`openSize`) grows over, which should hide while it is open.
+function pack(items, gap) {
+  items = items || []
+  gap = Math.max(0, Number(gap) || 0)
+  var out = items.map(function() { return { shift: 0, covered: false } })
+  var groups = {}
+  for (var i = 0; i < items.length; i++) {
+    if (!items[i] || items[i].skip) continue
+    var g = String(items[i].group)
+    if (!groups[g]) groups[g] = []
+    groups[g].push(i)
+  }
+  Object.keys(groups).forEach(function(g) {
+    var order = groups[g].slice().sort(function(a, b) {
+      return items[a].center - items[b].center || a - b
+    })
+    // Blocks of notches touching each other: `rel` is each one's middle
+    // from the block's first, `pos` the first's middle.
+    var blocks = []
+    function want(block) {
+      var sum = 0
+      for (var k = 0; k < block.idx.length; k++) sum += items[block.idx[k]].center - block.rel[k]
+      var pos = sum / block.idx.length
+      var lo = -Infinity, hi = Infinity
+      for (var m = 0; m < block.idx.length; m++) {
+        var it = items[block.idx[m]]
+        lo = Math.max(lo, it.start + it.size / 2 - block.rel[m])
+        hi = Math.min(hi, it.end - it.size / 2 - block.rel[m])
+      }
+      block.pos = lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, pos))
+    }
+    function lastEnd(block) {
+      var k = block.idx.length - 1
+      return block.pos + block.rel[k] + items[block.idx[k]].size / 2
+    }
+    for (var n = 0; n < order.length; n++) {
+      var block = { idx: [order[n]], rel: [0], pos: 0 }
+      want(block)
+      blocks.push(block)
+      while (blocks.length > 1) {
+        var prev = blocks[blocks.length - 2]
+        var last = blocks[blocks.length - 1]
+        if (lastEnd(prev) + gap + items[last.idx[0]].size / 2 <= last.pos + 1e-9) break
+        var base = prev.rel[prev.rel.length - 1] + items[prev.idx[prev.idx.length - 1]].size / 2
+          + gap + items[last.idx[0]].size / 2
+        for (var q = 0; q < last.idx.length; q++) {
+          prev.idx.push(last.idx[q])
+          prev.rel.push(base + last.rel[q])
+        }
+        blocks.pop()
+        want(prev)
+      }
+    }
+    blocks.forEach(function(b) {
+      for (var k = 0; k < b.idx.length; k++)
+        out[b.idx[k]].shift = b.pos + b.rel[k] - items[b.idx[k]].center
+    })
+    // An open notch grows from where it was; the closed ones it reaches hide.
+    order.forEach(function(o) {
+      if (!items[o].open) return
+      var mid = items[o].center + out[o].shift
+      var half = Math.max(items[o].size, Number(items[o].openSize) || 0) / 2
+      order.forEach(function(c) {
+        if (c === o || items[c].open) return
+        var cm = items[c].center + out[c].shift
+        if (Math.abs(cm - mid) < half + items[c].size / 2 + gap) out[c].covered = true
+      })
+    })
+  })
+  return out
+}

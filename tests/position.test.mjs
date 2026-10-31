@@ -155,3 +155,52 @@ test('screenAt: the screen containing a desktop point, else the nearest', () => 
   assert.equal(Position.screenAt(screens, -50, 20), 'DP-1');
   assert.equal(Position.screenAt([], 1, 1), '');
 });
+
+const item = (center, size, extra = {}) => ({ group: 'DP-1|top', center, size, start: 0, end: 1000, ...extra });
+const at = (items, gap = 10) => plain(Position.pack(items, gap)).map((r, i) => items[i].center + r.shift);
+
+test('pack: notches apart from each other stay where they are', () => {
+  assert.deepEqual(at([item(200, 100), item(600, 100)]), [200, 600]);
+});
+
+// Asked for: two notches can't sit on top of each other. Closed, they go
+// side by side, each moved as little as it takes.
+test('pack: notches on one spot go side by side, around it', () => {
+  assert.deepEqual(at([item(500, 100), item(500, 100)]), [445, 555]);
+  // Partly over each other: both give way by half.
+  assert.deepEqual(at([item(500, 100), item(560, 100)]), [475, 585]);
+  // Three in a row, the middle one kept in place.
+  assert.deepEqual(at([item(400, 100), item(500, 100), item(600, 100)], 0), [400, 500, 600]);
+  assert.deepEqual(at([item(500, 100), item(500, 100), item(500, 100)], 0), [400, 500, 600]);
+});
+
+test('pack: a notch that grows pushes its neighbor along', () => {
+  // The first one's compact view got wider: it now reaches the second, and
+  // both give way by the same amount.
+  assert.deepEqual(at([item(500, 400), item(600, 100)]), [420, 680]);
+});
+
+test('pack: notches stay inside the edge, pushed back from its ends', () => {
+  assert.deepEqual(at([item(50, 100), item(60, 100)]), [50, 160]);
+  // The one that wanted 940 stays left of the one that wanted 950.
+  assert.deepEqual(at([item(950, 100), item(940, 100)]), [950, 840]);
+});
+
+test('pack: only notches on one screen edge push each other', () => {
+  assert.deepEqual(at([item(500, 100), item(500, 100, { group: 'DP-1|left' }), item(500, 100, { group: 'eDP-1|top' })]),
+                   [500, 500, 500]);
+  assert.deepEqual(at([item(500, 100), item(500, 100, { skip: true })]), [500, 500]);
+});
+
+test('pack: an open notch grows from where it was and hides the ones it reaches', () => {
+  const r = plain(Position.pack([item(300, 100, { open: true, openSize: 500 }), item(450, 100), item(800, 100)], 10));
+  assert.deepEqual(r.map((x) => x.shift), [0, 0, 0]);
+  assert.deepEqual(r.map((x) => x.covered), [false, true, false]);
+});
+
+test('stretch: the ends of the edge the middle of a notch may take', () => {
+  assert.deepEqual(plain(Position.stretch({ edge: 'top', width: 1000, height: 600, insets: { left: 40 }, margin: 14 })),
+                   { start: 54, end: 986 });
+  assert.deepEqual(plain(Position.stretch({ edge: 'left', width: 1000, height: 600, insets: { top: 30 }, margin: 14 })),
+                   { start: 44, end: 586 });
+});
