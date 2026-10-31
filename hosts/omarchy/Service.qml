@@ -18,6 +18,10 @@ NotchService {
   hostModules: ({
     osd: Qt.resolvedUrl("modules/osd.qml")
   })
+  hostSettingsSchema: [
+    { page: "appearance", section: "Theme", type: "note", label: "Follows your Omarchy theme",
+      help: "Colors, fonts and spacing come from the active Omarchy theme and change with it." }
+  ]
 
   // Omarchy's theme mapped onto the core's tokens; follows theme switches.
   QtObject {
@@ -25,6 +29,7 @@ NotchService {
     readonly property color foreground: Color.foreground
     readonly property color background: Color.background
     readonly property color accent: Color.accent
+    readonly property color danger: Color.urgent
     readonly property string fontFamily: Style.font.family
     readonly property int fontCaption: Style.font.caption
     readonly property int fontBodySmall: Style.font.bodySmall

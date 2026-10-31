@@ -6,7 +6,8 @@ import QtQuick
 // below (a host's own theme mapped onto these names) and everything else falls
 // back to the defaults here. Bindings on Theme follow the provider live.
 //
-//   foreground, background, accent        colors
+//   foreground, background, accent,
+//   danger                                 colors
 //   fontFamily                             font family name
 //   fontCaption, fontBodySmall, fontBody,
 //   fontHeading, fontDisplay               pixel sizes
@@ -25,6 +26,23 @@ QtObject {
   readonly property color foreground: pick("foreground", "#cacccc")
   readonly property color background: pick("background", "#101315")
   readonly property color accent: pick("accent", theme.foreground)
+  readonly property color danger: pick("danger", "#e06c75")
+
+  // Derived tones. Use these instead of ad-hoc alphas, so every surface
+  // (notch, modules, settings) shades the same way on any theme.
+  function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
+  function mix(a, b, t) {
+    return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1)
+  }
+  readonly property color muted: alpha(theme.foreground, 0.6)       // secondary text
+  readonly property color faint: alpha(theme.foreground, 0.35)      // disabled, hints
+  readonly property color line: alpha(theme.foreground, 0.14)       // borders, dividers
+  readonly property color hover: alpha(theme.foreground, 0.06)      // hover fill
+  readonly property color selected: alpha(theme.foreground, 0.10)   // selected fill
+  readonly property color surface: mix(theme.background, theme.foreground, 0.035) // raised panels
+
+  readonly property int radiusSmall: theme.space(6)
+  readonly property int radius: theme.space(10)
 
   readonly property real spacingScale: Math.max(0.1, Number(pick("spacingScale", 1)) || 1)
 

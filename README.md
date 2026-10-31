@@ -12,6 +12,7 @@ core/                 the framework: no desktop-specific code
   NotchSurface.qml    the overlay that draws the notch
   NotchModule.qml     base type for modules
   Theme.qml           visual tokens (singleton), fed by the host
+  settings/           the settings window and its controls
   *Compositor.qml     compositor adapters (Hyprland, generic)
   modules/            built-in modules: media, activities
 hosts/
@@ -51,6 +52,7 @@ Over a fullscreen app only peeks show.
 | `barStyleAvailable` | whether the host has a bar indicator for `compactStyle: "bar"` |
 | `defaultModules` | modules to load when the config lists none |
 | `hostSettingsSchema` | settings-window fields for the host's own config keys (see [Settings](#settings)) |
+| `hostSettingsPages` | extra settings-window pages, or new labels/icons for the core ones |
 
 `NotchSurface`:
 
@@ -61,7 +63,9 @@ Over a fullscreen app only peeks show.
 | `barHeight`, `barOnTop`, `barHidden` | the host's bar, so the notch hangs under it |
 | `layerNamespace` | layer-shell namespace |
 
-`Theme.provider`: an object with any of `foreground`, `background`, `accent`, `fontFamily`, `fontCaption`, `fontBodySmall`, `fontBody`, `fontHeading`, `fontDisplay` and `spacingScale`. Missing keys use defaults.
+`Theme.provider`: an object with any of `foreground`, `background`, `accent`, `danger`, `fontFamily`, `fontCaption`, `fontBodySmall`, `fontBody`, `fontHeading`, `fontDisplay` and `spacingScale`. Missing keys use defaults.
+
+From those the theme derives the tones everything else uses: `muted` (secondary text), `faint` (hints, disabled), `line` (borders, dividers), `hover` and `selected` (fills), `surface` (raised panels), plus `radiusSmall` and `radius`. Use these rather than ad-hoc alphas, so the notch, modules and settings shade alike on any theme.
 
 ## Config
 
@@ -80,17 +84,23 @@ Hosts add their own keys; the standalone host, for example, adds `topOffset` and
 
 The gear in the expanded notch (or the `settings` IPC method) opens a settings window. It is an ordinary toplevel window with a fixed size, so tiling compositors float it, and it takes keyboard input. Every change applies at once and is written back to the config file; there is no Apply button. Clearing a field removes the key, so it goes back to its default.
 
-The form is generated from `NotchService.settingsSchema`: the core's fields, then the host's `hostSettingsSchema`. Each field is an object:
+The window has a sidebar of pages (General, Modules, Appearance) and, on each page, its fields grouped by section: title and description on the left, the control on the right. A page without fields is hidden. Ctrl+Tab cycles pages; Esc closes.
+
+The window is generated from `NotchService.settingsSchema`: the core's fields, then the host's `hostSettingsSchema`. Each field is an object:
 
 | Key | |
 |---|---|
 | `key` | config key; dotted for nested objects (`theme.accent`) |
-| `type` | `choice`, `integer`, `string`, `color` or `modules` |
-| `label`, `help` | text shown next to and under the control |
-| `section` | heading the field sits under |
+| `type` | `choice`, `integer`, `boolean`, `string`, `color`, `modules` or `note` (text only, no key) |
+| `label`, `help` | title and description |
+| `page` | sidebar page id; `general` when absent |
+| `section` | heading the field sits under, within its page |
 | `default` | value shown while the key is absent |
-| `options` | `[{ value, label }]`, for `choice` |
+| `options` | `[{ value, label, preview }]`, for `choice` |
+| `display` | `"cards"` shows a `choice` as picture cards; each option's `preview` is the url of a QML file drawn on its card (its root takes `selected`) |
 | `min`, `max`, `step`, `unit` | for `integer` (a slider) |
+
+Pages come from `NotchService.settingsPages`: the core's, then the host's `hostSettingsPages`, each `{ id, label, icon }` with `icon` a Nerd Font code point. A host page with a core page's id replaces its label or icon.
 
 ## Writing a module
 

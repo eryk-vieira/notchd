@@ -22,14 +22,14 @@ ShellRoot {
     logName: "notchd"
     configPath: Quickshell.env("NOTCHD_CONFIG") || svc.defaultConfigPath
     hostSettingsSchema: [
-      { section: "Layout", key: "topOffset", type: "integer", label: "Top offset",
+      { page: "general", section: "Layout", key: "topOffset", type: "integer", label: "Top offset",
         default: 0, min: 0, max: 120, step: 1, unit: "px",
         help: "Gap above the notch, e.g. your bar's height." },
-      { section: "Appearance", key: "theme.foreground", type: "color", label: "Foreground", default: "#cacccc" },
-      { section: "Appearance", key: "theme.background", type: "color", label: "Background", default: "#101315" },
-      { section: "Appearance", key: "theme.accent", type: "color", label: "Accent",
+      { page: "appearance", section: "Colors", key: "theme.foreground", type: "color", label: "Foreground", default: "#cacccc" },
+      { page: "appearance", section: "Colors", key: "theme.background", type: "color", label: "Background", default: "#101315" },
+      { page: "appearance", section: "Colors", key: "theme.accent", type: "color", label: "Accent",
         help: "Defaults to the foreground color." },
-      { section: "Appearance", key: "theme.fontFamily", type: "string", label: "Font", default: "monospace",
+      { page: "appearance", section: "Text", key: "theme.fontFamily", type: "string", label: "Font", default: "monospace",
         help: "Use a Nerd Font so module icons render." }
     ]
   }

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "settings"
 
 // The notch's single source of truth: config, modules, mode, peeks, hover and
 // IPC. Every surface that shows the notch (NotchSurface, a host's bar
@@ -36,6 +37,9 @@ Item {
   // Extra settings-window fields for the host's own config keys, in the
   // same format as coreSettingsSchema below.
   property var hostSettingsSchema: []
+  // Extra settings-window pages, as corePages below. A page with a core
+  // page's id replaces its label or icon.
+  property var hostSettingsPages: []
 
   // -------------------------------------------------------------- built-ins
   readonly property var builtinModules: ({
@@ -169,33 +173,64 @@ Item {
   }
 
   // --------------------------------------------------------------- settings
+  // Sidebar pages of the settings window, in order. A page shows only when
+  // some field is on it.
+  //   id, label
+  //   icon       Nerd Font code point (or glyph string)
+  readonly property var corePages: [
+    { id: "general", label: "General", icon: 0xF0493 },     // nf-md-cog
+    { id: "modules", label: "Modules", icon: 0xF0A66 },     // nf-md-puzzle_outline
+    { id: "appearance", label: "Appearance", icon: 0xF0E0C } // nf-md-palette_outline
+  ]
+  readonly property var settingsPages: {
+    var out = svc.corePages.map(function(p) { return Object.assign({}, p) })
+    var host = svc.hostSettingsPages || []
+    for (var i = 0; i < host.length; i++) {
+      var at = out.findIndex(function(p) { return p.id === host[i].id })
+      if (at === -1) out.push(host[i])
+      else out[at] = Object.assign(out[at], host[i])
+    }
+    return out
+  }
+
   // The fields the settings window shows, built from these descriptors:
   //   key        config key (dotted for nested objects)
-  //   type       "choice" | "integer" | "string" | "color" | "modules"
+  //   type       "choice" | "integer" | "boolean" | "string" | "color"
+  //              | "modules" | "note" (text only, no key)
   //   label, help
-  //   section    heading the field sits under
+  //   page       sidebar page id (default "general")
+  //   section    heading the field sits under, within its page
   //   default    value shown while the key is absent
-  //   options    [{ value, label }] for "choice"
+  //   options    [{ value, label, preview }] for "choice"; `preview` is the
+  //              url of a QML file drawn on the card (root takes `selected`)
+  //   display    "cards" shows a choice as picture cards instead of segments
   //   min, max, step, unit   for "integer"
   readonly property var coreSettingsSchema: {
     var out = []
     if (svc.barStyleAvailable)
-      out.push({ section: "Behavior", key: "compactStyle", type: "choice", label: "Compact style",
-                 default: "bar",
-                 help: "Where the compact view lives when a module is active.",
-                 options: [{ value: "bar", label: "In the bar" }, { value: "notch", label: "Hanging notch" }] })
-    out.push({ section: "Behavior", key: "hoverOpenDelay", type: "integer", label: "Hover open delay",
+      out.push({ page: "general", section: "Layout", key: "compactStyle", type: "choice", display: "cards",
+                 label: "Compact style", default: "bar",
+                 help: "Where an active module lives when the notch is closed.",
+                 options: [
+                   { value: "bar", label: "In the bar", preview: Qt.resolvedUrl("settings/previews/CompactBar.qml") },
+                   { value: "notch", label: "Hanging notch", preview: Qt.resolvedUrl("settings/previews/CompactNotch.qml") }
+                 ] })
+    out.push({ page: "general", section: "Hover", key: "hoverOpenDelay", type: "integer", label: "Open delay",
+               help: "How long the pointer rests on the notch before it expands.",
                default: 120, min: 0, max: 1000, step: 10, unit: "ms" })
-    out.push({ section: "Behavior", key: "hoverCloseDelay", type: "integer", label: "Hover close delay",
+    out.push({ page: "general", section: "Hover", key: "hoverCloseDelay", type: "integer", label: "Close delay",
+               help: "How long it stays open after the pointer leaves.",
                default: 300, min: 0, max: 2000, step: 10, unit: "ms" })
-    out.push({ section: "Modules", key: "modules", type: "modules", label: "Enabled",
+    out.push({ page: "modules", key: "modules", type: "modules", label: "Loaded modules",
                default: svc.defaultModules,
-               help: "Checked modules load; order breaks ties in the expanded view." })
+               help: "Switched-on modules load. Their order breaks ties in the expanded view." })
     return out
   }
   readonly property var settingsSchema: svc.coreSettingsSchema.concat(svc.hostSettingsSchema || [])
 
   property bool settingsOpen: false
+  // The page the window shows; kept here so it survives closing the window.
+  property string settingsPage: "general"
   function openSettings() { svc.settingsOpen = true }
   function closeSettings() { svc.settingsOpen = false }
 
@@ -205,7 +240,7 @@ Item {
     id: settingsLoader
     readonly property var owner: svc
     active: svc.settingsOpen
-    NotchSettings { svc: settingsLoader.owner }
+    SettingsWindow { svc: settingsLoader.owner }
   }
 
   // --------------------------------------------------------------- modules

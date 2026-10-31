@@ -1,0 +1,112 @@
+import QtQuick
+import QtQuick.Layouts
+import ".."
+
+// One field of the schema: title and help on the left, the control on the
+// right. Controls that need room (cards, module lists) go under the text
+// instead. A `note` has no control at all.
+//
+// Every control takes `field` and `value` (the effective value: config or
+// default) and emits `edited(value)`; `undefined` removes the key.
+ColumnLayout {
+  id: row
+
+  property var field: ({})
+  property var svc: null
+
+  readonly property var stored: row.svc ? row.svc.configValue(row.field.key) : undefined
+  readonly property var value: row.stored === undefined ? row.field["default"] : row.stored
+  readonly property bool wide: row.field.type === "modules"
+    || (row.field.type === "choice" && row.field.display === "cards")
+
+  readonly property Component control: {
+    switch (row.field.type) {
+      case "choice": return row.field.display === "cards" ? cardsControl : segmentedControl
+      case "integer": return sliderControl
+      case "boolean": return toggleControl
+      case "string": return textControl
+      case "color": return textControl
+      case "modules": return modulesControl
+      case "note": return null
+      default: return unknownControl
+    }
+  }
+
+  function edit(v) { if (row.svc) row.svc.setConfigValue(row.field.key, v) }
+
+  spacing: Theme.space(12)
+
+  RowLayout {
+    Layout.fillWidth: true
+    spacing: Theme.space(24)
+
+    ColumnLayout {
+      Layout.fillWidth: true
+      Layout.alignment: Qt.AlignVCenter
+      spacing: Theme.space(3)
+      Label {
+        Layout.fillWidth: true
+        text: row.field.label || row.field.key || ""
+      }
+      Label {
+        Layout.fillWidth: true
+        visible: !!row.field.help
+        role: "help"
+        text: row.field.help || ""
+      }
+    }
+
+    Loader {
+      Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+      active: !row.wide && row.control !== null
+      sourceComponent: row.control
+    }
+  }
+
+  Loader {
+    Layout.fillWidth: true
+    active: row.wide
+    visible: active
+    sourceComponent: row.control
+  }
+
+  Component {
+    id: segmentedControl
+    SegmentedControl { field: row.field; value: row.value; onEdited: function(v) { row.edit(v) } }
+  }
+  Component {
+    id: cardsControl
+    CardChoice { field: row.field; value: row.value; onEdited: function(v) { row.edit(v) } }
+  }
+  Component {
+    id: sliderControl
+    SliderControl { field: row.field; value: row.value; onEdited: function(v) { row.edit(v) } }
+  }
+  Component {
+    id: toggleControl
+    Toggle { field: row.field; value: row.value; onEdited: function(v) { row.edit(v) } }
+  }
+  Component {
+    id: textControl
+    TextControl {
+      field: row.field; value: row.value; stored: row.stored
+      onEdited: function(v) { row.edit(v) }
+    }
+  }
+  Component {
+    id: modulesControl
+    ModuleList {
+      field: row.field; value: row.value; svc: row.svc
+      onEdited: function(v) { row.edit(v) }
+    }
+  }
+  Component {
+    id: unknownControl
+    Label {
+      role: "help"
+      wrapMode: Text.NoWrap
+      text: "unsupported field type: " + row.field.type
+      color: Theme.danger
+    }
+  }
+}
