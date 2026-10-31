@@ -95,8 +95,8 @@ Item {
     path: svc.configPath
     watchChanges: true
     printErrors: false
-    onLoaded: { missingConfigRetry.stop(); svc.loadConfig(text()) }
-    onLoadFailed: missingConfigRetry.start()
+    onLoaded: { missingConfigRetry.stop(); svc.loadConfig(text()); svc.configResolved = true }
+    onLoadFailed: { missingConfigRetry.start(); svc.configResolved = true }
     onFileChanged: reload()
     onSaveFailed: function(error) { console.warn(svc.logName + ": could not write " + svc.configPath + ": " + error) }
     // A file that didn't exist when the view loaded isn't watched yet; a
@@ -210,6 +210,9 @@ Item {
 
   // --------------------------------------------------------------- modules
   property var modules: []
+  // Modules load once the config is read (or known to be missing), so they
+  // are not created from the defaults and then again from the config.
+  property bool configResolved: false
 
   function rebuildModules() {
     var out = []
@@ -228,7 +231,7 @@ Item {
 
   Repeater {
     id: moduleLoaders
-    model: svc.moduleIds
+    model: svc.configResolved ? svc.moduleIds : []
     delegate: Loader {
       required property string modelData
       source: svc.moduleUrl(modelData)
