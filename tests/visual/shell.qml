@@ -34,8 +34,8 @@ ShellRoot {
   ]
 
   // Each scenario: the page, the theme, whether the host has a bar and its
-  // extra fields, config keys to set and whether to scroll the page to its
-  // end. Or, with `edge`, the notch on
+  // extra fields, config keys to set, the notch the window edits and whether
+  // to scroll the page to its end. Or, with `edge`, the notch on
   // that edge instead of the settings window.
   readonly property var scenarios: [
     { name: "general-dark", page: "general", theme: root.dark, bar: true, fields: root.omarchyFields },
@@ -44,6 +44,12 @@ ShellRoot {
     { name: "appearance-omarchy-dark", page: "appearance", theme: root.dark, bar: true, fields: root.omarchyFields },
     { name: "general-notch-dark", page: "general", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { compactStyle: "notch", position: { edge: "left", offset: 0.3 } }, scrollTo: "end" },
+    { name: "general-notches-dark", page: "general", theme: root.dark, bar: true, fields: root.omarchyFields,
+      config: { notches: [{}, { id: "jobs", modules: ["activities"], position: { edge: "bottom", screen: "all" } }] },
+      notch: 1 },
+    { name: "modules-notches-light", page: "modules", theme: root.light, bar: true, fields: root.omarchyFields,
+      config: { notches: [{}, { id: "jobs", modules: ["activities"], position: { edge: "bottom" } }] },
+      notch: 1 },
     { name: "general-standalone-dark", page: "general", theme: root.dark, bar: false, fields: root.standaloneFields },
     { name: "appearance-standalone-light", page: "appearance", theme: root.light, bar: false, fields: root.standaloneFields },
     { name: "edge-top", edge: "top", theme: root.dark },
@@ -133,11 +139,11 @@ ShellRoot {
     }
     NotchCard {
       id: mockCard
-      svc: mock.svc
+      notch: mock.svc ? mock.svc.firstCopy : null
       maxWidth: mock.width - Theme.space(24)
       maxHeight: mock.height - Theme.space(24)
       readonly property var spot: Position.place({
-        edge: mockCard.edge, offset: mock.svc ? mock.svc.placement.offset : 0.5,
+        edge: mockCard.edge, offset: mockCard.notch ? mockCard.notch.placement.offset : 0.5,
         width: mock.width, height: mock.height, cardWidth: mockCard.width, cardHeight: mockCard.height,
         insets: Position.insets("top", mock.barHeight, true), margin: mockCard.shoulder + Theme.space(4)
       })
@@ -174,6 +180,8 @@ ShellRoot {
     var cfg = root.scenario.config || {}
     svc.setConfigValue("compactStyle", cfg.compactStyle)
     svc.setConfigValue("position", cfg.position)
+    svc.setConfigValue("notches", cfg.notches)
+    svc.settingsNotch = root.scenario.notch || 0
     for (var i = 0; i < root.demoServices.length; i++)
       root.demoServices[i].setConfigValue("position", root.scenario.edge ? { edge: root.scenario.edge } : undefined)
     grabTimer.interval = root.scenario.edge ? 1200 : 400
@@ -198,8 +206,8 @@ ShellRoot {
   Timer {
     id: scrollTimer
     interval: 200
-    onTriggered: if (root.scenario && root.scenario.scrollTo === "end")
-      win.pageView.contentY = Math.max(0, win.pageView.contentHeight - win.pageView.height)
+    onTriggered: if (root.scenario) win.pageView.contentY = root.scenario.scrollTo === "end"
+      ? Math.max(0, win.pageView.contentHeight - win.pageView.height) : 0
   }
   Timer { id: quitTimer; interval: 100; onTriggered: Qt.quit() }
 }

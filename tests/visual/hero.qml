@@ -109,7 +109,7 @@ ShellRoot {
     }
 
     NotchCard {
-      svc: screen.svc
+      notch: screen.svc ? screen.svc.firstCopy : null
       maxWidth: screen.width - Theme.space(24)
       x: Math.round((screen.width - width) / 2)
       y: screen.barHeight

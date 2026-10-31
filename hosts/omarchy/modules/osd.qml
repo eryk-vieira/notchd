@@ -74,7 +74,7 @@ NotchModule {
     target: "osd"
     function show(payloadJson: string): string { osd.show(payloadJson); return "ok" }
     function close(): string { osd.dismissPeek(); return "ok" }
-    function state(): string { return osd.notch && osd.notch.peekModule === osd ? "open" : "closed" }
+    function state(): string { return osd.notch && osd.notch.peeking(osd) ? "open" : "closed" }
     function ping(): string { return "ok" }
   }
 

@@ -9,7 +9,7 @@ No symlinks: `omarchy plugin validate` rejects any inside the plugin folder.
 
 ## NotchService
 
-The single source of truth: config, modules, mode, peeks, hover, IPC.
+The single source of truth: config, modules, the notches and IPC. It makes a `Notch` per entry of the config's `notches` (one, from the top-level keys, without a list): its modules, compact style, position, workspaces. Each notch shows as one or more `NotchCopy`: one that moves (following focus, or kept on its home screen), or one per screen with `position.screen` `"all"` and in bar style. A copy holds the state the pointer and peeks change (hover, pin, peek, drag) and so its own mode.
 
 | Property | Meaning |
 |---|---|
@@ -19,25 +19,27 @@ The single source of truth: config, modules, mode, peeks, hover, IPC.
 | `hostModules` | `{ id: url }` of modules the host ships; they win over built-ins |
 | `barStyleAvailable` | whether the host has a bar indicator for `compactStyle: "bar"` |
 | `barEdge` | the screen edge the host's bar is on (`"top"`, `"bottom"`, `"left"`, `"right"`); in `"bar"` style the notch hangs from the middle of it |
-| `compositor` | a compositor adapter; the surface uses it unless given its own, and the `workspaces` setting needs one that knows workspaces |
+| `compositor` | a compositor adapter: the focused screen, fullscreen windows and workspaces; the `workspaces` setting needs one that knows workspaces |
+| `screens` | the screens a notch can be on; Quickshell's (tests give their own) |
 | `defaultModules` | modules to load when the config lists none |
 | `hostSettingsSchema` | settings-window fields for the host's own config keys (see [settings.md](settings.md)) |
 | `hostSettingsPages` | extra settings-window pages, or new labels/icons for the core ones |
 
-A host reads its own config keys from `service.config`. `service.edge` and `service.vertical` say where the notch is (`Position.js` has the rules). A bar indicator asks `service.showsOn(screen)` whether the closed notch belongs on its monitor's workspace.
+A host reads its own config keys from `service.config`. `service.notches` lists the notches (`notchById(id)` finds one) and `service.copies` every copy of every notch. Each notch has `edge`, `vertical` and `placement` (`Position.js` has the rules) and `showsOn(screen)`, whether its closed notch belongs on that screen's workspace.
+
+A bar indicator shows `service.barNotch`, the one notch in bar style (none when the host has no bar indicator, or every notch hangs). That notch has a copy per screen; the indicator reports the pointer to the copy on its own monitor (`barNotch.copyOn(screenName)`, then `setPointer(source, inside, screenName)` and `togglePinned(screenName)`).
 
 ## NotchSurface
 
-The layer-shell overlay that puts the notch on screen: it picks the screen, places a `NotchCard` (the notch itself, which also renders offscreen) on its edge, off the bar where they share one, and routes the pointer. It also moves the notch when it is dragged (`NotchCard` reports the drag, `Position.dragTarget` picks the edge and offset) and stores the drop as `position`. The pointer stays with the notch's window while the button is down, even over another screen, so a drag there is followed too: `Position.screenAt` finds the screen, a preview window (namespace `<layerNamespace>-drag`) shows the notch on it, and the drop names it as the home screen.
+Puts the notches on screen: a `NotchWindow` per copy, the layer-shell overlay that places a `NotchCard` (the notch itself, which also renders offscreen) on the screen the copy names, on its edge, off the bar where they share one, and routes the pointer. It also moves the notch when it is dragged (`NotchCard` reports the drag, `Position.dragTarget` picks the edge and offset) and stores the drop as `position`. The pointer stays with the notch's window while the button is down, even over another screen, so a drag there is followed too: `Position.screenAt` finds the screen, a preview window (namespace `<layerNamespace>-drag`) shows the notch on it, and the drop names it as the home screen. A notch on every screen only takes the drop's edge and offset: all its copies move.
 
 | Property | Meaning |
 |---|---|
 | `svc` | the service |
-| `compositor` | a compositor adapter (see `core/GenericCompositor.qml` for the contract); defaults to the service's |
 | `barHeight`, `barHidden` | the host's bar (its thickness, 0 for none), so the notch hangs off it where they share an edge and keeps clear of it elsewhere; its edge is the service's `barEdge` |
 | `layerNamespace` | layer-shell namespace |
 
-With the config's `reserveSpace` on (and `compactStyle` `"notch"`), it also maps one empty window per screen, namespace `<layerNamespace>-reserve`, holding an exclusive zone on the notch's edge, as deep as the closed notch (`ReservedSpace.qml`: the rest lip, or the deepest compact view seen while a module is active; it grows at once and shrinks once the notch has collapsed, 400 ms later). It sits on the overlay layer, so the compositor stacks it inside the bar's own zone; a host bar needs a normal exclusive zone for the strip to land where the notch hangs. Moving the notch to another edge replaces these windows: a mapped layer surface keeps its first anchors.
+With the config's `reserveSpace` on (and `compactStyle` `"notch"`), it also maps one empty window per screen edge a notch keeps clear, namespace `<layerNamespace>-reserve`, holding an exclusive zone as deep as the deepest closed notch on that edge (`State.reserveZones`: notches sharing an edge don't add up). Each copy's depth comes from `ReservedSpace.qml`: the rest lip, or the deepest compact view seen while a module is active; it grows at once and shrinks once the notch has collapsed, 400 ms later. It sits on the overlay layer, so the compositor stacks it inside the bar's own zone; a host bar needs a normal exclusive zone for the strip to land where the notch hangs. Moving the notch to another edge replaces these windows: a mapped layer surface keeps its first anchors.
 
 Give the service and the adapter ids that differ from these property names (`service`, `compositorLoader`): `svc: svc` inside the surface reads as the surface's own property.
 

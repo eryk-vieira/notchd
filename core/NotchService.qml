@@ -4,11 +4,11 @@ import Quickshell.Io
 import "settings"
 import "Config.js" as Config
 import "State.js" as State
-import "Position.js" as Position
 import "settings/Settings.js" as Settings
 
-// The notch's single source of truth: config, modules, mode, peeks, hover and
-// IPC. Every surface that shows the notch (NotchSurface, a host's bar
+// The notches' source of truth: config, modules, the notches (Notch, one per
+// entry of the config's `notches`, each shown as one or more NotchCopy) and
+// IPC. Every surface that shows a notch (NotchSurface, a host's bar
 // indicator) reads it; modules see it as `notch`.
 //
 // It knows nothing about the desktop it runs in. A host instantiates it and
@@ -39,10 +39,13 @@ Item {
   property string barEdge: "top"
   // Prefix for log lines.
   property string logName: svc.ipcTarget
-  // A compositor adapter (HyprlandCompositor, GenericCompositor, ...): which
-  // workspace each screen shows, for the `workspaces` setting. NotchSurface
-  // uses it too unless given its own.
+  // A compositor adapter (HyprlandCompositor, GenericCompositor, ...): the
+  // focused screen, fullscreen windows and which workspace each screen
+  // shows, for the `workspaces` setting.
   property var compositor: null
+  // The screens a notch can be on (anything with a `name`): Quickshell's.
+  // Tests give their own, to have more than one.
+  property var screens: Quickshell.screens || []
   // Modules to load when the config doesn't list any.
   property var defaultModules: ["media", "activities"]
   // Extra settings-window fields for the host's own config keys, in the
@@ -75,51 +78,32 @@ Item {
   // ---------------------------------------------------------------- config
   // The parsed config, so hosts can read their own keys from it.
   property var config: ({})
-  property var moduleIds: svc.defaultModules
   property int hoverOpenDelay: Config.DEFAULTS.hoverOpenDelay
   property int hoverCloseDelay: Config.DEFAULTS.hoverCloseDelay
-  // Where the compact state lives: "bar" (in the host's bar indicator; the
-  // notch only drops out to peek or expand) or "notch" (hanging from its
-  // edge all the time).
-  property string configuredStyle: Config.DEFAULTS.compactStyle
-  readonly property string compactStyle: svc.barStyleAvailable && svc.configuredStyle === "bar" ? "bar" : "notch"
-  // Keep windows out of the strip a closed notch hangs into (compactStyle
-  // "notch" only); NotchSurface reserves it.
-  property bool reserveSpace: Config.DEFAULTS.reserveSpace
-  // Workspaces the closed notch hangs on (ids or names); null: every one.
-  property var workspaces: null
-  // The configured position, { edge, offset } (Position.js).
-  property var position: Position.resolve(undefined)
-  // Where the notch is: bar style locks it to the middle of the bar.
-  readonly property var placement: Position.effective(svc.position, svc.compactStyle, svc.barEdge)
-  readonly property string edge: svc.placement.edge
-  readonly property bool vertical: Position.isVertical(svc.edge)
-  // Whether the notch can be dragged to another edge; never in bar style,
-  // where it belongs to the bar.
-  property bool draggable: Config.DEFAULTS.draggable
-  readonly property bool canDrag: svc.draggable && svc.compactStyle === "notch"
+  // Every notch, resolved (Config.notches), and their ids.
+  property var notchSpecs: Config.notches({}, svc.defaultModules)
+  property var notchIds: svc.notchSpecs.map(function(n) { return n.id })
+  // Every module some notch shows: the ones to load.
+  property var moduleIds: Config.moduleUnion(svc.notchSpecs)
 
-  // Whether the closed notch hangs on `screen`, by the workspace it shows.
-  // Bindings that call it follow workspace switches.
-  function showsOn(screen) {
-    var ws = svc.compositor && screen ? svc.compositor.activeWorkspace(screen) : null
-    return State.workspaceAllowed(svc.workspaces, ws)
-  }
+  function sameList(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
 
   // Keys missing from the config fall back to their defaults, so deleting a
-  // key in the file (or the settings window) resets it. Config.resolve has
-  // the rules.
+  // key in the file (or the settings window) resets it. Config.resolve and
+  // Config.notches have the rules. The id and module lists are only
+  // replaced when they change: a new list would make every notch and module
+  // again, losing what they show.
   function applyConfig(cfg) {
-    var r = Config.resolve(cfg, svc.defaultModules)
+    var r = Config.resolve(cfg)
+    var specs = Config.notches(cfg, svc.defaultModules)
     svc.config = cfg
-    svc.moduleIds = r.moduleIds
     svc.hoverOpenDelay = r.hoverOpenDelay
     svc.hoverCloseDelay = r.hoverCloseDelay
-    svc.configuredStyle = r.compactStyle
-    svc.reserveSpace = r.reserveSpace
-    svc.workspaces = r.workspaces
-    svc.position = Position.resolve(cfg.position)
-    svc.draggable = r.draggable
+    svc.notchSpecs = specs
+    var ids = specs.map(function(n) { return n.id })
+    if (!svc.sameList(ids, svc.notchIds)) svc.notchIds = ids
+    var modules = Config.moduleUnion(specs)
+    if (!svc.sameList(modules, svc.moduleIds)) svc.moduleIds = modules
   }
 
   function loadConfig(text) {
@@ -161,7 +145,12 @@ Item {
   // doesn't write on every step. `undefined` removes the key (back to its
   // default); emptied parent objects are removed too.
   function setConfigValue(key, value) {
-    svc.applyConfig(Config.withValue(svc.config, key, value))
+    svc.replaceConfig(Config.withValue(svc.config, key, value))
+  }
+
+  // The whole config at once, applied and then written.
+  function replaceConfig(cfg) {
+    svc.applyConfig(cfg)
     saveTimer.restart()
   }
 
@@ -198,7 +187,8 @@ Item {
   // The fields the settings window shows, built from these descriptors:
   //   key        config key (dotted for nested objects)
   //   type       "choice" | "integer" | "boolean" | "string" | "color"
-  //              | "modules" | "workspaces" | "note" (text only, no key)
+  //              | "modules" | "workspaces" | "notches" (the notch picker)
+  //              | "note" (text only, no key)
   //   label, help
   //   page       sidebar page id (default "general")
   //   section    heading the field sits under, within its page
@@ -207,60 +197,96 @@ Item {
   //              url of a QML file drawn on the card (root takes `selected`)
   //   display    "cards" shows a choice as picture cards instead of segments
   //   min, max, step, unit   for "integer"
+  //
+  // A notch's own keys are those of the notch the window edits
+  // (settingsNotch): in a list, "notches.<index>.<key>", whose default is the
+  // top-level key it inherits.
   readonly property var coreSettingsSchema: {
     var out = []
-    if (svc.barStyleAvailable)
-      out.push({ page: "general", section: "Layout", key: "compactStyle", type: "choice", display: "cards",
-                 label: "Compact style", default: Config.DEFAULTS.compactStyle,
-                 help: "Where an active module lives when the notch is closed.",
+    var n = svc.settingsNotchObject
+    var prefix = n && n.spec ? n.spec.prefix : ""
+    function key(k) { return prefix + k }
+    function inherited(k, fallback) {
+      if (prefix === "") return fallback
+      var v = Config.valueAt(svc.config, k)
+      return v === undefined ? fallback : v
+    }
+    var style = n ? n.compactStyle : "notch"
+    var several = svc.notches.length > 1
+
+    out.push({ page: "general", section: "Notch", key: "notches", type: "notches", label: "Notches",
+               help: several ? "Pick the notch to set up here and on the Modules page. Each has its own modules and place."
+                             : "Add a notch to show other modules somewhere else, each with its own place." })
+    if (prefix !== "")
+      out.push({ page: "general", section: "Notch", key: key("id"), type: "string", label: "Name",
+                 default: Config.defaultNotchId(n.index),
+                 help: "What IPC calls it: openNotch, closeNotch and toggleNotch take it." })
+    // The bar holds one notch's compact state; another notch can't pick it
+    // until that one hangs.
+    var barOwner = svc.barNotch
+    if (svc.barStyleAvailable && barOwner && n && barOwner !== n) {
+      out.push({ page: "general", section: "Layout", type: "note", label: "Compact style: hanging",
+                 help: "The bar holds the compact state of " + barOwner.notchId + ", so this notch hangs from its edge. Set " + barOwner.notchId + " to the hanging notch to give the bar to this one." })
+    } else if (svc.barStyleAvailable) {
+      out.push({ page: "general", section: "Layout", key: key("compactStyle"), type: "choice", display: "cards",
+                 label: "Compact style", default: inherited("compactStyle", Config.DEFAULTS.compactStyle),
+                 help: several ? "Where an active module lives when the notch is closed. The bar holds one notch at a time."
+                               : "Where an active module lives when the notch is closed.",
                  options: [
                    { value: "bar", label: "In the bar", preview: Qt.resolvedUrl("settings/previews/CompactBar.qml") },
                    { value: "notch", label: "Hanging notch", preview: Qt.resolvedUrl("settings/previews/CompactNotch.qml") }
                  ] })
+    }
     // Only a notch that hangs below the edge while closed has a strip to keep.
-    if (svc.compactStyle === "notch")
-      out.push({ page: "general", section: "Layout", key: "reserveSpace", type: "boolean",
-                 label: "Keep windows clear", default: Config.DEFAULTS.reserveSpace,
+    if (style === "notch")
+      out.push({ page: "general", section: "Layout", key: key("reserveSpace"), type: "boolean",
+                 label: "Keep windows clear", default: inherited("reserveSpace", Config.DEFAULTS.reserveSpace),
                  help: "Windows keep clear of the closed notch instead of going under it, along its whole edge: a sliver at rest, more while a module is active. Peeks and the open notch still cover them." })
-    if (svc.compactStyle === "notch") {
-      out.push({ page: "general", section: "Position", key: "position.edge", type: "choice", display: "cards",
-                 label: "Edge", default: "top",
+    if (style === "notch") {
+      out.push({ page: "general", section: "Position", key: key("position.edge"), type: "choice", display: "cards",
+                 label: "Edge", default: inherited("position.edge", "top"),
                  help: "The screen edge the notch hangs from. On a side edge, an active module without a vertical view shows a dot.",
                  options: ["top", "bottom", "left", "right"].map(function(e) {
                    return { value: e, label: e.charAt(0).toUpperCase() + e.slice(1),
                             preview: Qt.resolvedUrl("settings/previews/Edge.qml") }
                  }) })
-      out.push({ page: "general", section: "Position", key: "position.offset", type: "number", display: "percent",
-                 label: "Along the edge", default: 0.5, min: 0, max: 1, step: 0.01,
+      out.push({ page: "general", section: "Position", key: key("position.offset"), type: "number", display: "percent",
+                 label: "Along the edge", default: inherited("position.offset", 0.5), min: 0, max: 1, step: 0.01,
                  help: "Where on the edge: 0 % is its left (or top) end, 50 % the middle." })
-      var screens = Quickshell.screens || []
+      var screens = svc.screens
       if (screens.length > 1)
-        out.push({ page: "general", section: "Position", key: "position.screen", type: "choice",
-                   label: "Screen", default: "",
-                   help: "Where the closed notch stays. Following focus, it moves to the screen you work on; peeks and the open notch always do.",
-                   options: [{ value: "", label: "Follow focus" }].concat(screens.map(function(s) {
+        out.push({ page: "general", section: "Position", key: key("position.screen"), type: "choice",
+                   label: "Screen", default: inherited("position.screen", ""),
+                   help: "Where the notch stays. Following focus, it moves to the screen you work on, and its peeks show there. On a screen of its own, it peeks there too. On every screen, each screen has its own copy, and a peek shows on the focused one.",
+                   options: [{ value: "", label: "Follow focus" }, { value: "all", label: "Every screen" }].concat(screens.map(function(s) {
                      return { value: s.name, label: s.name }
                    })) })
-      out.push({ page: "general", section: "Position", key: "draggable", type: "boolean",
-                 label: "Drag to move", default: Config.DEFAULTS.draggable,
+      out.push({ page: "general", section: "Position", key: key("draggable"), type: "boolean",
+                 label: "Drag to move", default: inherited("draggable", Config.DEFAULTS.draggable),
                  help: "Hold the notch for a moment, then drag it to any edge of the screen; it snaps to the nearest one, and to the middle when close to it. A quick click only pins it." })
     } else {
       out.push({ page: "general", section: "Position", type: "note", label: "Follows the bar",
-                 help: "With the compact state in the bar, the notch drops out of the middle of the bar. Pick the hanging notch to place it on any edge." })
+                 help: "With the compact state in the bar, the notch drops out of the middle of the bar, on every screen. Pick the hanging notch to place it on any edge." })
     }
     if (svc.compositor && svc.compositor.supportsWorkspaces)
-      out.push({ page: "general", section: "Layout", key: "workspaces", type: "workspaces",
-                 label: "Workspaces",
+      out.push({ page: "general", section: "Layout", key: key("workspaces"), type: "workspaces",
+                 label: "Workspaces", default: inherited("workspaces", undefined),
                  help: "Where the closed notch (or its bar indicator) shows; none picked means every workspace. Peeks and the open notch show on any." })
     out.push({ page: "general", section: "Hover", key: "hoverOpenDelay", type: "integer", label: "Open delay",
-               help: "How long the pointer rests on the notch before it expands.",
+               help: several ? "How long the pointer rests on a notch before it expands. For every notch."
+                             : "How long the pointer rests on the notch before it expands.",
                default: Config.DEFAULTS.hoverOpenDelay, min: 0, max: 1000, step: 10, unit: "ms" })
     out.push({ page: "general", section: "Hover", key: "hoverCloseDelay", type: "integer", label: "Close delay",
-               help: "How long it stays open after the pointer leaves.",
+               help: several ? "How long it stays open after the pointer leaves. For every notch."
+                             : "How long it stays open after the pointer leaves.",
                default: Config.DEFAULTS.hoverCloseDelay, min: 0, max: 2000, step: 10, unit: "ms" })
-    out.push({ page: "modules", key: "modules", type: "modules", label: "Loaded modules",
-               default: svc.defaultModules,
-               help: "Switched-on modules load. Their order breaks ties in the expanded view." })
+    if (several)
+      out.push({ page: "modules", section: "Notch", key: "notches", type: "notches", label: "Notches",
+                 help: "Pick the notch whose modules to set." })
+    out.push({ page: "modules", section: several ? "Modules" : "", key: key("modules"), type: "modules", label: "Loaded modules",
+               default: inherited("modules", svc.defaultModules),
+               help: several ? "What this notch shows. A module may show in several notches. Their order breaks ties in the expanded view."
+                             : "Switched-on modules load. Their order breaks ties in the expanded view." })
     return out
   }
   readonly property var settingsSchema: svc.coreSettingsSchema.concat(svc.hostSettingsSchema || [])
@@ -268,7 +294,15 @@ Item {
   property bool settingsOpen: false
   // The page the window shows; kept here so it survives closing the window.
   property string settingsPage: "general"
-  function openSettings() { svc.settingsOpen = true }
+  // The notch the window edits, by index.
+  property int settingsNotch: 0
+  readonly property var settingsNotchObject: svc.notches.length > 0
+    ? svc.notches[Math.max(0, Math.min(svc.settingsNotch, svc.notches.length - 1))] : null
+  // `index`: the notch to edit, if given.
+  function openSettings(index) {
+    if (typeof index === "number") svc.settingsNotch = index
+    svc.settingsOpen = true
+  }
   function closeSettings() { svc.settingsOpen = false }
 
   // `svc: svc` would bind the window's own property to itself (the property
@@ -279,6 +313,94 @@ Item {
     active: svc.settingsOpen
     SettingsWindow { svc: settingsLoader.owner }
   }
+
+  // --------------------------------------------------------------- notches
+  function notchSpec(id) {
+    for (var i = 0; i < svc.notchSpecs.length; i++)
+      if (svc.notchSpecs[i].id === id) return svc.notchSpecs[i]
+    return null
+  }
+
+  // The compact style of the notch at `index`: only one gets the bar.
+  readonly property var compactStyles: State.compactStyles(
+    svc.notchSpecs.map(function(n) { return n.compactStyle }), svc.barStyleAvailable)
+  function compactStyleAt(index) { return svc.compactStyles[index] || "notch" }
+
+  // `notch: svc` would bind the notch's own property to itself (the property
+  // name shadows the id), so the reference goes through `owner`.
+  Variants {
+    id: notchVariants
+    readonly property var owner: svc
+    model: svc.notchIds
+    Notch {
+      required property var modelData
+      svc: notchVariants.owner
+      notchId: modelData
+    }
+  }
+  // The notches, in config order.
+  readonly property var notches: {
+    var list = notchVariants.instances.slice()
+    list.sort(function(a, b) { return a.index - b.index })
+    return list
+  }
+  // Every copy of every notch: what NotchSurface puts on screen.
+  readonly property var copies: {
+    var out = []
+    for (var i = 0; i < svc.notches.length; i++) out = out.concat(svc.notches[i].copies)
+    return out
+  }
+  // The first notch's first copy: what a single-notch view (the visual
+  // tests, the README image) draws.
+  readonly property var firstCopy: svc.copies.length > 0 ? svc.copies[0] : null
+  // The notch whose compact state the host's bar holds, if any.
+  readonly property var barNotch: {
+    for (var i = 0; i < svc.notches.length; i++)
+      if (svc.notches[i].compactStyle === "bar") return svc.notches[i]
+    return null
+  }
+
+  function notchById(id) {
+    for (var i = 0; i < svc.notches.length; i++)
+      if (svc.notches[i].notchId === id) return svc.notches[i]
+    return null
+  }
+
+  // A new notch in the config, off the edges the others hang from; and
+  // taking one out (Config.withNotchAdded / withoutNotch). Returns the new
+  // notch's index.
+  function addNotch() {
+    var used = svc.notches.map(function(n) { return n.edge })
+    var edges = ["bottom", "left", "right", "top"].filter(function(e) { return used.indexOf(e) === -1 })
+    var entry = { id: Config.freeNotchId(svc.notchIds), modules: [] }
+    entry.position = { edge: edges.length > 0 ? edges[0] : "bottom" }
+    var next = Config.withNotchAdded(svc.config, entry)
+    svc.replaceConfig(next)
+    return next.notches.length - 1
+  }
+  function removeNotch(index) { svc.replaceConfig(Config.withoutNotch(svc.config, index)) }
+
+  // What modules read: whether any notch is open, and whether one shows
+  // `module`'s peek.
+  readonly property bool expanded: svc.copies.some(function(c) { return c.mode === "expanded" })
+  function peeking(module) {
+    return svc.copies.some(function(c) { return c.mode === "peek" && c.peekModule === module })
+  }
+
+  // A module's peek goes to every notch that shows the module, on the copy
+  // on the focused screen of one that has a copy per screen.
+  function requestPeek(module, ms) {
+    for (var i = 0; i < svc.notches.length; i++) svc.notches[i].requestPeek(module, ms)
+  }
+  function dismissPeek(module) {
+    for (var i = 0; i < svc.notches.length; i++) svc.notches[i].dismissPeek(module)
+  }
+
+  // Without a notch named, open and toggle act on the first notch and close
+  // closes them all.
+  function open() { if (svc.notches.length > 0) svc.notches[0].open() }
+  function close() { for (var i = 0; i < svc.notches.length; i++) svc.notches[i].close() }
+  function toggle() { if (svc.notches.length > 0) svc.notches[0].toggle() }
 
   // --------------------------------------------------------------- modules
   property var modules: []
@@ -320,101 +442,26 @@ Item {
     }
   }
 
-  // Bindings read each module's `active` and `priority`, so they re-run when
-  // any module changes state.
-  // State.js has the rules.
-  readonly property var activeModules: State.activeModules(svc.modules)
-  readonly property var compactModule: State.compactModule(svc.activeModules)
-
-  readonly property var expandedModules: svc.activeModules.filter(function(m) { return !!m.expanded })
-
-  // ------------------------------------------------------------------ peek
-  property var peekModule: null
-
-  function requestPeek(module, ms) {
-    if (!State.canPeek(module, { pinned: svc.pinned, hovered: svc.hovered,
-                                 current: svc.peekModule, currentShowing: peekTimer.running })) return
-    svc.peekModule = module
-    peekTimer.interval = Math.max(400, Number(ms) || 2500)
-    peekTimer.restart()
-  }
-
-  function dismissPeek(module) {
-    if (!module || svc.peekModule === module) {
-      peekTimer.stop()
-      svc.peekModule = null
-    }
-  }
-
-  Timer { id: peekTimer; onTriggered: svc.peekModule = null }
-
-  // ----------------------------------------------------------------- hover
-  // Several surfaces report the pointer (the notch card, one bar indicator
-  // per monitor); the notch counts as hovered while any of them has it.
-  property var pointerSources: ({})
-  readonly property bool pointerInside: Object.keys(svc.pointerSources).length > 0
-  property bool hovered: false
-  property bool pinned: false
-
-  // The monitor whose bar indicator opened the notch; the overlay follows it
-  // while expanded instead of the focused monitor.
-  property string screenOverride: ""
-
-  function setPointer(source, inside, screenName) {
-    var next = Object.assign({}, svc.pointerSources)
-    if (inside) next[source] = true
-    else delete next[source]
-    svc.pointerSources = next
-    if (inside && screenName) svc.screenOverride = screenName
-  }
-
-  onPointerInsideChanged: {
-    if (pointerInside) { closeTimer.stop(); openTimer.restart() }
-    else {
-      openTimer.stop()
-      closeTimer.restart()
-      // Left before it opened: forget the screen it was about to open on.
-      if (svc.mode !== "expanded" && svc.mode !== "peek") svc.screenOverride = ""
-    }
-  }
-  onHoveredChanged: if (hovered && svc.peekModule && !svc.peekModule.urgentPeek) svc.dismissPeek()
-  onPinnedChanged: if (pinned) svc.dismissPeek()
-  onModeChanged: if (mode !== "expanded" && mode !== "peek") svc.screenOverride = ""
-
-  Timer { id: openTimer; interval: svc.hoverOpenDelay; onTriggered: if (!svc.dragging) svc.hovered = true }
-  Timer { id: closeTimer; interval: svc.hoverCloseDelay; onTriggered: svc.hovered = false }
-
-  // While the notch is dragged it stays closed (State.mode) and nothing
-  // opens it; dropping it leaves it closed until the pointer comes back.
-  property bool dragging: false
-  function setDragging(on) {
-    svc.dragging = on
-    openTimer.stop()
-    svc.pinned = false
-    svc.hovered = false
-  }
-
-  function open() { svc.pinned = true }
-  function close() { svc.pinned = false; svc.hovered = false }
-  function togglePinned(screenName) {
-    if (screenName) svc.screenOverride = screenName
-    svc.pinned = !svc.pinned
-  }
-
-  // ------------------------------------------------------------------ mode
-  readonly property string mode: State.mode({ peekModule: svc.peekModule, pinned: svc.pinned, dragging: svc.dragging,
-                                             hovered: svc.hovered, compactModule: svc.compactModule })
-
   // ------------------------------------------------------------------- IPC
+  function ipcNotch(id) { return svc.notchById(id) }
   IpcHandler {
     target: svc.ipcTarget
-    function toggle(): void { svc.pinned = !svc.pinned }
+    function toggle(): void { svc.toggle() }
     function open(): void { svc.open() }
     function close(): void { svc.close() }
+    // The same for one notch, by id.
+    function toggleNotch(id: string): string { var n = svc.ipcNotch(id); if (!n) return "no notch " + id; n.toggle(); return "ok" }
+    function openNotch(id: string): string { var n = svc.ipcNotch(id); if (!n) return "no notch " + id; n.open(); return "ok" }
+    function closeNotch(id: string): string { var n = svc.ipcNotch(id); if (!n) return "no notch " + id; n.close(); return "ok" }
     function settings(): void { svc.settingsOpen = !svc.settingsOpen }
-    // Back to the middle of the top edge, following focus, after a drag
-    // that went astray.
-    function recenter(): void { svc.setConfigValue("position", undefined) }
+    // Every notch back to the middle of the top edge, following focus, after
+    // a drag that went astray.
+    function recenter(): void {
+      var cfg = Config.withValue(svc.config, "position", undefined)
+      for (var i = 0; Config.hasNotchList(cfg) && i < cfg.notches.length; i++)
+        cfg = Config.withValue(cfg, "notches." + i + ".position", undefined)
+      svc.replaceConfig(cfg)
+    }
     // Change one config key, as the settings window does. `value` is JSON
     // ("200", "\"notch\"", "[\"media\"]"); empty resets the key to its default.
     function set(key: string, value: string): string {
@@ -434,13 +481,20 @@ Item {
     }
     function state(): string {
       return JSON.stringify({
-        mode: svc.mode,
-        compactStyle: svc.compactStyle,
-        reserveSpace: svc.reserveSpace,
-        workspaces: svc.workspaces,
-        position: svc.placement,
-        draggable: svc.canDrag,
-        peek: svc.peekModule ? svc.peekModule.moduleId : null,
+        notches: svc.notches.map(function(n) {
+          return {
+            id: n.notchId,
+            compactStyle: n.compactStyle,
+            reserveSpace: n.reserveSpace,
+            workspaces: n.workspaces,
+            position: n.placement,
+            draggable: n.canDrag,
+            modules: n.modules.map(function(m) { return m.moduleId }),
+            copies: n.copies.map(function(c) {
+              return { screen: c.screenName, mode: c.mode, peek: c.peekModule ? c.peekModule.moduleId : null }
+            })
+          }
+        }),
         modules: svc.modules.map(function(m) { return { id: m.moduleId, active: m.active, priority: m.priority } })
       })
     }

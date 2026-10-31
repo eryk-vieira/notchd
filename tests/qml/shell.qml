@@ -74,7 +74,12 @@ ShellRoot {
       { name: "a quick press-and-pull never drags the notch", run: root.quickPullNoDrag },
       { name: "held, then moved, the notch is dragged and not pinned", run: root.holdThenDrag },
       { name: "a side edge reserves the side compact view, never the old one turned", run: root.reserveFollowsEdge },
-      { name: "on a side edge the card grows sideways", run: root.sideEdgeAxes }
+      { name: "on a side edge the card grows sideways", run: root.sideEdgeAxes },
+      { name: "a peek shows on the focused screen and leaves the other copies alone", run: root.peekOnFocusedCopy },
+      { name: "a peek goes only to the notches that show the module", run: root.peekOnlyWhereShown },
+      { name: "notches, copies and modules survive a config edit", run: root.survivesConfigEdits },
+      { name: "adding a notch and removing it gives the config back", run: root.addAndRemoveNotch },
+      { name: "only the first notch asking for the bar gets it", run: root.oneBarNotch }
     ]
     Qt.callLater(root.next)
   }
@@ -97,6 +102,35 @@ ShellRoot {
     compositor: workspace4
   }
 
+  // Two screens, A and B; B has focus.
+  QtObject {
+    id: twoScreens
+    property string focusedScreenName: "B"
+    function hasFullscreen(screen) { return false }
+    readonly property bool supportsWorkspaces: false
+    readonly property var knownWorkspaces: []
+    function activeWorkspace(screen) { return null }
+  }
+
+  NotchService {
+    id: multi
+    ipcTarget: "notchd-qmltest-multi"
+    configPath: root.dir + "/multi.json"
+    compositor: twoScreens
+    screens: [{ name: "A" }, { name: "B" }]
+    defaultModules: ["activities"]
+  }
+
+  NotchService {
+    id: barred
+    ipcTarget: "notchd-qmltest-bar"
+    configPath: root.dir + "/bar.json"
+    compositor: twoScreens
+    screens: [{ name: "A" }, { name: "B" }]
+    barStyleAvailable: true
+    defaultModules: []
+  }
+
   // ---------------------------------------------------------------- cases
   // Bug: a list edited in the settings went through the control's `var`
   // signal, came out as a sequence (Array.isArray false), and Config.resolve
@@ -112,16 +146,17 @@ ShellRoot {
   function workspaceChipsList() {
     var screen = { name: "test" }
     chips.toggle(1); chips.toggle(2); chips.toggle(3)
-    root.check(Array.isArray(service.workspaces), "workspaces is not an array: " + JSON.stringify(service.workspaces))
-    root.check(JSON.stringify(service.workspaces) === "[1,2,3]", "workspaces is " + JSON.stringify(service.workspaces))
-    root.check(!service.showsOn(screen), "shows on workspace 4 with [1,2,3]")
+    var notch = service.notches[0]
+    root.check(Array.isArray(notch.workspaces), "workspaces is not an array: " + JSON.stringify(notch.workspaces))
+    root.check(JSON.stringify(notch.workspaces) === "[1,2,3]", "workspaces is " + JSON.stringify(notch.workspaces))
+    root.check(!notch.showsOn(screen), "shows on workspace 4 with [1,2,3]")
     chips.toggle(4)
-    root.check(service.showsOn(screen), "does not show on workspace 4 after adding it")
+    root.check(notch.showsOn(screen), "does not show on workspace 4 after adding it")
     chips.toggle(4)
-    root.check(!service.showsOn(screen), "still shows on workspace 4 after removing it")
+    root.check(!notch.showsOn(screen), "still shows on workspace 4 after removing it")
     chips.toggle(1); chips.toggle(2); chips.toggle(3)
     root.check(service.configValue("workspaces") === undefined, "an empty pick left the key in the config")
-    root.check(service.showsOn(screen), "no pick should mean every workspace")
+    root.check(notch.showsOn(screen), "no pick should mean every workspace")
     root.done()
   }
 
@@ -150,7 +185,7 @@ ShellRoot {
   }
   NotchCard {
     id: card
-    svc: cardSvc
+    notch: cardSvc
     property real tallestCompact: 0
     onCompactDepthChanged: if (compactDepth > tallestCompact) tallestCompact = compactDepth
   }
@@ -176,10 +211,11 @@ ShellRoot {
   // before it opened kept that, so the next peek showed on that screen
   // instead of the focused one.
   function hoverLeaveForgetsScreen() {
-    service.setPointer("notch", true, "DP-1")
-    service.setPointer("notch", false, "")
-    root.check(service.mode !== "expanded", "opened without waiting for the hover delay")
-    root.check(service.screenOverride === "", "kept screen " + service.screenOverride)
+    var copy = service.firstCopy
+    copy.setPointer("notch", true, "DP-1")
+    copy.setPointer("notch", false, "")
+    root.check(copy.mode !== "expanded", "opened without waiting for the hover delay")
+    root.check(copy.openScreen === "", "kept screen " + copy.openScreen)
     root.done()
   }
 
@@ -189,7 +225,7 @@ ShellRoot {
   // and shrinks after a delay.
   ReservedSpace {
     id: reserve
-    svc: cardSvc
+    notch: cardSvc
     notchCard: card
     shrinkDelay: 300
     property int lowest: 0
@@ -302,7 +338,7 @@ ShellRoot {
   // space now goes once the notch has collapsed.
   ReservedSpace {
     id: defaultReserve
-    svc: cardSvc
+    notch: cardSvc
     notchCard: card
   }
 
@@ -388,7 +424,7 @@ ShellRoot {
     implicitHeight: 400
     NotchCard {
       id: pointerCard
-      svc: pointerSvc
+      notch: pointerSvc
       draggable: true
       x: 50
       property int started: 0
@@ -464,6 +500,110 @@ ShellRoot {
       root.check(pointerCard.ended === 1, "the drop ended " + pointerCard.ended + " drags")
       root.check(!pointerCard.dragging, "still dragging after the drop")
       root.check(pointerSvc.pins === 0, "the drop also pinned the notch")
+      root.done()
+    })
+  }
+
+  // ------------------------------------------------------------- notches
+  readonly property var twoNotches: ({
+    notches: [{ id: "main", modules: ["activities"], position: { screen: "all" } },
+              { id: "side", modules: [], position: { edge: "left" } }]
+  })
+  function push(id, peek) {
+    return multi.moduleById("activities").push(JSON.stringify({ id: id, title: id, sticky: true, peek: peek }))
+  }
+
+  // Bug: one notch window moved between screens. With media showing on one
+  // monitor, changing the volume on another took the notch away from it.
+  // A notch on every screen now peeks on the focused one only.
+  function peekOnFocusedCopy() {
+    var main = null
+    root.steps([
+      [0, function() { multi.replaceConfig(root.twoNotches) }],
+      [300, function() {
+        main = multi.notchById("main")
+        root.check(!!main && main.copies.length === 2, "main has " + (main ? main.copies.length : 0) + " copies, not one per screen")
+        root.check(root.push("build", false) === "ok", "activities not loaded")
+      }],
+      [100, function() {
+        root.check(main.copyOn("A").mode === "compact" && main.copyOn("B").mode === "compact",
+                   "a quiet push left " + main.copyOn("A").mode + " / " + main.copyOn("B").mode)
+        twoScreens.focusedScreenName = "B"
+        root.push("deploy", true)
+      }],
+      [100, function() {
+        root.check(main.copyOn("B").mode === "peek", "the focused copy shows " + main.copyOn("B").mode)
+        root.check(main.copyOn("A").mode === "compact", "the copy on the other screen shows " + main.copyOn("A").mode)
+        root.check(multi.peeking(multi.moduleById("activities")), "the service does not report the peek")
+        multi.dismissPeek(null)
+        twoScreens.focusedScreenName = "A"
+        root.push("lint", true)
+      }],
+      [100, function() {
+        root.check(main.copyOn("A").mode === "peek" && main.copyOn("B").mode === "compact",
+                   "focus on A: " + main.copyOn("A").mode + " / " + main.copyOn("B").mode)
+        multi.dismissPeek(null)
+      }]
+    ], function() { root.done() })
+  }
+
+  function peekOnlyWhereShown() {
+    var side = multi.notchById("side")
+    root.check(!!side && side.copies.length === 1 && !side.everyScreen, "side should be one copy that moves")
+    root.push("test", true)
+    root.steps([[100, function() {}]], function() {
+      root.check(side.copies[0].mode === "rest", "a notch without the module shows " + side.copies[0].mode)
+      root.check(side.edge === "left", "side hangs from " + side.edge)
+      multi.dismissPeek(null)
+      root.done()
+    })
+  }
+
+  // The notches, their copies and the modules are made once: a config edit
+  // (a slider moving) must not make them again, losing what they show.
+  function survivesConfigEdits() {
+    var main = multi.notchById("main")
+    var copy = main.copyOn("A")
+    var module = multi.moduleById("activities")
+    copy.open()
+    multi.setConfigValue("hoverOpenDelay", 50)
+    multi.setConfigValue("notches.0.position.edge", "bottom")
+    root.steps([[50, function() {}]], function() {
+      root.check(multi.notchById("main") === main, "the notch was made again")
+      root.check(main.copyOn("A") === copy, "the copy was made again")
+      root.check(copy.pinned, "the copy forgot it was pinned")
+      root.check(multi.moduleById("activities") === module, "the module was loaded again")
+      root.check(module.items.length > 0, "the module lost its activities")
+      root.check(main.edge === "bottom", "the edit did not apply: " + main.edge)
+      copy.close()
+      module.clear("")
+      root.done()
+    })
+  }
+
+  function addAndRemoveNotch() {
+    var start = { modules: ["activities"], hoverOpenDelay: 40 }
+    multi.replaceConfig(start)
+    root.check(multi.notches.length === 1, "one notch to start, not " + multi.notches.length)
+    var at = multi.addNotch()
+    root.check(at === 1 && multi.notches.length === 2, "added at " + at + ", " + multi.notches.length + " notches")
+    root.check(JSON.stringify(multi.config.notches[0]) === "{}", "the first notch should inherit it all: " + JSON.stringify(multi.config.notches))
+    root.check(multi.notches[1].edge !== multi.notches[0].edge, "the new notch hangs on the same edge")
+    root.check(multi.notches[1].modules.length === 0, "the new notch starts with modules")
+    multi.removeNotch(1)
+    root.check(JSON.stringify(multi.config) === JSON.stringify(start), "the config came back as " + JSON.stringify(multi.config))
+    root.done()
+  }
+
+  function oneBarNotch() {
+    barred.replaceConfig({ notches: [{}, { id: "second" }] })
+    root.steps([[50, function() {}]], function() {
+      var first = barred.notches[0], second = barred.notches[1]
+      root.check(barred.barNotch === first, "the bar went to " + (barred.barNotch ? barred.barNotch.notchId : "none"))
+      root.check(first.compactStyle === "bar" && second.compactStyle === "notch",
+                 "styles " + first.compactStyle + " / " + second.compactStyle)
+      root.check(first.everyScreen && first.copies.length === 2, "the bar notch needs a copy per bar")
+      root.check(!!first.copyOn("B") && first.copyOn("B") !== first.copyOn("A"), "no copy for bar B")
       root.done()
     })
   }

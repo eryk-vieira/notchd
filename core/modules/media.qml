@@ -57,7 +57,7 @@ NotchModule {
     interval: 1000
     repeat: true
     triggeredOnStart: true
-    running: !!media.player && !!media.notch && media.notch.mode === "expanded"
+    running: !!media.player && !!media.notch && media.notch.expanded
     onTriggered: {
       media.player.positionChanged()
       var v = Number(media.player.position)

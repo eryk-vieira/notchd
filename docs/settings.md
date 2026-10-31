@@ -9,7 +9,7 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | Key | |
 |---|---|
 | `key` | config key; dotted for nested objects (`theme.accent`) |
-| `type` | `choice`, `integer`, `number`, `boolean`, `string`, `color`, `modules`, `workspaces` or `note` (text only, no key) |
+| `type` | `choice`, `integer`, `number`, `boolean`, `string`, `color`, `modules`, `workspaces`, `notches` or `note` (text only, no key) |
 | `label`, `help` | title and description |
 | `page` | sidebar page id; `general` when absent |
 | `section` | heading the field sits under, within its page; sections keep the order their first field appears in |
@@ -26,7 +26,12 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | `string`, `color` | `TextControl` (a color adds a swatch and is validated) |
 | `modules` | `ModuleList` |
 | `workspaces` | `WorkspaceChips`: 1 to 10, the compositor's workspaces and the picked ones; none picked removes the key |
+| `notches` | `NotchPicker`: a chip per notch, to pick the one the window edits, and Add/Remove; it edits the list through the service (`addNotch`, `removeNotch`) |
 | `note` | none; just the title and help |
+
+## Several notches
+
+The window edits one notch at a time, `NotchService.settingsNotch` (its index), picked at the top of the General and Modules pages. The core's fields for a notch's own keys (modules, compact style, position, workspaces...) take that notch's key: `position.edge` at the top level, `notches.1.position.edge` in a list, with the top-level value it inherits as the field's default. Picking that value removes the notch's own key, so it inherits again. The hover delays and the host's fields apply to every notch. The gear in an expanded notch opens the window on that notch.
 
 ## Pages
 

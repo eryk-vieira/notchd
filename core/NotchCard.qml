@@ -13,9 +13,10 @@ import QtQuick.Shapes
 Item {
   id: card
 
-  property var svc: null
+  // The notch copy it draws (NotchCopy): its mode, modules and edge.
+  property var notch: null
   // The screen edge it hangs from: "top", "bottom", "left" or "right".
-  property string edge: card.svc && card.svc.edge ? card.svc.edge : "top"
+  property string edge: card.notch && card.notch.edge ? card.notch.edge : "top"
   readonly property bool vertical: card.edge === "left" || card.edge === "right"
   // Whether it can be dragged: held for `holdToDrag` ms, a press picks it up
   // and moving then drags it; a quick click never moves it. The card only
@@ -37,22 +38,22 @@ Item {
   property real maxHeight: Theme.space(1200)
 
   // ------------------------------------------------------------------ mode
-  readonly property string svcMode: card.svc ? card.svc.mode : "rest"
-  readonly property bool barStyle: !!card.svc && card.svc.compactStyle === "bar"
+  readonly property string notchMode: card.notch ? card.notch.mode : "rest"
+  readonly property bool barStyle: !!card.notch && card.notch.compactStyle === "bar"
   // What the notch shows: in bar style, rest and compact belong to the bar.
-  readonly property string mode: (card.barStyle && (card.svcMode === "rest" || card.svcMode === "compact"))
-    ? "hidden" : card.svcMode
+  readonly property string mode: (card.barStyle && (card.notchMode === "rest" || card.notchMode === "compact"))
+    ? "hidden" : card.notchMode
 
   // On a side edge, compact shows the module's `verticalCompact` (a module
   // without one gets a dot) and peek its `verticalPeek`, if it has one.
-  readonly property var peekModule: card.svc ? card.svc.peekModule : null
+  readonly property var peekModule: card.notch ? card.notch.peekModule : null
   readonly property bool verticalPeek: card.vertical && !!card.peekModule && !!card.peekModule.verticalPeek
   readonly property Component modeComponent: {
-    if (!card.svc) return restView
+    if (!card.notch) return restView
     if (card.mode === "peek" && card.peekModule)
       return card.verticalPeek ? card.peekModule.verticalPeek : card.peekModule.peek
     if (card.mode === "expanded") return expandedView
-    var m = card.svc.compactModule
+    var m = card.notch.compactModule
     if (card.mode === "compact" && m && m.compact)
       return !card.vertical ? m.compact : (m.verticalCompact || dotView)
     return restView
@@ -184,7 +185,7 @@ Item {
         spacing: Theme.space(16)
 
         Repeater {
-          model: card.svc ? card.svc.expandedModules : []
+          model: card.notch ? card.notch.expandedModules : []
           delegate: Loader {
             required property var modelData
             width: Theme.space(400)
@@ -194,7 +195,7 @@ Item {
 
         // Nothing active: say so instead of opening an empty card.
         Column {
-          visible: !card.svc || card.svc.expandedModules.length === 0
+          visible: !card.notch || card.notch.expandedModules.length === 0
           width: Theme.space(260)
           spacing: Theme.space(2)
           Text {
@@ -235,7 +236,7 @@ Item {
             anchors.margins: -Theme.space(6)
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: if (card.svc) { card.svc.close(); card.svc.openSettings() }
+            onClicked: if (card.notch) { card.notch.close(); card.notch.openSettings() }
           }
         }
       }
@@ -316,7 +317,7 @@ Item {
     }
     onReleased: if (pressArea.dragging) { pressArea.dragging = false; card.dragEnded() }
     onCanceled: if (pressArea.dragging) { pressArea.dragging = false; card.dragEnded() }
-    onClicked: if (card.svc && !pressArea.dragging) card.svc.togglePinned("")
+    onClicked: if (card.notch && !pressArea.dragging) card.notch.togglePinned("")
   }
 
   Item {

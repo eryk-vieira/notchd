@@ -80,23 +80,30 @@ function workspaceAllowed(list, ws) {
 // { name, allowed } (allowed: its workspace takes the notch), `override` the
 // screen it was opened from (counts only while open), `open` whether it
 // peeks or is expanded, `home` the screen the config's position names.
-// Open, it shows on the focused screen whatever the workspace; closed, on
-// its home screen if allowed there, else on the focused screen if allowed
-// there, else on the first screen that is.
+// Closed, it shows on its home screen if allowed there, else on the focused
+// screen if allowed there, else on the first screen that is. Open, it shows
+// where the pointer opened it; else a notch with a home screen opens where
+// it hangs closed (a peek never takes it off its screen), and one without
+// on the focused screen, whatever the workspace.
 function notchScreen(s) {
   var screens = s.screens || []
   function find(name) {
     for (var i = 0; i < screens.length; i++) if (screens[i].name === name) return screens[i]
     return null
   }
-  var over = s.open && s.override ? find(s.override) : null
-  if (over) return over.name
-  var home = !s.open && s.home ? find(s.home) : null
-  if (home && home.allowed) return home.name
   var focused = find(s.focused) || screens[0] || null
-  if (s.open || (focused && focused.allowed)) return focused ? focused.name : ""
-  for (var i = 0; i < screens.length; i++) if (screens[i].allowed) return screens[i].name
-  return ""
+  var home = s.home ? find(s.home) : null
+  function closed() {
+    if (home && home.allowed) return home.name
+    if (focused && focused.allowed) return focused.name
+    for (var i = 0; i < screens.length; i++) if (screens[i].allowed) return screens[i].name
+    return ""
+  }
+  if (!s.open) return closed()
+  var over = s.override ? find(s.override) : null
+  if (over) return over.name
+  if (home) return closed() || home.name
+  return focused ? focused.name : ""
 }
 
 // The screens that keep windows clear of the closed notch (reserveSpace),
@@ -108,4 +115,43 @@ function reserveScreens(screens, home) {
   for (var i = 0; i < allowed.length; i++)
     if (home && allowed[i].name === home) return [home]
   return allowed.map(function(s) { return s.name })
+}
+
+// ---------------------------------------------------------------- notches
+// The compact style each notch gets, from the ones configured: the host's
+// bar holds one notch's compact state, so only the first notch that asks
+// for "bar" gets it, and only when the host has a bar indicator; the rest
+// hang ("notch").
+function compactStyles(configured, barAvailable) {
+  var taken = !barAvailable
+  return (configured || []).map(function(style) {
+    if (style !== "bar" || taken) return "notch"
+    taken = true
+    return "bar"
+  })
+}
+
+// The copy of a notch that shows a peek, by its screen name: the copy on
+// the focused screen, else the first. A notch with one copy (it follows
+// focus or stays on its screen) has `copies` [""] and that copy peeks.
+function peekCopy(copies, focused) {
+  if (!copies || copies.length === 0) return null
+  if (copies.length === 1) return copies[0]
+  return copies.indexOf(focused) !== -1 ? focused : copies[0]
+}
+
+// What windows leave free per screen edge, from every notch copy's reserve
+// ({ screens, edge, space }): the deepest one on each, so notches sharing
+// an edge don't add up. As { "<screen>|<edge>": space }, spaces above 0.
+function reserveZones(reserves) {
+  var out = {}
+  for (var i = 0; i < (reserves || []).length; i++) {
+    var r = reserves[i]
+    if (!r || !(r.space > 0)) continue
+    for (var j = 0; j < (r.screens || []).length; j++) {
+      var key = r.screens[j] + "|" + r.edge
+      out[key] = Math.max(out[key] || 0, r.space)
+    }
+  }
+  return out
 }

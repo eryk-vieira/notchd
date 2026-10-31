@@ -6,7 +6,10 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
-- Drag the notch onto another monitor: a preview shows it there, and the drop makes that monitor its home (`position.screen`; settings: General › Position › Screen), where the closed notch stays whichever monitor has focus. Dropped on a workspace left out of `workspaces`, it adds that workspace, so the notch stays where it landed. Peeks and the open notch still show on the focused one; reserved space is kept on the home monitor only.
+- Several notches (`notches`; settings: the notch picker at the top of General and Modules): each with its own modules, compact style, position, workspaces and reserved space, inheriting the top-level keys it leaves out. A module may show in several. IPC gets `openNotch`, `closeNotch` and `toggleNotch` by notch id, and `state` lists the notches and their copies.
+- `position.screen: "all"` (settings: General › Position › Screen › Every screen): a copy of the notch on every monitor, each hovered, pinned and dragged on its own. A peek shows on the focused monitor only, so changing the volume on one monitor no longer takes the notch away from the music playing on another. In bar style the notch has a copy per bar.
+
+- Drag the notch onto another monitor: a preview shows it there, and the drop makes that monitor its home (`position.screen`; settings: General › Position › Screen), where the notch stays whichever monitor has focus, peeks included. Dropped on a workspace left out of `workspaces`, it adds that workspace, so the notch stays where it landed. Reserved space is kept on the home monitor only.
 - With a vertical Omarchy bar, the bar indicator shows the compact state down the bar (the module's vertical view, or a dot) instead of hiding, and the notch drops out of the side.
 - Settings window with a sidebar of pages (General, Modules, Appearance), fields grouped by section, compact style picked from picture cards, segmented choices and switches for modules.
 - Settings fields can be `boolean` or `note`, live on a `page`, and show a choice as picture cards (`display: "cards"`); hosts can add pages with `hostSettingsPages`.
@@ -16,11 +19,13 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 - `workspaces` (settings: General › Layout › Workspaces): the workspaces the closed notch, or its bar indicator, shows on. On others it moves to a screen that shows one, or hides; peeks and the open notch still show, and reserved space is only kept where the notch can hang. Hyprland only.
 - `position` (settings: General › Position): the hanging notch on any screen edge (`edge`: top, bottom, left, right) and anywhere along it (`offset`). On a side edge peeks and the expanded notch keep their layout and the notch grows sideways; reserved space moves to that edge. In `"bar"` style the notch stays in the middle of the bar, on whichever edge the bar is.
 - Hold the hanging notch for a moment and drag it to any edge (`draggable`, on by default; settings: General › Position › Drag to move); a quick click only pins it. It follows the nearest edge as you drag, snaps to the middle, and the drop is saved as `position`. Windows move once, when it lands. `recenter` over IPC puts it back at the top.
-- Modules can give `verticalCompact` and `verticalPeek` views for a side edge, and read `notch.edge` and `notch.vertical`; a module without a vertical compact view shows a dot there. The media and activities modules stack their compact view down the edge, and the Omarchy OSD stands its bar up.
+- Modules can give `verticalCompact` and `verticalPeek` views for a side edge; a module without a vertical compact view shows a dot there. The media and activities modules stack their compact view down the edge, and the Omarchy OSD stands its bar up.
 - Settings fields can be a `number` (a slider with a fractional step, shown as a percentage with `display: "percent"`); card pictures get their option's `value`.
 - README image of the notch in its four states, rendered from the real QML with `make hero`, in Omarchy's Gruvbox theme and wallpaper.
 
 ### Changed
+
+- Modules read `notch.expanded` and `notch.peeking(module)` instead of `notch.mode` and `notch.peekModule`, since a module can show in several notches. Hosts read the place and workspaces from each notch (`service.notches`, `service.barNotch`); `NotchSurface` no longer takes a `compositor` of its own.
 
 - The repository root is the Omarchy plugin (`manifest.json` at the root). Point `~/.config/omarchy/plugins/eryk.notchd` at the checkout instead of `hosts/omarchy`.
 - The standalone host is `shell.qml` at the repository root: run `qs -p <checkout>` instead of `qs -p hosts/standalone`.

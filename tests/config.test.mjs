@@ -46,21 +46,98 @@ test('withValue removing a key under a missing parent changes nothing', () => {
   assert.deepEqual(plain(Config.withValue({ a: 1 }, 'theme.accent', undefined)), { a: 1 });
 });
 
-test('resolve falls back to defaults for missing or bad keys', () => {
-  const r = plain(Config.resolve({}, ['media']));
-  assert.deepEqual(r, { moduleIds: ['media'], hoverOpenDelay: 120, hoverCloseDelay: 300, compactStyle: 'bar', reserveSpace: false, draggable: true, workspaces: null });
+test('resolve: the service-wide keys, defaults for missing or bad ones', () => {
+  assert.deepEqual(plain(Config.resolve({})), { hoverOpenDelay: 120, hoverCloseDelay: 300 });
+  assert.deepEqual(plain(Config.resolve({ hoverOpenDelay: -50, hoverCloseDelay: 'x' })), { hoverOpenDelay: 0, hoverCloseDelay: 0 });
 });
 
-test('resolve reads and clamps the core keys', () => {
-  const r = plain(Config.resolve(
-    { modules: ['osd', 3], hoverOpenDelay: -50, hoverCloseDelay: 'x', compactStyle: 'notch', reserveSpace: true, draggable: false, workspaces: [1, 'code'] }, []));
-  assert.deepEqual(r, { moduleIds: ['osd', '3'], hoverOpenDelay: 0, hoverCloseDelay: 0, compactStyle: 'notch', reserveSpace: true, draggable: false, workspaces: [1, 'code'] });
-  assert.equal(Config.resolve({ compactStyle: 'weird' }, []).compactStyle, 'bar');
-  assert.equal(Config.resolve({ reserveSpace: 'yes' }, []).reserveSpace, false);
-  assert.equal(Config.resolve({ draggable: 'no' }, []).draggable, true);
-  assert.equal(Config.resolve({ workspaces: [] }, []).workspaces, null);
-  assert.equal(Config.resolve({ workspaces: 3 }, []).workspaces, null);
-  assert.deepEqual(plain(Config.resolve({ workspaces: [2, '', null, 'x'] }, []).workspaces), [2, 'x']);
+const one = (cfg, defaults = ['media']) => plain(Config.notches(cfg, defaults))[0];
+
+test('notches: without a list, the top level is the one notch, at its defaults', () => {
+  assert.deepEqual(plain(Config.notches({}, ['media'])), [{
+    id: 'main', index: 0, prefix: '', moduleIds: ['media'], compactStyle: 'bar',
+    reserveSpace: false, draggable: true, workspaces: null, position: undefined
+  }].map(plain));
+  assert.equal(plain(Config.notches({ notches: [] }, [])).length, 1);
+});
+
+test('notches: reads and clamps the notch keys', () => {
+  const n = one({ modules: ['osd', 3], compactStyle: 'notch', reserveSpace: true, draggable: false, workspaces: [1, 'code'] }, []);
+  assert.deepEqual(n.moduleIds, ['osd', '3']);
+  assert.equal(n.compactStyle, 'notch');
+  assert.equal(n.reserveSpace, true);
+  assert.equal(n.draggable, false);
+  assert.deepEqual(n.workspaces, [1, 'code']);
+  assert.equal(one({ compactStyle: 'weird' }).compactStyle, 'bar');
+  assert.equal(one({ reserveSpace: 'yes' }).reserveSpace, false);
+  assert.equal(one({ draggable: 'no' }).draggable, true);
+  assert.equal(one({ workspaces: [] }).workspaces, null);
+  assert.equal(one({ workspaces: 3 }).workspaces, null);
+  assert.deepEqual(one({ workspaces: [2, '', null, 'x'] }).workspaces, [2, 'x']);
+});
+
+test('notches: each listed notch inherits the top-level keys it leaves out', () => {
+  const cfg = {
+    modules: ['media'], reserveSpace: true, position: { edge: 'left', offset: 0.2 },
+    notches: [{}, { id: 'jobs', modules: ['activities'], reserveSpace: false, position: { offset: 0.8, screen: 'all' } }]
+  };
+  const [main, jobs] = plain(Config.notches(cfg, ['osd']));
+  assert.deepEqual([main.id, main.prefix, main.moduleIds, main.reserveSpace], ['main', 'notches.0.', ['media'], true]);
+  assert.deepEqual(main.position, { edge: 'left', offset: 0.2 });
+  assert.deepEqual([jobs.id, jobs.index, jobs.prefix, jobs.moduleIds, jobs.reserveSpace],
+                   ['jobs', 1, 'notches.1.', ['activities'], false]);
+  assert.deepEqual(jobs.position, { edge: 'left', offset: 0.8, screen: 'all' });
+});
+
+test('notches: ids default by place and never repeat', () => {
+  const ids = plain(Config.notches({ notches: [{}, {}, { id: 'main' }, { id: ' x ' }, { id: 'x' }, 'junk'] }, []))
+    .map((n) => n.id);
+  assert.deepEqual(ids, ['main', 'notch-2', 'main-2', 'x', 'x-2', 'notch-6']);
+});
+
+test('moduleUnion: every module a notch shows, once, in first-seen order', () => {
+  const specs = plain(Config.notches({ notches: [{ modules: ['osd', 'media'] }, { modules: ['activities', 'osd'] }] }, []));
+  assert.deepEqual(plain(Config.moduleUnion(specs)), ['osd', 'media', 'activities']);
+});
+
+test('freeNotchId: the lowest notch-<n> not taken', () => {
+  assert.equal(Config.freeNotchId(['main']), 'notch-2');
+  assert.equal(Config.freeNotchId(['main', 'notch-2', 'notch-4']), 'notch-3');
+});
+
+test('withNotchAdded turns the top-level notch into the first entry', () => {
+  const cfg = { modules: ['media'], hoverOpenDelay: 50 };
+  const next = plain(Config.withNotchAdded(cfg, { id: 'jobs', modules: [] }));
+  assert.deepEqual(next, { modules: ['media'], hoverOpenDelay: 50, notches: [{}, { id: 'jobs', modules: [] }] });
+  assert.deepEqual(plain(Config.withNotchAdded(next, { id: 'c' })).notches.length, 3);
+  assert.deepEqual(cfg, { modules: ['media'], hoverOpenDelay: 50 });
+});
+
+test('withoutNotch: the last one left goes back to the top level', () => {
+  const cfg = { modules: ['media'], position: { edge: 'left', offset: 0.2 },
+                notches: [{}, { id: 'jobs', modules: ['activities'], position: { offset: 0.9 } }] };
+  assert.deepEqual(plain(Config.withoutNotch(cfg, 0)),
+                   { modules: ['activities'], position: { edge: 'left', offset: 0.9 } });
+  assert.deepEqual(plain(Config.withoutNotch(cfg, 1)), { modules: ['media'], position: { edge: 'left', offset: 0.2 } });
+  const three = { notches: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] };
+  assert.deepEqual(plain(Config.withoutNotch(three, 1)), { notches: [{ id: 'a' }, { id: 'c' }] });
+  // The last notch stays.
+  assert.deepEqual(plain(Config.withoutNotch({ modules: [] }, 0)), { modules: [] });
+  assert.deepEqual(plain(Config.withoutNotch(three, 7)), three);
+});
+
+test('withValue reaches into the notch list and never prunes an entry', () => {
+  const cfg = { notches: [{}, { id: 'jobs', position: { edge: 'left' } }] };
+  assert.deepEqual(plain(Config.withValue(cfg, 'notches.1.position.edge', 'right')).notches[1],
+                   { id: 'jobs', position: { edge: 'right' } });
+  assert.deepEqual(plain(Config.withValue(cfg, 'notches.0.reserveSpace', true)).notches[0], { reserveSpace: true });
+  // Emptying an entry keeps it: an empty notch inherits everything.
+  const emptied = plain(Config.withValue({ notches: [{ draggable: false }, {}] }, 'notches.0.draggable', undefined));
+  assert.deepEqual(emptied, { notches: [{}, {}] });
+  const moved = plain(Config.withValue(cfg, 'notches.1.position.edge', undefined));
+  assert.deepEqual(moved, { notches: [{}, { id: 'jobs' }] });
+  // Removing an entry by index takes it out of the list, no hole.
+  assert.deepEqual(plain(Config.withValue(cfg, 'notches.0', undefined)), { notches: [{ id: 'jobs', position: { edge: 'left' } }] });
 });
 
 // Bug: a notch dragged onto a screen showing a workspace left out of

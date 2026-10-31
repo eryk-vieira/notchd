@@ -19,13 +19,16 @@ Working on notchd itself. For using it, see the [README](README.md); for the rul
 manifest.json         Omarchy plugin manifest: the repo root is the plugin
 shell.qml             standalone host: the repo root is also a Quickshell config
 core/                 the framework: no desktop-specific code
-  NotchService.qml    state: config, modules, mode, peeks, hover, IPC
-  NotchSurface.qml    the layer-shell overlay that puts the notch on screen
+  NotchService.qml    state: config, modules, the notches, peek routing, IPC
+  Notch.qml           one notch of the config: its modules, place and copies
+  NotchCopy.qml       a notch on one screen: hover, pin, peek, drag, mode
+  NotchSurface.qml    a window per copy, and the space they reserve
+  NotchWindow.qml     the layer-shell overlay that puts one copy on screen
   NotchCard.qml       the notch itself: outline, padding, the current view
   NotchModule.qml     base type for modules
   Theme.qml           visual tokens (singleton), fed by the host
   Config.js           config rules (pure JS)
-  State.js            mode and peek rules (pure JS)
+  State.js            mode, peek and screen rules (pure JS)
   Position.js         edge and offset: where the notch sits (pure JS)
   ReservedSpace.qml   how much of its edge windows leave to the closed notch
   *Compositor.qml     compositor adapters (Hyprland, generic)

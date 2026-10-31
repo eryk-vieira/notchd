@@ -4,12 +4,14 @@
 // The config's `position` is { edge, offset, screen }: edge "top" |
 // "bottom" | "left" | "right", offset 0..1 along the edge (left to right,
 // top to bottom), 0.5 the middle, and screen the monitor the closed notch
-// stays on ("" or missing: the focused one; State.notchScreen). A missing
-// key is top-center, following focus.
+// stays on ("" or missing: the focused one, State.notchScreen; ALL_SCREENS:
+// a copy of the notch on every monitor). A missing key is top-center,
+// following focus.
 
 var EDGES = ["top", "bottom", "left", "right"]
 var DEFAULT_EDGE = "top"
 var DEFAULT_OFFSET = 0.5
+var ALL_SCREENS = "all"
 
 function isEdge(edge) { return EDGES.indexOf(edge) !== -1 }
 
@@ -30,11 +32,11 @@ function resolve(value) {
 }
 
 // Where the notch actually goes. compactStyle "bar" locks it to the middle
-// of the host's bar (its compact state lives in the bar, on every screen);
-// otherwise the configured position.
+// of the host's bar, with a copy on every screen (its compact state lives in
+// the bar, and there is a bar on each); otherwise the configured position.
 function effective(position, compactStyle, barEdge) {
   if (compactStyle === "bar")
-    return { edge: isEdge(barEdge) ? barEdge : DEFAULT_EDGE, offset: DEFAULT_OFFSET, screen: "" }
+    return { edge: isEdge(barEdge) ? barEdge : DEFAULT_EDGE, offset: DEFAULT_OFFSET, screen: ALL_SCREENS }
   return resolve(position)
 }
 

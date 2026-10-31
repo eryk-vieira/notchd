@@ -19,6 +19,7 @@ ColumnLayout {
   readonly property var stored: row.svc ? row.svc.configValue(row.field.key) : undefined
   readonly property var value: row.stored === undefined ? row.field["default"] : row.stored
   readonly property bool wide: row.field.type === "modules" || row.field.type === "workspaces"
+    || row.field.type === "notches"
     || (row.field.type === "choice" && row.field.display === "cards")
 
   readonly property Component control: {
@@ -31,6 +32,7 @@ ColumnLayout {
       case "color": return textControl
       case "modules": return modulesControl
       case "workspaces": return workspacesControl
+      case "notches": return notchesControl
       case "note": return null
       default: return unknownControl
     }
@@ -107,6 +109,13 @@ ColumnLayout {
   Component {
     id: workspacesControl
     WorkspaceChips {
+      field: row.field; value: row.value; svc: row.svc
+      onEdited: function(v) { row.edit(v) }
+    }
+  }
+  Component {
+    id: notchesControl
+    NotchPicker {
       field: row.field; value: row.value; svc: row.svc
       onEdited: function(v) { row.edit(v) }
     }

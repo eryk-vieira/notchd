@@ -102,12 +102,26 @@ test('notchScreen: open, the screen it was opened from, else the focused one', (
 test('notchScreen: closed, the notch stays on its home screen whatever has focus', () => {
   const screens = [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: true }];
   assert.equal(State.notchScreen({ screens, focused: 'DP-1', home: 'eDP-1' }), 'eDP-1');
-  // Open (a peek, the expanded notch) it still follows focus.
-  assert.equal(State.notchScreen({ screens, focused: 'DP-1', home: 'eDP-1', open: true }), 'DP-1');
   // A home whose workspace does not take the notch, or that is gone, falls back.
   const busy = [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: false }];
   assert.equal(State.notchScreen({ screens: busy, focused: 'eDP-1', home: 'eDP-1' }), 'DP-1');
   assert.equal(State.notchScreen({ screens, focused: 'DP-1', home: 'HDMI-A-1' }), 'DP-1');
+});
+
+// Bug: with the notch kept on one monitor (position.screen), changing the
+// volume while working on the other moved the notch over there for the
+// peek. A notch with a home screen now opens where it hangs.
+test('notchScreen: open, a notch with a home screen stays where it hangs', () => {
+  const screens = [{ name: 'DP-1', allowed: true }, { name: 'eDP-1', allowed: true }];
+  assert.equal(State.notchScreen({ screens, focused: 'eDP-1', home: 'DP-1', open: true }), 'DP-1');
+  // Its home's workspace leaves it out: it opens where it hangs instead.
+  const busy = [{ name: 'DP-1', allowed: false }, { name: 'eDP-1', allowed: true }, { name: 'HDMI-A-1', allowed: true }];
+  assert.equal(State.notchScreen({ screens: busy, focused: 'HDMI-A-1', home: 'DP-1', open: true }), 'HDMI-A-1');
+  // Hanging nowhere, it opens on its home.
+  const none = [{ name: 'DP-1', allowed: false }, { name: 'eDP-1', allowed: false }];
+  assert.equal(State.notchScreen({ screens: none, focused: 'eDP-1', home: 'DP-1', open: true }), 'DP-1');
+  // Opened by the pointer on another screen, it stays there.
+  assert.equal(State.notchScreen({ screens, focused: 'DP-1', home: 'DP-1', open: true, override: 'eDP-1' }), 'eDP-1');
 });
 
 test('reserveScreens: only the home screen while the notch can hang there', () => {
@@ -115,4 +129,31 @@ test('reserveScreens: only the home screen while the notch can hang there', () =
   assert.deepEqual(plain(State.reserveScreens(screens, 'eDP-1')), ['eDP-1']);
   assert.deepEqual(plain(State.reserveScreens(screens, '')), ['DP-1', 'eDP-1']);
   assert.deepEqual(plain(State.reserveScreens(screens, 'HDMI-A-1')), ['DP-1', 'eDP-1']);
+});
+
+test('compactStyles: only the first notch asking for the bar gets it', () => {
+  assert.deepEqual(plain(State.compactStyles(['notch', 'bar', 'bar'], true)), ['notch', 'bar', 'notch']);
+  assert.deepEqual(plain(State.compactStyles(['bar', 'bar'], false)), ['notch', 'notch']);
+  assert.deepEqual(plain(State.compactStyles([], true)), []);
+});
+
+// Bug: with the notch showing media on one monitor, changing the volume on
+// another moved the one notch there. A notch on every screen peeks only on
+// the focused one; the others keep what they show.
+test('peekCopy: the copy on the focused screen, else the first', () => {
+  assert.equal(State.peekCopy(['DP-1', 'HDMI-A-1'], 'HDMI-A-1'), 'HDMI-A-1');
+  assert.equal(State.peekCopy(['DP-1', 'HDMI-A-1'], ''), 'DP-1');
+  assert.equal(State.peekCopy([''], 'HDMI-A-1'), '');
+  assert.equal(State.peekCopy([], 'DP-1'), null);
+});
+
+test('reserveZones: the deepest reserve per screen edge, never the sum', () => {
+  const zones = plain(State.reserveZones([
+    { screens: ['DP-1', 'HDMI-A-1'], edge: 'top', space: 10 },
+    { screens: ['DP-1'], edge: 'top', space: 24 },
+    { screens: ['DP-1'], edge: 'left', space: 8 },
+    { screens: ['HDMI-A-1'], edge: 'bottom', space: 0 },
+    null
+  ]));
+  assert.deepEqual(zones, { 'DP-1|top': 24, 'HDMI-A-1|top': 10, 'DP-1|left': 8 });
 });

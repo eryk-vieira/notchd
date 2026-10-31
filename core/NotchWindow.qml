@@ -1,0 +1,255 @@
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+import "Position.js" as Position
+import "Config.js" as Config
+
+// One notch copy (NotchCopy) on screen: a layer-shell overlay on the screen
+// the copy names, the card hanging from the edge its notch's `position`
+// names, at its offset along it (off the host's bar where they share an
+// edge). Hidden over a fullscreen app and, closed, where its workspace
+// doesn't take it; peeks and the open notch show regardless. The copy holds
+// the state and NotchCard draws it; this places the card, routes the
+// pointer and handles the drag. With compactStyle "bar" the card hides at
+// rest/compact (the host's bar indicator shows that) and drops out from
+// under the bar to peek or expand.
+//
+// The window covers the whole screen on the overlay layer but its input mask
+// is just the notch, so everything else stays click-through. What the closed
+// notch keeps clear of windows (reserveSpace) goes out as `reserve`;
+// NotchSurface holds the space for every copy.
+Scope {
+  id: root
+
+  property var copy: null
+  // The host's bar, as NotchSurface has it.
+  property int barHeight: 0
+  property bool barHidden: false
+  property string layerNamespace: "notchd"
+
+  readonly property var notch: root.copy ? root.copy.owner : null
+  readonly property var compositor: root.copy ? root.copy.compositor : null
+
+  // What the notch shows (NotchCard.mode): the copy's mode, or "hidden".
+  readonly property string mode: card.mode
+
+  // -------------------------------------------------------------- geometry
+  readonly property var targetScreen: {
+    var screens = Quickshell.screens || []
+    var name = root.copy ? root.copy.screenName : ""
+    for (var i = 0; i < screens.length; i++)
+      if (screens[i].name === name) return screens[i]
+    return screens.length > 0 ? screens[0] : null
+  }
+  readonly property bool offWorkspace: !!root.copy && root.copy.offWorkspace
+  readonly property bool fullscreenOnScreen: !!(root.compositor && root.targetScreen
+    && root.compositor.hasFullscreen(root.targetScreen))
+
+  // The bar hides over fullscreen apps, so the notch moves up with it.
+  readonly property bool barVisible: !root.fullscreenOnScreen && !root.barHidden
+  // Where the notch is shown: while dragged, where it would land. On another
+  // screen (`dragScreen`), a preview there shows it instead of this card.
+  property var dragPlacement: null
+  property string dragScreen: ""
+  readonly property bool dragAway: !!root.dragPlacement && root.dragScreen !== ""
+    && root.dragScreen !== root.windowScreenName
+  readonly property string windowScreenName: window.screen ? window.screen.name : ""
+  readonly property var shownPlacement: root.dragPlacement
+    || (root.copy ? root.copy.placement : { edge: "top", offset: 0.5 })
+  readonly property string edge: card.edge
+  // What the bar takes on each edge.
+  readonly property var insets: Position.insets(root.copy && root.copy.svc ? root.copy.svc.barEdge : "top",
+                                                root.barHeight, root.barVisible)
+
+  // Hidden in bar style at rest/compact; over a fullscreen app, or with no
+  // screen on an allowed workspace, only peeks and the open notch show.
+  readonly property bool concealed: root.mode === "hidden"
+    || ((root.fullscreenOnScreen || root.offWorkspace) && (root.mode === "rest" || root.mode === "compact"))
+  readonly property bool pinned: !!root.copy && root.copy.pinned
+
+  // ------------------------------------------------------- reserved space
+  ReservedSpace {
+    id: reserveSpace
+    notch: root.copy
+    notchCard: card
+  }
+
+  // What windows keep clear of this copy: `space` px along `edge` of each
+  // of `screens` (NotchCopy.reservedScreens). The reserve keeps to where the
+  // notch is, not where a drag would put it.
+  readonly property var reserve: ({
+    screens: root.copy ? root.copy.reservedScreens : [],
+    edge: root.notch ? root.notch.edge : "top",
+    space: reserveSpace.space
+  })
+
+  // ---------------------------------------------------------------- window
+  PanelWindow {
+    id: window
+    screen: root.targetScreen
+
+    anchors { top: true; left: true; right: true; bottom: true }
+    color: "transparent"
+    exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.namespace: root.layerNamespace
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+    mask: Region { item: hitArea }
+
+    // The notch plus some slack, so the small rest lip is easy to hover:
+    // at both ends along the edge and twice that on the open side.
+    readonly property real slack: Theme.space(root.mode === "rest" ? 10 : 4)
+    readonly property var zone: {
+      var s = window.slack
+      var x = card.x - (root.edge === "left" ? 0 : root.edge === "right" ? 2 * s : s)
+      var y = card.y - (root.edge === "top" ? 0 : root.edge === "bottom" ? 2 * s : s)
+      if (root.concealed) return { x: x, y: y, width: 0, height: 0 }
+      return { x: x, y: y, width: card.width + 2 * s, height: card.height + 2 * s }
+    }
+
+    // Input region: the zone; while pinned, everything off the bar, to
+    // click away.
+    Item {
+      id: hitArea
+      x: root.pinned ? root.insets.left : window.zone.x
+      y: root.pinned ? root.insets.top : window.zone.y
+      width: root.pinned ? Math.max(0, window.width - root.insets.left - root.insets.right) : window.zone.width
+      height: root.pinned ? Math.max(0, window.height - root.insets.top - root.insets.bottom) : window.zone.height
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      visible: root.pinned
+      onClicked: if (root.copy) root.copy.close()
+    }
+
+    // The pointer is on the notch while it is on the card or the slack
+    // around it. The card reports its own hover: an item beside it loses
+    // the pointer to any control inside the card that takes hover, which
+    // closed the notch as the pointer crossed its buttons. Naming the
+    // screen keeps the copy that moves on it while open, even when another
+    // screen has focus (the closed notch can hang off-focus).
+    readonly property string screenName: window.screen ? window.screen.name : ""
+    Item {
+      id: hoverZone
+      x: window.zone.x
+      y: window.zone.y
+      width: window.zone.width
+      height: window.zone.height
+      HoverHandler {
+        onHoveredChanged: if (root.copy) root.copy.setPointer("notch-slack", hovered, window.screenName)
+      }
+    }
+
+    NotchCard {
+      id: card
+      notch: root.copy
+      edge: root.shownPlacement.edge
+      maxWidth: window.width - Theme.space(64)
+      maxHeight: window.height - Theme.space(64)
+      // Position.js has the rules; the shoulders stay on screen.
+      readonly property real margin: card.shoulder + Theme.space(4)
+      readonly property var spot: Position.place({
+        edge: card.edge, offset: root.shownPlacement.offset,
+        width: window.width, height: window.height, cardWidth: card.width, cardHeight: card.height,
+        insets: root.insets, margin: card.margin
+      })
+      x: card.spot.x
+      y: card.spot.y
+
+      onHoveredChanged: if (root.copy) root.copy.setPointer("notch", card.hovered, window.screenName)
+
+      // Held and dragged, it jumps to the edge nearest the pointer, its
+      // middle under the pointer, and lands there on release
+      // (Position.dragTarget). The pointer stays with this window while the
+      // button is down, even over another screen: its position plus this
+      // screen's gives the point on the desktop, and the screen there
+      // (Position.screenAt) gets a preview and, on the drop, the notch.
+      // With more than one screen, the drop also makes that screen its home,
+      // and lets in the workspace it shows if `workspaces` left it out, so
+      // the notch stays where it was dropped (Config.withWorkspace). A notch
+      // on every screen only takes the edge and offset: all its copies move.
+      draggable: !!root.copy && root.copy.canDrag
+      onDragStarted: if (root.copy) root.copy.setDragging(true)
+      onDragMoved: function(scenePosition) {
+        var here = window.screen
+        var gx = (here ? here.x : 0) + scenePosition.x
+        var gy = (here ? here.y : 0) + scenePosition.y
+        var name = Position.screenAt(root.screenGeometry(), gx, gy) || root.windowScreenName
+        var target = root.screenNamed(name) || here
+        root.dragScreen = name
+        root.dragPlacement = Position.dragTarget({
+          x: gx - (target ? target.x : 0), y: gy - (target ? target.y : 0),
+          width: target ? target.width : window.width, height: target ? target.height : window.height,
+          insets: root.insets, margin: card.margin, magnet: Theme.space(24)
+        })
+      }
+      onDragEnded: {
+        var notch = root.notch
+        if (notch && root.dragPlacement) {
+          var drop = Object.assign({}, root.dragPlacement)
+          drop.screen = notch.everyScreen ? Position.ALL_SCREENS
+            : (Quickshell.screens || []).length > 1 ? root.dragScreen : ""
+          // The workspace first: with the home set before it, the notch
+          // would hop back to the other screen and return.
+          var home = drop.screen && !notch.everyScreen ? root.screenNamed(drop.screen) : null
+          if (home && root.compositor && notch.workspaces && !notch.showsOn(home))
+            notch.setValue("workspaces", Config.withWorkspace(notch.workspaces, root.compositor.activeWorkspace(home)))
+          notch.setValue("position", Position.configValue(drop))
+        }
+        root.dragPlacement = null
+        root.dragScreen = ""
+        if (root.copy) root.copy.setDragging(false)
+      }
+      opacity: root.concealed || root.dragAway ? 0 : 1
+      Behavior on opacity { NumberAnimation { duration: 160 } }
+    }
+  }
+
+  // ------------------------------------------------------ drag preview
+  function screenGeometry() {
+    return (Quickshell.screens || []).map(function(s) {
+      return { name: s.name, x: s.x, y: s.y, width: s.width, height: s.height }
+    })
+  }
+  function screenNamed(name) {
+    var screens = Quickshell.screens || []
+    for (var i = 0; i < screens.length; i++) if (screens[i].name === name) return screens[i]
+    return null
+  }
+
+  // The notch where a drag on another screen would land it: a window of its
+  // own there (this one can't draw beyond its screen), showing the closed
+  // notch and taking no input.
+  Variants {
+    model: root.dragAway ? [root.screenNamed(root.dragScreen)].filter(function(s) { return !!s }) : []
+    PanelWindow {
+      id: preview
+      required property var modelData
+      screen: modelData
+      anchors { top: true; left: true; right: true; bottom: true }
+      color: "transparent"
+      exclusionMode: ExclusionMode.Ignore
+      WlrLayershell.namespace: root.layerNamespace + "-drag"
+      WlrLayershell.layer: WlrLayer.Overlay
+      WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+      mask: Region {}
+
+      NotchCard {
+        id: previewCard
+        notch: root.copy
+        edge: root.dragPlacement ? root.dragPlacement.edge : "top"
+        maxWidth: preview.width - Theme.space(64)
+        maxHeight: preview.height - Theme.space(64)
+        readonly property var spot: Position.place({
+          edge: previewCard.edge, offset: root.dragPlacement ? root.dragPlacement.offset : 0.5,
+          width: preview.width, height: preview.height, cardWidth: previewCard.width, cardHeight: previewCard.height,
+          insets: root.insets, margin: previewCard.shoulder + Theme.space(4)
+        })
+        x: previewCard.spot.x
+        y: previewCard.spot.y
+      }
+    }
+  }
+}

@@ -13,7 +13,8 @@ Item {
   id: reserve
   visible: false
 
-  property var svc: null
+  // The notch copy (NotchCopy) whose closed notch it keeps clear.
+  property var notch: null
   property NotchCard notchCard: null
   // NotchCard's depth animation (380 ms), plus a little.
   property int shrinkDelay: 400
@@ -36,16 +37,16 @@ Item {
 
   // State.js has the rules.
   readonly property int target: State.reservedSpace({
-    enabled: !!reserve.svc && reserve.svc.reserveSpace,
-    compactStyle: reserve.svc ? reserve.svc.compactStyle : "",
-    compact: !!reserve.svc && !!reserve.svc.compactModule && !!reserve.svc.compactModule.compact,
+    enabled: !!reserve.notch && reserve.notch.reserveSpace,
+    compactStyle: reserve.notch ? reserve.notch.compactStyle : "",
+    compact: !!reserve.notch && !!reserve.notch.compactModule && !!reserve.notch.compactModule.compact,
     baseline: reserve.compactBaseline,
     tallest: reserve.deepestCompact,
     rest: reserve.notchCard ? reserve.notchCard.restDepth : 0
   })
 
   // Held while the notch is dragged, so windows move once, when it lands.
-  readonly property bool held: !!reserve.svc && !!reserve.svc.dragging
+  readonly property bool held: !!reserve.notch && !!reserve.notch.dragging
   onHeldChanged: if (!reserve.held) reserve.follow()
 
   function follow() {
