@@ -43,6 +43,16 @@ Item {
   // module peeks, wherever it is.
   property bool peekOnFocusedScreen: false
 
+  // Takes typing (a text field in its expanded view): the notch's window
+  // takes the keyboard while it is pinned open on it (State.keyboardFocus),
+  // and Escape closes it. Hover alone never takes the keyboard; a view
+  // calls requestKeyboard() (a press on its field) to pin the notch.
+  property bool wantsKeyboard: false
+
+  // Width of its expanded view, in unscaled px (Theme.space applies); the
+  // default suits a list of rows.
+  property int expandedWidth: 400
+
   property Component compact: null
   // Compact view for a side edge (left/right): narrow and tall. Without one,
   // the notch shows a dot there while the module is active.
@@ -69,5 +79,11 @@ Item {
 
   function dismissPeek() {
     if (notch) notch.dismissPeek(module)
+  }
+
+  // Pins every notch open on this module, so its window takes the keyboard
+  // (wantsKeyboard) and leaving it with the pointer doesn't close it.
+  function requestKeyboard() {
+    if (notch) notch.requestKeyboard(module)
   }
 }

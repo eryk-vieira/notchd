@@ -6,6 +6,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
+- Modules you type into (`wantsKeyboard`): the notch takes the keyboard while it is pinned open on one, by a click, a shortcut (`toggleNotch`) or a press on the module's field (`requestKeyboard()`), never on hover alone; Escape closes it. Modules can also set their expanded view's width (`expandedWidth`).
 - An app icon: the notch with an orange dot and an `n`, in Gruvbox colors. `assets/icons/` has the SVG, PNGs at every size from 16 to 1024 px, a `.ico` and a one-color symbolic SVG.
 - Omarchy: a notchd button in the bar, with the app icon. Its panel lists every notch, where it is and what it shows; clicking one opens or closes it, its gear opens that notch's settings, and Settings (or a right click on the icon) opens the settings window.
 - `timer` module: a countdown or a pomodoro, started from the expanded notch or with `timer 25m`, `timer pomodoro`, `timer toggle`, `timer +5m`, `timer stop` over IPC. The closed notch shows the time left; at the end it peeks, even over the open notch, and sends a desktop notification. Its lengths, rounds, auto-start and notification are in settings (Modules › Timer). Not loaded by default.

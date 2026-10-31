@@ -522,6 +522,16 @@ Item {
     for (var j = 0; j < svc.standaloneNotches.length; j++) svc.standaloneNotches[j].dismissPeek(module)
   }
 
+  // A module you type into asks for the keyboard (a press on its field):
+  // every copy open on it pins, so its window takes the keyboard
+  // (State.keyboardFocus) and the pointer leaving doesn't close it.
+  function requestKeyboard(module) {
+    for (var i = 0; i < svc.copies.length; i++) {
+      var copy = svc.copies[i]
+      if (copy.mode === "expanded" && copy.expandedModules.indexOf(module) !== -1) copy.open()
+    }
+  }
+
   // Without a notch named, open and toggle act on the first notch and close
   // closes them all.
   function open() { if (svc.notches.length > 0) svc.notches[0].open() }

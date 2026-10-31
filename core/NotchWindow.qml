@@ -179,7 +179,10 @@ Scope {
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: root.layerNamespace
     WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    // The keyboard only while pinned open on a module you type into
+    // (NotchCopy.keyboardFocus); otherwise typing stays with your windows.
+    WlrLayershell.keyboardFocus: root.copy && root.copy.keyboardFocus === "exclusive"
+      ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     mask: Region { item: hitArea }
 

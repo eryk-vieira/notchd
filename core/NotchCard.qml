@@ -34,6 +34,13 @@ Item {
   // controls inside the views (which take hover themselves) never hide it.
   readonly property bool hovered: hover.hovered
   HoverHandler { id: hover }
+
+  // Escape closes it. Keys reach it while its window has the keyboard
+  // (pinned open on a module you type into): from a field inside a view,
+  // which leaves Escape alone, or the card itself, which holds the focus
+  // otherwise.
+  focus: true
+  Keys.onEscapePressed: if (card.notch) card.notch.close()
   // How each end of the card along the edge meets what is beside it
   // (Outline.js): "shoulder" flares into the edge, "corner" sits flush and
   // square against the screen's side, "joined" sits flush with a
@@ -224,7 +231,7 @@ Item {
           model: card.notch ? card.notch.expandedModules : []
           delegate: Loader {
             required property var modelData
-            width: Theme.space(400)
+            width: Theme.space(modelData.expandedWidth || 400)
             sourceComponent: modelData.expanded
           }
         }

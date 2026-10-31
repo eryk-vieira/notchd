@@ -15,6 +15,7 @@ mkdir -- "$scratch/config" "$scratch/data" "$scratch/runtime"
 ln -s -- "$root/core" "$scratch/config/core"
 ln -s -- "$root/hosts" "$scratch/config/hosts"
 ln -s -- "$root/tests/qml/shell.qml" "$scratch/config/shell.qml"
+ln -s -- "$root/tests/qml/fixtures" "$scratch/config/fixtures"
 
 NOTCHD_QMLTEST_DIR="$scratch/data" "$root/scripts/isolated.sh" "$scratch/runtime" \
   timeout 60 quickshell -p "$scratch/config" --no-color > "$scratch/log" 2>&1 || true
