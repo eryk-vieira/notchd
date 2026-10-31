@@ -216,21 +216,44 @@ NotchModule {
   }
 
   // ------------------------------------------------------------ components
-  component Art: ClippingRectangle {
+  // Artwork with rounded corners. ClippingRectangle rounds it with a shader;
+  // the software renderer (QT_QUICK_BACKEND=software, offscreen renders) has
+  // none and would draw nothing at all, so there it gets a square crop.
+  component Art: Item {
     id: art
     property real size: Theme.space(20)
+    property real radius: Theme.space(5)
+    readonly property bool shaders: GraphicsInfo.api !== GraphicsInfo.Software
     implicitWidth: size
     implicitHeight: size
     Layout.preferredWidth: size
     Layout.preferredHeight: size
-    color: Qt.rgba(Theme.foreground.r, Theme.foreground.g, Theme.foreground.b, 0.12)
+
+    Loader {
+      anchors.fill: parent
+      sourceComponent: art.shaders ? rounded : square
+    }
+    Component {
+      id: rounded
+      ClippingRectangle { radius: art.radius; color: Theme.selected; ArtContent { size: art.size } }
+    }
+    Component {
+      id: square
+      Rectangle { radius: art.radius; color: Theme.selected; clip: true; ArtContent { size: art.size } }
+    }
+  }
+
+  component ArtContent: Item {
+    id: content
+    property real size: Theme.space(20)
+    anchors.fill: parent
     Image {
       id: artImage
       anchors.fill: parent
       source: media.artUrl
       fillMode: Image.PreserveAspectCrop
-      sourceSize.width: art.size * 2
-      sourceSize.height: art.size * 2
+      sourceSize.width: content.size * 2
+      sourceSize.height: content.size * 2
       asynchronous: true
       visible: status === Image.Ready
     }
@@ -242,7 +265,7 @@ NotchModule {
       color: Theme.foreground
       opacity: 0.7
       font.family: Theme.font.family
-      font.pixelSize: art.size * 0.55
+      font.pixelSize: content.size * 0.55
     }
   }
 
