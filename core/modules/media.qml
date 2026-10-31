@@ -4,8 +4,8 @@ import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import ".."
 
-// Now playing, from MPRIS (Spotify, browsers, mpv...). Compact: artwork on
-// the left, equalizer on the right. Peeks on a new track. Expanded: artwork,
+// Now playing, from MPRIS (Spotify, browsers, mpv...). Compact: artwork,
+// title and artist, equalizer. Peeks on a new track. Expanded: artwork,
 // title, progress and transport controls.
 NotchModule {
   id: media
@@ -78,12 +78,51 @@ NotchModule {
   }
 
   // ----------------------------------------------------------------- views
+  // Artwork, "title · artist" and the equalizer. The text gets up to
+  // `maxText`; the title keeps its room first and the artist takes what is
+  // left, dropping out when that is too little to read.
   compact: Component {
     Item {
-      implicitWidth: Theme.space(220)
+      id: compactRow
+      readonly property real gap: Theme.space(10)
+      readonly property real maxText: Theme.space(240)
+      readonly property real textWidth: Math.max(0, width - compactArt.width - compactEq.width - gap * 2)
+      readonly property real titleWidth: Math.min(compactTitle.implicitWidth, textWidth)
+      readonly property real artistWidth: Math.min(compactArtist.implicitWidth, textWidth - titleWidth)
+      readonly property bool artistFits: media.trackArtist !== "" && artistWidth >= Theme.space(40)
+
+      implicitWidth: Math.max(Theme.space(220), compactArt.width + compactEq.width + gap * 2
+        + Math.min(maxText, compactTitle.implicitWidth + (media.trackArtist !== "" ? compactArtist.implicitWidth : 0)))
       implicitHeight: Theme.space(18)
-      Art { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; size: Theme.space(16); radius: Theme.space(4) }
-      Equalizer { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; barHeight: Theme.space(12) }
+
+      Art { id: compactArt; anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; size: Theme.space(16); radius: Theme.space(4) }
+      Text {
+        id: compactTitle
+        anchors.left: compactArt.right
+        anchors.leftMargin: compactRow.gap
+        anchors.verticalCenter: parent.verticalCenter
+        width: compactRow.titleWidth
+        textFormat: Text.PlainText
+        text: media.trackTitle
+        elide: Text.ElideRight
+        color: Theme.foreground
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.bodySmall
+      }
+      Text {
+        id: compactArtist
+        anchors.left: compactTitle.right
+        anchors.verticalCenter: parent.verticalCenter
+        width: compactRow.artistWidth
+        visible: compactRow.artistFits
+        textFormat: Text.PlainText
+        text: " · " + media.trackArtist
+        elide: Text.ElideRight
+        color: Theme.muted
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.bodySmall
+      }
+      Equalizer { id: compactEq; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; barHeight: Theme.space(12) }
     }
   }
 
