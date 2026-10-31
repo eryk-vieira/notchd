@@ -134,7 +134,7 @@ Objects and arrays built inside the vm have their own prototypes; compare them t
 
 It can't run offscreen like the tests (`PanelWindow` needs a compositor, and rendering real frames is the cost that matters), so it runs on your display but on a private D-Bus that activates nothing, with the demo player as the only MPRIS player and a scratch config. It is not part of `make check`: the numbers depend on the machine and on what else runs. Run it before and after a change that could cost something, anything that animates, polls or adds a window, and put both tables in the commit discussion.
 
-What keeps the cost down: anything that changes on screen makes its whole window render a frame, and every notch window covers its screen. A view that animates without pause (a `Behavior` that is always moving, a timer of a few hundred ms) renders at the monitor's refresh rate; step it instead. A copy that is hidden must not keep a live view.
+What keeps the cost down: anything that changes on screen makes its whole window render a frame, and every notch window covers its screen. A view that animates without pause (a `Behavior` that is always moving, a timer of a few hundred ms) renders at the monitor's refresh rate; step it instead. A copy that is hidden must not keep a live view. An `Image` without `mipmap: true` costs a texture atlas the size of the screen.
 
 ## Conventions
 

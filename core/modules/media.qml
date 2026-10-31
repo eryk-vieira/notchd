@@ -304,6 +304,11 @@ NotchModule {
       sourceSize.width: content.size * 2
       sourceSize.height: content.size * 2
       asynchronous: true
+      // Mipmapped, the texture stays out of the scene graph's atlas: that
+      // one is sized to the window, which covers the screen (4096 x 2048
+      // px on a 3440 x 1440 monitor, ~25 MB), all for an 80 px cover. It
+      // also scales the 2x source down smoother.
+      mipmap: true
       visible: status === Image.Ready
     }
     Text {
