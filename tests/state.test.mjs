@@ -70,6 +70,44 @@ test('needsWindow: a guest only while open or lingering after; a notch always', 
   assert.equal(State.needsWindow({ guest: true, lingering: true }), true);
 });
 
+test('shownModules: every expanded module, or with tabs the picked one', () => {
+  const media = mod('media', 60, { moduleId: 'media' });
+  const claude = mod('claude', 40, { moduleId: 'claude' });
+  const codex = mod('codex', 40, { moduleId: 'codex' });
+  const ids = (r) => plain({ modules: r.modules.map((m) => m.id), tabs: r.tabs.map((m) => m.id) });
+  // Without tabs, all of them, one above the other.
+  assert.deepEqual(ids(State.shownModules([media, claude, codex], false, 'codex')),
+                   { modules: ['media', 'claude', 'codex'], tabs: [] });
+  // With tabs, the picked one; none picked, or one that went, the first.
+  assert.deepEqual(ids(State.shownModules([claude, codex], true, 'codex')), { modules: ['codex'], tabs: ['claude', 'codex'] });
+  assert.deepEqual(ids(State.shownModules([claude, codex], true, '')), { modules: ['claude'], tabs: ['claude', 'codex'] });
+  assert.deepEqual(ids(State.shownModules([claude, codex], true, 'media')), { modules: ['claude'], tabs: ['claude', 'codex'] });
+  // One module needs no tabs.
+  assert.deepEqual(ids(State.shownModules([claude], true, 'codex')), { modules: ['claude'], tabs: [] });
+  assert.deepEqual(ids(State.shownModules(null, true, '')), { modules: [], tabs: [] });
+});
+
+test('compactModules: with tabs every active compact view, else the compact module', () => {
+  const media = mod('media', 60, { compact: {} });
+  const claude = mod('claude', 40, { compact: {} });
+  const plainOne = mod('osd', 100);
+  const ids = (list) => plain(list.map((m) => m.id));
+  assert.deepEqual(ids(State.compactModules([plainOne, media, claude], false)), ['media']);
+  assert.deepEqual(ids(State.compactModules([plainOne, media, claude], true)), ['media', 'claude']);
+  assert.deepEqual(ids(State.compactModules([plainOne], false)), []);
+  assert.deepEqual(ids(State.compactModules([plainOne], true)), []);
+  assert.deepEqual(ids(State.compactModules(null, true)), []);
+});
+
+test('attentionPeek: the first module with something unseen and a peek', () => {
+  const codex = mod('codex', 40, { attention: false });
+  const claude = mod('claude', 40, { attention: true });
+  const noPeek = mod('silent', 90, { attention: true, peek: null });
+  assert.equal(State.attentionPeek([noPeek, codex, claude]).id, 'claude');
+  assert.equal(State.attentionPeek([codex]), null);
+  assert.equal(State.attentionPeek(null), null);
+});
+
 test('keyboardFocus: only pinned open on a module that types', () => {
   const typing = mod('claude', 50, { wantsKeyboard: true });
   const open = { pinned: true, mode: 'expanded', modules: [mod('media', 60), typing] };

@@ -105,7 +105,11 @@ ShellRoot {
       { name: "claude: the closed notch keeps its size while it works", run: root.agentBusySteady },
       { name: "codex: closed and idle for idleMinutes, it stops; opened again, it starts", run: root.codexIdle },
       { name: "terminal: the band behind your messages (ANSI 8) is gray, not orange", run: root.messageBandGray },
-      { name: "a window its monitor took away comes back with the monitor", run: root.keepShownReopens }
+      { name: "a window its monitor took away comes back with the monitor", run: root.keepShownReopens },
+      { name: "an open notch taller than its screen fits it and scrolls", run: root.tallNotchScrolls },
+      { name: "with tabs the open notch shows one module, and opening for a module picks its tab", run: root.tabsShowOne },
+      { name: "with tabs the closed notch shows every module side by side", run: root.tabsCompactAll },
+      { name: "news missed while the notch was open peeks once as it closes", run: root.missedPeekOnClose }
     ]
     Qt.callLater(root.next)
   }
@@ -1254,10 +1258,12 @@ ShellRoot {
       }],
       [1100, function() {
         root.check(copy.peekModule === m, "the end of work while closed did not peek")
+        root.check(m.attention, "done while closed, it has no news for you")
         svc.open()
       }],
       [500, function() {
         root.check(m.term === first && first.parent !== m && first.visible, "reopened, it did not show the same terminal")
+        root.check(!m.attention, "seen, it still has news")
         m.restart()
       }],
       [900, function() {
@@ -1501,6 +1507,164 @@ ShellRoot {
     ], function() {
       windowKept.wanted = false
       windowKept.screen = null
+      root.done()
+    })
+  }
+
+  // ----------------------------------------------------------- tall notch
+  // Bug: the open notch stopped at the screen's height, but what it showed
+  // didn't: two terminals one above the other on a laptop screen ran past
+  // the bottom, cut off, with no way to reach them. Now the modules scroll
+  // past the room the card has: the wheel, and a scrollbar.
+  NotchService {
+    id: tallSvc
+    ipcTarget: "notchd-qmltest-tall"
+    configPath: root.dir + "/tall.json"
+    compositor: workspace4
+    hostModules: ({ typing: Qt.resolvedUrl("fixtures/typing.qml"), tall: Qt.resolvedUrl("fixtures/tall.qml") })
+    defaultModules: ["typing", "tall"]
+  }
+  FloatingWindow {
+    implicitWidth: 700
+    implicitHeight: 500
+    NotchCard {
+      id: tallCard
+      notch: tallSvc.notches.length > 0 ? tallSvc.notches[0].copies[0] : null
+      x: 50
+      maxWidth: 600
+      maxHeight: 400
+    }
+    TestCase { id: wheel; when: false }
+  }
+  // The card's Flickable, found by what it has.
+  function flickableIn(item) {
+    if (!item) return null
+    if (item.contentY !== undefined && item.contentHeight !== undefined && item.flicking !== undefined) return item
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++) {
+      var found = root.flickableIn(kids[i])
+      if (found) return found
+    }
+    return null
+  }
+  function tallNotchScrolls() {
+    var copy = tallSvc.notches.length > 0 ? tallSvc.notches[0].copies[0] : null
+    if (!root.check(!!copy, "the notch did not load")) { root.done(); return }
+    copy.open()
+    var flick = null
+    root.steps([
+      [600, function() {
+        root.check(tallCard.mode === "expanded", "the card is " + tallCard.mode)
+        root.check(tallCard.height <= 400, "a card with 400 px of room is " + tallCard.height + " tall")
+        flick = root.flickableIn(tallCard)
+        if (!root.check(!!flick, "the open notch has nothing that scrolls")) return
+        root.check(flick.contentHeight > flick.height, "the modules fit, the test proves nothing: "
+                   + flick.contentHeight + " in " + flick.height)
+        // The wheel over the tall module, which doesn't take it.
+        wheel.mouseWheel(tallCard, tallCard.width / 2, tallCard.height / 2, 0, -360)
+      }],
+      [100, function() {
+        if (flick) root.check(flick.contentY > 0, "the wheel did not scroll the modules")
+      }]
+    ], function() {
+      copy.close()
+      root.done()
+    })
+  }
+
+  // With the notch's `tabs`, the open notch shows one module at a time:
+  // the first, or the one whose tab is picked; a module that opens the notch
+  // (a shortcut, IPC: openNotch) picks its own. The keyboard follows what
+  // shows: the typing module's tab not shown, the window doesn't take it.
+  function tabsShowOne() {
+    var copy = tallSvc.notches.length > 0 ? tallSvc.notches[0].copies[0] : null
+    var typing = tallSvc.moduleById("typing")
+    var tall = tallSvc.moduleById("tall")
+    if (!root.check(!!copy && !!typing && !!tall, "the notch or its modules did not load")) { root.done(); return }
+    root.check(copy.shownModules.length === 2 && copy.tabModules.length === 0, "without tabs it shows "
+               + copy.shownModules.length + " modules and " + copy.tabModules.length + " tabs")
+    tallSvc.setConfigValue("tabs", true)
+    root.check(copy.tabModules.length === 2, "with tabs, " + copy.tabModules.length + " tabs")
+    root.check(copy.shownModules.length === 1 && copy.shownModules[0] === typing, "with tabs it does not show the first module alone")
+    tall.openNotch()
+    root.check(copy.pinned, "opening for a module did not open the notch")
+    root.check(copy.shownModules.length === 1 && copy.shownModules[0] === tall, "opening for a module did not pick its tab")
+    root.check(copy.keyboardFocus === "none", "the typing module's tab hidden, it takes " + copy.keyboardFocus)
+    copy.showTab("typing")
+    root.check(copy.keyboardFocus === "exclusive", "on the typing module's tab, pinned, it takes " + copy.keyboardFocus)
+    copy.close()
+    tallSvc.setConfigValue("tabs", undefined)
+    root.check(copy.tabModules.length === 0, "tabs off, " + copy.tabModules.length + " tabs")
+    root.done()
+  }
+
+  // Two modules, with tabs: the closed notch and missed news.
+  NotchService {
+    id: tabsSvc
+    ipcTarget: "notchd-qmltest-tabs"
+    configPath: root.dir + "/tabs.json"
+    compositor: workspace4
+    hostModules: ({ tall: Qt.resolvedUrl("fixtures/tall.qml"), news: Qt.resolvedUrl("fixtures/news.qml") })
+    defaultModules: ["tall", "news"]
+  }
+  NotchCard {
+    id: tabsCard
+    notch: tabsSvc.notches.length > 0 ? tabsSvc.notches[0].copies[0] : null
+  }
+
+  // Bug: with tabs, the closed notch showed only the first module (codex),
+  // the others (claude, the timer) a tab away even when it was closed. Now
+  // it shows every active module's compact view, side by side.
+  function tabsCompactAll() {
+    var copy = tabsSvc.notches.length > 0 ? tabsSvc.notches[0].copies[0] : null
+    if (!root.check(!!copy, "the notch did not load")) { root.done(); return }
+    root.check(copy.compactModules.length === 1, "without tabs the closed notch shows " + copy.compactModules.length + " modules")
+    tabsSvc.setConfigValue("tabs", true)
+    root.steps([[600, function() {
+      root.check(copy.mode === "compact", "the notch is " + copy.mode)
+      root.check(copy.compactModules.length === 2, "with tabs the closed notch shows " + copy.compactModules.length + " modules")
+      // 80 and 60 px wide, a line and the gaps between them.
+      root.check(tabsCard.width >= 80 + 60 + 2 * Theme.space(10), "a closed notch with both is " + tabsCard.width + " wide")
+    }]], function() {
+      tabsSvc.setConfigValue("tabs", undefined)
+      root.done()
+    })
+  }
+
+  // Bug: with tabs, an agent that finished on a tab you weren't looking at
+  // asked for its peek while the notch was open, which takes no peeks, and
+  // the news was lost (codex peeked, claude never did). A peek of news you
+  // haven't seen (NotchModule.attention) now shows as the notch closes,
+  // once: hovering and leaving again doesn't repeat it.
+  function missedPeekOnClose() {
+    var copy = tabsSvc.notches.length > 0 ? tabsSvc.notches[0].copies[0] : null
+    var news = tabsSvc.moduleById("news")
+    if (!root.check(!!copy && !!news, "the notch or its module did not load")) { root.done(); return }
+    tabsSvc.setConfigValue("tabs", true)
+    copy.open()
+    news.attention = true
+    news.requestPeek(3000)
+    root.check(copy.peekModule === null, "an open notch peeked")
+    copy.close()
+    root.steps([
+      [50, function() {
+        root.check(copy.peekModule === news, "closing did not show the missed peek")
+        copy.dismissPeek(news)
+        copy.hovered = true
+      }],
+      [50, function() { copy.hovered = false }],
+      [50, function() {
+        root.check(copy.peekModule === null, "the missed peek showed again")
+        // News you saw before the notch closed doesn't peek.
+        copy.open()
+        news.requestPeek(3000)
+        news.attention = false
+        copy.close()
+      }],
+      [50, function() { root.check(copy.peekModule === null, "news already seen peeked") }]
+    ], function() {
+      news.attention = false
+      tabsSvc.setConfigValue("tabs", undefined)
       root.done()
     })
   }

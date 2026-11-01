@@ -321,6 +321,9 @@ Item {
     out.push({ page: own, section: "Layout", key: key("reserveSpace"), type: "boolean",
                label: "Keep windows clear", default: inherited("reserveSpace", Config.DEFAULTS.reserveSpace),
                help: "Windows keep clear of the closed notch instead of going under it, along its whole edge: a sliver at rest, more while a module is active. Peeks and the open notch still cover them." })
+    out.push({ page: own, section: "Layout", key: key("tabs"), type: "boolean",
+               label: "Tabs", default: inherited("tabs", Config.DEFAULTS.tabs),
+               help: "Open, the notch shows one module at a time, with a tab for each, instead of all of them one above the other. For modules that take room, like a terminal. Opening the notch from a module (a shortcut, IPC) picks its tab." })
     out.push({ page: own, section: "Position", key: key("position.edge"), type: "choice", display: "cards",
                label: "Edge", default: inherited("position.edge", "top"),
                help: "The screen edge the notch hangs from. On a side edge, an active module without a vertical view shows a dot.",
@@ -530,7 +533,7 @@ Item {
   function requestKeyboard(module) {
     for (var i = 0; i < svc.copies.length; i++) {
       var copy = svc.copies[i]
-      if (copy.mode === "expanded" && copy.expandedModules.indexOf(module) !== -1) copy.open()
+      if (copy.mode === "expanded" && copy.shownModules.indexOf(module) !== -1) copy.open()
     }
   }
 
@@ -538,7 +541,7 @@ Item {
   // every one that does (NotchModule.openNotch / closeNotch).
   function openModule(module) {
     for (var i = 0; i < svc.notches.length; i++)
-      if (svc.notches[i].hasModule(module)) { svc.notches[i].open(); return true }
+      if (svc.notches[i].hasModule(module)) { svc.notches[i].open(module); return true }
     return false
   }
   function closeModule(module) {
@@ -655,6 +658,7 @@ Item {
           return {
             id: n.notchId,
             reserveSpace: n.reserveSpace,
+            tabs: n.tabs,
             workspaces: n.workspaces,
             position: n.placement,
             draggable: n.canDrag,

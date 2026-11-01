@@ -23,11 +23,15 @@ NotchModule {
   expanded: Component { Text { text: "details"; color: Theme.foreground } }
 
   // m.requestPeek(3000) pops the notch open with `peek` for 3 s.
-  // m.openNotch() pins the first notch that shows it open; m.closeNotch() closes them.
+  // m.openNotch() pins the first notch that shows it open, on its tab; m.closeNotch() closes them.
 }
 ```
 
 A module that is `active` but has no `compact` view right now leaves the closed notch at rest and still shows when expanded: the `resources` module, set to `"short"`, binds `compact` to null until a resource runs short.
+
+The expanded view is as tall as it lays itself out; it needn't fit the screen. Past the room the notch has, the open notch scrolls its modules (the wheel, where your view doesn't take it, and a scrollbar), and with the notch's `tabs` it shows one module at a time, its `title` on the tab. `openNotch()` picks the module's own tab. Closed, a notch with tabs shows every active module's `compact` view side by side, so keep it short.
+
+A peek asked for while the notch is open (on another tab, say) doesn't show. For news that matters, set `attention: true` before `requestPeek()`: its tab gets a dot, and the peek shows once as the notch closes, unless you have seen it by then. Clear `attention` once you have (the terminal modules clear it when their view opens). The rule is `State.attentionPeek`.
 
 ## Settings
 

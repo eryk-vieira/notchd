@@ -66,9 +66,14 @@ NotchModule {
 
   property int viewsOpen: 0
   onWorkingChanged: {
-    if (Agent.donePeek({ wasWorking: !m.working, working: m.working, open: m.viewsOpen > 0, typed: m.typed }))
+    if (m.working) m.attention = false
+    if (Agent.donePeek({ wasWorking: !m.working, working: m.working, open: m.viewsOpen > 0, typed: m.typed })) {
+      // Done while you weren't looking: news until its view opens.
+      m.attention = true
       m.requestPeek(5000)
+    }
   }
+  onViewsOpenChanged: if (m.viewsOpen > 0) m.attention = false
 
   // ------------------------------------------------------------- terminal
   function ensureTerm() {
@@ -97,6 +102,7 @@ NotchModule {
     m.place()
   }
   function stop() {
+    m.attention = false
     if (!m.term) return
     m.term.destroy()
     m.term = null
@@ -422,14 +428,16 @@ NotchModule {
     }
   }
   // A green dot while it works; its place stays while off.
+  // Green while it works; the accent once it is done and you haven't
+  // looked (`attention`).
   component Working: Item {
     implicitWidth: Theme.space(7)
     implicitHeight: implicitWidth
     Rectangle {
       anchors.fill: parent
-      visible: m.working
+      visible: m.working || m.attention
       radius: width / 2
-      color: Theme.success
+      color: m.working ? Theme.success : Theme.accent
     }
   }
   component IconButton: Item {

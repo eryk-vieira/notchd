@@ -24,14 +24,27 @@ Item {
   readonly property bool reserveSpace: !!copy.owner && copy.owner.reserveSpace
   readonly property bool canDrag: !!copy.owner && copy.owner.canDrag
   readonly property var compactModule: copy.owner ? copy.owner.compactModule : null
+  readonly property var compactModules: copy.owner ? copy.owner.compactModules : []
   readonly property var expandedModules: copy.owner ? copy.owner.expandedModules : []
+  // What the open notch shows of those (State.shownModules): all of them,
+  // or with the notch's `tabs`, the one whose tab is picked; and the
+  // modules to make tabs of ([] for none).
+  property string tab: ""
+  readonly property var shown: State.shownModules(copy.expandedModules, !!copy.owner && copy.owner.tabs, copy.tab)
+  readonly property var shownModules: copy.shown.modules
+  readonly property var tabModules: copy.shown.tabs
+  // Picks a module's tab, by id.
+  function showTab(moduleId) { copy.tab = moduleId || "" }
 
   // ------------------------------------------------------------------ peek
   property var peekModule: null
 
   function requestPeek(module, ms) {
     if (!State.canPeek(module, { pinned: copy.pinned, hovered: copy.hovered,
-                                 current: copy.peekModule, currentShowing: peekTimer.running })) return
+                                 current: copy.peekModule, currentShowing: peekTimer.running })) {
+      copy.keepMissed(module, ms)
+      return
+    }
     copy.peekModule = module
     peekTimer.interval = Math.max(400, Number(ms) || 2500)
     peekTimer.restart()
@@ -45,6 +58,23 @@ Item {
   }
 
   Timer { id: peekTimer; onTriggered: copy.peekModule = null }
+
+  // Peeks the notch couldn't show, of modules with news you haven't seen
+  // (NotchModule.attention): { module, ms }. Each shows once, as the notch
+  // closes (State.attentionPeek), unless you have seen it by then.
+  property var missed: []
+  function keepMissed(module, ms) {
+    if (!module || !module.attention) return
+    copy.missed = copy.missed.filter(function(e) { return e.module !== module }).concat([{ module: module, ms: ms }])
+  }
+  function peekMissed() {
+    if (copy.isOpen) return
+    var list = copy.missed.filter(function(e) { return e.module.attention })
+    var module = State.attentionPeek(list.map(function(e) { return e.module }))
+    copy.missed = list.filter(function(e) { return e.module !== module })
+    if (!module) return
+    for (var i = 0; i < list.length; i++) if (list[i].module === module) copy.requestPeek(module, list[i].ms)
+  }
 
   // ----------------------------------------------------------------- hover
   // Several surfaces report the pointer (the notch card, the slack around
@@ -107,14 +137,18 @@ Item {
   // The keyboard its window takes (State.keyboardFocus): "exclusive" while
   // pinned open on a module you type into, else "none".
   readonly property string keyboardFocus: State.keyboardFocus({ pinned: copy.pinned, mode: copy.mode,
-                                                               modules: copy.expandedModules })
+                                                               modules: copy.shownModules })
 
   // ---------------------------------------------------------------- window
   // Whether its window is on screen (State.needsWindow): a guest's only
   // while open and for `windowLinger` ms after it closes.
   property int windowLinger: 5000
   property bool lingering: false
-  onIsOpenChanged: if (!copy.isOpen) { copy.lingering = true; lingerTimer.restart() }
+  onIsOpenChanged: if (!copy.isOpen) {
+    copy.lingering = true
+    lingerTimer.restart()
+    Qt.callLater(copy.peekMissed)
+  }
   Timer { id: lingerTimer; interval: copy.windowLinger; onTriggered: copy.lingering = false }
   readonly property bool needsWindow: State.needsWindow({ guest: copy.guest, open: copy.isOpen, lingering: copy.lingering })
   // A window going away reports no pointer leaving it: forget what it had.

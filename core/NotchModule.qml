@@ -43,6 +43,12 @@ Item {
   // module peeks, wherever it is.
   property bool peekOnFocusedScreen: false
 
+  // Has news you haven't seen, such as an agent that finished while you
+  // weren't looking at it. Set it before requestPeek(): a peek the notch
+  // can't show then (open on another tab, say) shows as it closes. Its tab
+  // shows a dot meanwhile. The module clears it once you have seen it.
+  property bool attention: false
+
   // Takes typing (a text field in its expanded view): the notch's window
   // takes the keyboard while it is pinned open on it (State.keyboardFocus),
   // and Escape closes it. Hover alone never takes the keyboard; a view

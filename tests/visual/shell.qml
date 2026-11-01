@@ -65,7 +65,8 @@ ShellRoot {
     { name: "claude-dark", chat: true, theme: root.dark },
     { name: "claude-light", chat: true, theme: root.light },
     { name: "codex-dark", codex: true, theme: root.dark },
-    { name: "codex-light", codex: true, theme: root.light }
+    { name: "codex-light", codex: true, theme: root.light },
+    { name: "agents-dark", agents: true, theme: root.dark }
   ]
   property int index: -1
   readonly property var scenario: index >= 0 && index < scenarios.length ? scenarios[index] : null
@@ -128,6 +129,13 @@ ShellRoot {
   DemoService { id: claudeBusySvc; tag: "claude-busy"; defaultModules: ["claude"] }
   DemoService { id: codexSvc; tag: "codex"; defaultModules: ["codex"] }
   DemoService { id: codexBusySvc; tag: "codex-busy"; defaultModules: ["codex"] }
+  // Both in one notch: with tabs, and one above the other on a screen too
+  // short for them, which scrolls.
+  DemoService { id: agentsTabsSvc; tag: "agents-tabs"; defaultModules: ["claude", "codex"] }
+  DemoService { id: agentsStackSvc; tag: "agents-stack"; defaultModules: ["claude", "codex"] }
+  // Closed, with tabs: both side by side, claude working, codex done unseen.
+  DemoService { id: agentsClosedSvc; tag: "agents-closed"; defaultModules: ["claude", "codex"] }
+  DemoService { id: agentsSideSvc; tag: "agents-side"; defaultModules: ["claude", "codex"] }
   readonly property var demoServices: [mediaSvc, activitySvc, osdSvc, openSvc, resourcesSvc, resourcesOpenSvc,
                                        timerSvc, pomodoroSvc, timerIdleSvc, timerDoneSvc, restSvc]
 
@@ -171,6 +179,22 @@ ShellRoot {
       codexSvc.setConfigValue("codex.directory", root.outDir)
       codexSvc.open()
       codexBusySvc.moduleById("codex").status = { working: true, title: "Fix the flaky login test" }
+      var agents = [agentsTabsSvc, agentsStackSvc]
+      for (var a = 0; a < agents.length; a++) {
+        agents[a].setConfigValue("claude.directory", root.outDir)
+        agents[a].setConfigValue("codex.directory", root.outDir)
+      }
+      agentsTabsSvc.setConfigValue("tabs", true)
+      agentsClosedSvc.setConfigValue("tabs", true)
+      agentsClosedSvc.moduleById("claude").status = { working: true, title: "Convert HEIC photos to JPG" }
+      agentsClosedSvc.moduleById("codex").status = { working: false, title: "Fix the flaky login test" }
+      agentsClosedSvc.moduleById("codex").attention = true
+      agentsSideSvc.setConfigValue("tabs", true)
+      agentsSideSvc.setConfigValue("position", { edge: "right", offset: 0.5 })
+      agentsSideSvc.moduleById("claude").status = { working: true, title: "" }
+      agentsSideSvc.moduleById("codex").attention = true
+      agentsTabsSvc.open()
+      agentsStackSvc.open()
     }
   }
 
@@ -414,6 +438,24 @@ ShellRoot {
     }
   }
 
+  FloatingWindow {
+    id: agentsWin
+    visible: !!root.scenario && !!root.scenario.agents
+    implicitWidth: agentsScene.width
+    implicitHeight: agentsScene.height
+    color: Theme.background
+    Grid {
+      id: agentsScene
+      columns: 2
+      padding: Theme.space(16)
+      spacing: Theme.space(16)
+      MockScreen { svc: agentsTabsSvc; width: Theme.space(880); height: Theme.space(620); caption: "claude and codex, tabs" }
+      MockScreen { svc: agentsStackSvc; width: Theme.space(880); height: Theme.space(620); caption: "claude and codex, too tall: scrolls" }
+      MockScreen { svc: agentsClosedSvc; width: Theme.space(880); height: Theme.space(120); caption: "tabs, closed: claude working, codex done unseen" }
+      MockScreen { svc: agentsSideSvc; width: Theme.space(880); height: Theme.space(200); caption: "the same on the right edge" }
+    }
+  }
+
   // Set a scenario, give it a beat to lay out (and the notch to settle),
   // grab, then the next.
   function next() {
@@ -429,7 +471,7 @@ ShellRoot {
     svc.settingsNotch = root.scenario.notch || 0
     for (var i = 0; i < root.demoServices.length; i++)
       root.demoServices[i].setConfigValue("position", root.scenario.edge ? { edge: root.scenario.edge } : undefined)
-    grabTimer.interval = root.scenario.edge || root.scenario.chat || root.scenario.codex ? 1200 : 400
+    grabTimer.interval = root.scenario.edge || root.scenario.chat || root.scenario.codex || root.scenario.agents ? 1200 : 400
     grabTimer.start()
     scrollTimer.start()
   }
@@ -440,7 +482,7 @@ ShellRoot {
     interval: 400
     onTriggered: {
       var name = root.scenario.name
-      var target = root.scenario.chat ? chatScene : root.scenario.codex ? codexScene
+      var target = root.scenario.chat ? chatScene : root.scenario.codex ? codexScene : root.scenario.agents ? agentsScene
         : root.scenario.edge ? notchScene : win.contentItem.children[0]
       target.grabToImage(function(result) {
         if (!result.saveToFile(root.outDir + "/" + name + ".png")) console.warn("could not save " + name)

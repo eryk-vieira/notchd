@@ -20,6 +20,28 @@ function compactModule(active) {
   return null
 }
 
+// The modules the closed notch shows, side by side: with the notch's `tabs`,
+// every active one with a compact view (all of them at a glance, as the
+// open notch has them all a tab away); else just the compact module.
+function compactModules(active, tabs) {
+  active = active || []
+  if (!tabs) {
+    var one = compactModule(active)
+    return one ? [one] : []
+  }
+  return active.filter(function(m) { return !!m && !!m.compact })
+}
+
+// The module to peek as the notch closes: the first (highest priority)
+// with something you haven't seen yet (`attention`), such as an agent that
+// finished on a tab you weren't looking at; null for none.
+function attentionPeek(modules) {
+  modules = modules || []
+  for (var i = 0; i < modules.length; i++)
+    if (modules[i] && modules[i].attention && modules[i].peek) return modules[i]
+  return null
+}
+
 // Whether `module` may peek now. `current` is the module peeking, if any,
 // and `currentShowing` whether its peek is still on screen. A pinned notch
 // never peeks; hover only lets urgent peeks through; a peek on screen is not
@@ -55,9 +77,21 @@ function needsWindow(s) {
   return !s.guest || !!s.open || !!s.lingering
 }
 
+// What the open notch shows of its expanded modules (highest priority
+// first): all of them, one above the other; or, with `tabs` and more than
+// one, the one whose tab is picked (`picked`, a module id), else the first.
+// { modules, tabs }: `tabs` is the modules to make tabs of, [] for none.
+function shownModules(modules, tabs, picked) {
+  modules = modules || []
+  if (!tabs || modules.length < 2) return { modules: modules.slice(), tabs: [] }
+  for (var i = 0; i < modules.length; i++)
+    if (modules[i] && modules[i].moduleId === picked) return { modules: [modules[i]], tabs: modules.slice() }
+  return { modules: modules.slice(0, 1), tabs: modules.slice() }
+}
+
 // The keyboard a copy's window takes: "exclusive" while it is pinned open
 // (a click, a shortcut) on a module you type into (`wantsKeyboard`, among
-// the expanded ones in `modules`), else "none". Never on hover alone: the
+// the ones it shows in `modules`), else "none". Never on hover alone: the
 // pointer passing over the notch must not take the keyboard from the
 // window you are typing in.
 function keyboardFocus(s) {

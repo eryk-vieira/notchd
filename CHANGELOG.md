@@ -6,6 +6,8 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
+- `tabs` (settings: Notches › its gear › Layout › Tabs): the open notch shows one module at a time, with a tab for each, instead of all of them one above the other. Opening the notch from a module (a shortcut, `claude "ask ..."`) picks its tab. Closed, it shows every active module side by side, not just the first. For a notch with `claude` and `codex`.
+- News you missed while the notch was open: an agent that finishes while you look at another tab gets a dot on its tab and on the closed notch (until you open it), and its peek shows as the notch closes. Modules set `attention` for it.
 - `claude` and `codex` modules: Claude Code and Codex in their own terminal UIs inside the notch, in a terminal from the optional `qmltermwidget` package (`make restart` installs it with pacman; without it, the notch says what to install). The closed notch shows the session's title, which the agent makes after the first message, read from the title it gives the terminal, and a green dot while it works; open, the terminal takes the keyboard, Escape included, and closes from its × button or the shortcut. The agent starts the first time the notch opens and keeps running while it is closed, peeking when it finishes something; the restart button, or `claude new` / `codex new` over IPC, starts a new one, and `claude "ask <question>"` opens it and types the question in. The terminal takes the theme's background and foreground. Settings: Modules › Claude, Modules › Codex (folder, command, width, height, font, stop when idle). Not loaded by default: give each a notch of its own and bind `toggleNotch <id>` to a key.
 - Modules you type into (`wantsKeyboard`): the notch takes the keyboard while it is pinned open on one, by a click, a shortcut (`toggleNotch`) or a press on the module's field (`requestKeyboard()`), never on hover alone; Escape closes it. Modules can also set their expanded view's width (`expandedWidth`), and open or close their notch (`openNotch()`, `closeNotch()`).
 - An app icon: the notch with an orange dot and an `n`, in Gruvbox colors. `assets/icons/` has the SVG, PNGs at every size from 16 to 1024 px, a `.ico` and a one-color symbolic SVG.
@@ -52,6 +54,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Fixed
 
+- An open notch taller than the screen was cut off at the bottom, with no way to reach the rest: two terminals on a laptop screen, say. Past the room the screen has, its modules now scroll, with the wheel and a scrollbar.
 - Switching a monitor off and on again no longer leaves its notches gone: they move to another monitor while it is off and come back to it, with the space they reserve.
 - About 1300 binding-loop warnings in the log at start (and wasted work) with notches on a top or bottom edge and a side edge of one screen: the corners' insets read every notch's place, the side ones' included, which come from those insets.
 - A notch in `notches` dragged to the top edge (or to the middle, or off its home screen) jumped back: the drop left out what equals the default, and the notch took it from the top-level `position` instead. The drop now writes whatever differs from what the notch inherits.

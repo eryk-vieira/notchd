@@ -72,6 +72,9 @@ Item {
     if (card.mode === "peek" && card.peekModule)
       return card.verticalPeek ? card.peekModule.verticalPeek : card.peekModule.peek
     if (card.mode === "expanded") return expandedView
+    // With tabs, every active module side by side (State.compactModules).
+    var several = card.notch.compactModules || []
+    if (card.mode === "compact" && several.length > 1) return compactRowView
     var m = card.notch.compactModule
     if (card.mode === "compact" && m && m.compact)
       return !card.vertical ? m.compact : (m.verticalCompact || dotView)
@@ -218,44 +221,208 @@ Item {
     }
   }
 
+  // Several modules' compact views in one closed notch (a notch with tabs):
+  // side by side, a thin line between them; down a side edge, one under
+  // the other, each its vertical view (or a dot).
+  Component {
+    id: compactRowView
+    Grid {
+      id: compactRow
+      readonly property var modules: card.notch ? (card.notch.compactModules || []) : []
+      columns: card.vertical ? 1 : Math.max(1, compactRow.modules.length * 2 - 1)
+      columnSpacing: Theme.space(10)
+      rowSpacing: Theme.space(8)
+      verticalItemAlignment: Grid.AlignVCenter
+      horizontalItemAlignment: Grid.AlignHCenter
+      Repeater {
+        // A module, then a line before the next: [m0, line, m1, line, m2].
+        model: compactRow.modules.length * 2 - 1
+        delegate: Loader {
+          required property int index
+          readonly property var module: index % 2 === 0 ? compactRow.modules[index / 2] : null
+          sourceComponent: !module ? lineView
+            : card.vertical ? (module.verticalCompact || dotView) : module.compact
+        }
+      }
+      Component {
+        id: lineView
+        Rectangle {
+          implicitWidth: card.vertical ? Theme.space(14) : 1
+          implicitHeight: card.vertical ? 1 : Theme.space(14)
+          color: Theme.line
+        }
+      }
+    }
+  }
+
+  // How tall the content may be: the room the card has, less its padding.
+  // The expanded view scrolls what doesn't fit.
+  readonly property real contentRoom: Math.max(0, card.maxHeight
+    - (card.vertical && !card.turnedPadding ? 2 * card.alongPad : card.nearPad + card.farPad))
+
   Component {
     id: expandedView
     Column {
-      spacing: Theme.space(6)
+      id: expanded
+      spacing: Theme.space(10)
+      // Every expanded module, one above the other; with the notch's `tabs`,
+      // the one whose tab is picked (State.shownModules).
+      readonly property var shown: card.notch ? (card.notch.shownModules || card.notch.expandedModules || []) : []
+      readonly property var tabs: card.notch ? (card.notch.tabModules || []) : []
 
-      Column {
-        id: expandedStack
-        spacing: Theme.space(16)
-
+      // The tabs: a module's title each, the picked one raised.
+      Row {
+        id: tabRow
+        visible: expanded.tabs.length > 0
+        spacing: Theme.space(4)
         Repeater {
-          model: card.notch ? card.notch.expandedModules : []
-          delegate: Loader {
+          model: expanded.tabs
+          delegate: Rectangle {
+            id: tab
             required property var modelData
-            width: Theme.space(modelData.expandedWidth || 400)
-            sourceComponent: modelData.expanded
+            readonly property bool picked: expanded.shown.indexOf(tab.modelData) !== -1
+            width: tabLabel.implicitWidth + Theme.space(24)
+            height: tabLabel.implicitHeight + Theme.space(10)
+            radius: Theme.radiusSmall
+            color: tab.picked ? Theme.selected : tabMouse.containsMouse ? Theme.hover : "transparent"
+            Text {
+              id: tabLabel
+              anchors.centerIn: parent
+              textFormat: Text.PlainText
+              text: tab.modelData.title || tab.modelData.moduleId
+              color: tab.picked ? Theme.foreground : Theme.muted
+              font.family: Theme.font.family
+              font.pixelSize: Theme.font.body
+            }
+            // News you haven't seen (NotchModule.attention).
+            Rectangle {
+              visible: !!tab.modelData.attention
+              anchors.right: parent.right
+              anchors.top: parent.top
+              anchors.margins: Theme.space(4)
+              width: Theme.space(6)
+              height: width
+              radius: width / 2
+              color: Theme.accent
+            }
+            MouseArea {
+              id: tabMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: if (card.notch) card.notch.showTab(tab.modelData.moduleId)
+            }
+          }
+        }
+      }
+
+      // The modules, as tall as they are up to the room the card has; past
+      // that, the wheel (where a module doesn't take it, as a terminal does)
+      // and the scrollbar move them. Not flicked by a drag: that selects
+      // text in a terminal.
+      Item {
+        id: scrollBox
+        width: expandedStack.width
+        height: Math.min(expandedStack.height,
+          Math.max(Theme.space(80), card.contentRoom - (tabRow.visible ? tabRow.height + expanded.spacing : 0)))
+        readonly property bool overflow: expandedStack.height > scrollBox.height + 1
+
+        Flickable {
+          id: scroll
+          anchors.fill: parent
+          contentWidth: expandedStack.width
+          contentHeight: expandedStack.height
+          interactive: false
+          clip: scrollBox.overflow
+          function scrollBy(dy) {
+            scroll.contentY = Math.max(0, Math.min(scroll.contentHeight - scroll.height, scroll.contentY + dy))
+          }
+
+          Column {
+            id: expandedStack
+            spacing: Theme.space(16)
+
+            Repeater {
+              model: expanded.shown
+              delegate: Loader {
+                required property var modelData
+                width: Theme.space(modelData.expandedWidth || 400)
+                sourceComponent: modelData.expanded
+              }
+            }
+
+            // Nothing active: say so instead of opening an empty card.
+            Column {
+              visible: expanded.shown.length === 0
+              width: Theme.space(260)
+              spacing: Theme.space(2)
+              Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                textFormat: Text.PlainText
+                text: Qt.formatDate(new Date(), "dddd, d MMMM")
+                color: Theme.foreground
+                font.family: Theme.font.family
+                font.pixelSize: Theme.font.body
+              }
+              Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                textFormat: Text.PlainText
+                text: "All quiet"
+                color: Theme.muted
+                font.family: Theme.font.family
+                font.pixelSize: Theme.font.caption
+              }
+            }
           }
         }
 
-        // Nothing active: say so instead of opening an empty card.
-        Column {
-          visible: !card.notch || card.notch.expandedModules.length === 0
-          width: Theme.space(260)
-          spacing: Theme.space(2)
-          Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            textFormat: Text.PlainText
-            text: Qt.formatDate(new Date(), "dddd, d MMMM")
-            color: Theme.foreground
-            font.family: Theme.font.family
-            font.pixelSize: Theme.font.body
+        WheelHandler {
+          enabled: scrollBox.overflow
+          acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+          onWheel: function(event) {
+            var dy = event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.angleDelta.y / 120 * Theme.space(60)
+            scroll.scrollBy(-dy)
           }
-          Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            textFormat: Text.PlainText
-            text: "All quiet"
-            color: Theme.muted
-            font.family: Theme.font.family
-            font.pixelSize: Theme.font.caption
+        }
+
+        // The scrollbar, in the card's padding beside the modules: where the
+        // view is, and a handle to drag.
+        Item {
+          id: scrollTrack
+          visible: scrollBox.overflow
+          x: scrollBox.width + Theme.space(6)
+          width: Theme.space(8)
+          height: scrollBox.height
+          Rectangle {
+            id: scrollHandle
+            readonly property real share: scroll.contentHeight > 0 ? scroll.height / scroll.contentHeight : 1
+            x: Theme.space(2)
+            width: Theme.space(4)
+            height: Math.max(Theme.space(24), scrollTrack.height * scrollHandle.share)
+            y: scroll.contentHeight > scroll.height
+              ? (scrollTrack.height - scrollHandle.height) * scroll.contentY / (scroll.contentHeight - scroll.height) : 0
+            radius: width / 2
+            color: handleMouse.pressed || handleMouse.containsMouse ? Theme.muted : Theme.faint
+          }
+          MouseArea {
+            id: handleMouse
+            anchors.fill: parent
+            anchors.margins: -Theme.space(2)
+            hoverEnabled: true
+            preventStealing: true
+            property real grab: 0
+            function follow(y) {
+              var free = scrollTrack.height - scrollHandle.height
+              if (free <= 0) return
+              var top = Math.max(0, Math.min(free, y - handleMouse.grab))
+              scroll.contentY = top / free * (scroll.contentHeight - scroll.height)
+            }
+            onPressed: function(mouse) {
+              var inside = mouse.y >= scrollHandle.y && mouse.y <= scrollHandle.y + scrollHandle.height
+              handleMouse.grab = inside ? mouse.y - scrollHandle.y : scrollHandle.height / 2
+              handleMouse.follow(mouse.y)
+            }
+            onPositionChanged: function(mouse) { if (pressed) handleMouse.follow(mouse.y) }
           }
         }
       }
