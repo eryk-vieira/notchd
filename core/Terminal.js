@@ -18,15 +18,23 @@ function expandHome(path, home) {
   return p
 }
 
+// notchd's own folder for agents, where one without a folder of its own
+// starts: notchd in the documents folder (xdg-user-dir, which says the home
+// when there is none: then ~/Documents), made first. If it can't be made,
+// the agent starts where the shell is.
+var OWN_DIR = "d=$(xdg-user-dir DOCUMENTS 2>/dev/null); "
+  + "if [ -z \"$d\" ] || [ \"$d\" = \"$HOME\" ]; then d=\"$HOME/Documents\"; fi; "
+  + "d=\"$d/notchd\"; mkdir -p -- \"$d\" && cd -- \"$d\"; "
+
 // The arguments of /bin/sh that run `command` (a command line as typed in
-// the settings, "codex --search") with `extra` after its own arguments. The
-// shell parses the command, so it can be anything a shell takes; `extra`
-// reaches the program as given, never parsed again. TERM says what the
-// widget emulates (it sets plain "xterm" for every session; it does 256
-// colors).
-function shellArgs(command, extra) {
+// the settings, "codex --search") with `extra` after its own arguments, in
+// notchd's own folder with `ownDir` (OWN_DIR). The shell parses the
+// command, so it can be anything a shell takes; `extra` reaches the program
+// as given, never parsed again. TERM says what the widget emulates (it sets
+// plain "xterm" for every session; it does 256 colors).
+function shellArgs(command, extra, ownDir) {
   var cmd = String(command || "").trim()
-  return ["-c", "TERM=xterm-256color; export TERM; exec " + cmd + " \"$@\"", "sh"].concat(extra || [])
+  return ["-c", (ownDir ? OWN_DIR : "") + "TERM=xterm-256color; export TERM; exec " + cmd + " \"$@\"", "sh"].concat(extra || [])
 }
 
 // The key that leaves the terminal (the notch closes, the program goes on):

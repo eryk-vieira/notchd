@@ -10,16 +10,18 @@ import "Terminal.js" as Terminal
 // qmltermwidget package; without it, the open notch says what to install.
 // Meant for a notch of its own: closed, it shows the session's title and a
 // dot while the program works; open, the terminal takes the keyboard
-// (wantsKeyboard), Escape included, so the notch closes from its button, a
-// shortcut (toggleNotch) or IPC.
+// (wantsKeyboard), Escape included; Ctrl+Escape, its button, a shortcut or
+// IPC close the notch.
 //
 // The program starts the first time the notch opens and keeps running while
 // it is closed, so the session and whatever it is doing go on (unless
 // `idleMinutes` says to stop it); the restart button starts a new one. The
 // title and the dot come from the terminal's title, which the program sets
-// itself (`parseTitle`, from core/Agent.js). Settings, in the module's JSON
-// file: directory, command, idleMinutes, width, height, font. Over IPC,
-// command(): "new", "ask <text>" (Agent.parseCommand).
+// itself (`parseTitle`, from core/Agent.js). Settings: an agent's JSON file
+// says `"agent": { "command": ... }` and gets directory, command,
+// idleMinutes, width, height and font (Settings.agentSettings). Over IPC
+// (`agent <id> <command>`), command(): "toggle", "new", "ask <text>"
+// (Agent.parseCommand).
 NotchModule {
   id: m
   priority: 40
@@ -31,7 +33,8 @@ NotchModule {
   // ------------------------------------------------------------ the module
   // The program's name, in the notch's texts.
   property string appName: ""
-  // Run when the `command` setting is empty.
+  // Run when the `command` setting is empty and has no default (an agent's
+  // default is its file's `agent.command`).
   property string defaultCommand: ""
   // Terminal title -> { working, title } (Agent.codexTitle, ...).
   property var parseTitle: null
@@ -82,11 +85,15 @@ NotchModule {
     if (c.status !== Component.Ready) { m.loadError = c.errorString(); return }
     m.loadError = ""
     m.typed = false
-    // The command, its folder and the font apply from its next start.
+    // The command, its folder and the font apply from its next start. No
+    // folder of its own: notchd's (Terminal.OWN_DIR), which the shell goes
+    // to from the home.
+    var dir = String(m.setting("directory") || "").trim()
     m.term = c.createObject(m, {
       program: "/bin/sh",
-      programArguments: Terminal.shellArgs(m.setting("command") || m.defaultCommand, []),
-      workingDirectory: Terminal.expandHome(m.setting("directory"), Quickshell.env("HOME")),
+      programArguments: Terminal.shellArgs(String(m.setting("command") || "").trim() || m.settingDefault("command") || m.defaultCommand,
+                                           [], dir === ""),
+      workingDirectory: Terminal.expandHome(dir, Quickshell.env("HOME")),
       fontFamily: String(m.setting("font") || ""),
       width: Theme.space(m.expandedWidth),
       height: Theme.space(m.terminalHeight),
@@ -187,9 +194,17 @@ NotchModule {
   // "ok", or what was wrong (Agent.parseCommand).
   function command(text) {
     var cmd = Agent.parseCommand(text)
+    if (cmd.action === "toggle") return m.toggle()
     if (cmd.action === "new") { m.restart(); return "ok" }
     if (cmd.action === "ask") return m.ask(cmd.text)
-    return "usage: " + m.moduleId + " new | " + m.moduleId + " \"ask <question>\""
+    return "usage: agent " + m.moduleId + " toggle | new | \"ask <question>\""
+  }
+
+  // Opens the notch that shows it, on its tab, or closes it while a view
+  // shows it: a shortcut that works whatever the notch is called.
+  function toggle() {
+    if (m.viewsOpen > 0) { m.closeNotch(); return "ok" }
+    return m.openNotch() ? "ok" : "no notch shows " + m.moduleId
   }
 
   // Opens the notch and types `text` into the program, then Enter. A

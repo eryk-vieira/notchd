@@ -102,6 +102,7 @@ ShellRoot {
       { name: "codex: runs in the notch, keeps running closed, and its title says when it works", run: root.codexRuns },
       { name: "claude: runs in the notch, keeps running closed, and its title says when it works", run: root.claudeRuns },
       { name: "claude: ask over IPC opens the notch and types the question in; new starts another", run: root.claudeAsk },
+      { name: "agent toggle opens the agent's notch, whatever it is called, and closes it", run: root.agentToggle },
       { name: "claude: the closed notch keeps its size while it works", run: root.agentBusySteady },
       { name: "codex: closed and idle for idleMinutes, it stops; opened again, it starts", run: root.codexIdle },
       { name: "terminal: the band behind your messages (ANSI 8) is gray, not orange", run: root.messageBandGray },
@@ -853,9 +854,12 @@ ShellRoot {
         root.check(osd() === null && own() === null, "switched off, the OSD still loads")
         root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "osd" && m.standalone }), "the OSD left the catalog")
         root.check(svc.settingsSchema.some(function(f) { return f.key === "osd.enabled" && f.page === "modules/osd" }), "no switch on its page")
-        var lists = svc.settingsSchema.filter(function(f) { return f.type === "moduleCatalog" })
-        root.check(lists.length === 2 && !lists[0].standalone && lists[1].standalone === true,
-                   "the Modules page does not list standalone modules apart: " + JSON.stringify(lists))
+        var lists = svc.settingsSchema.filter(function(f) { return f.type === "moduleCatalog" }).map(function(f) { return f.part })
+        root.check(JSON.stringify(lists) === JSON.stringify(["notch", "agent", "standalone"]),
+                   "the Modules page does not list agents and standalone modules apart: " + JSON.stringify(lists))
+        root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "claude" && m.agent && !m.standalone }), "claude is no agent")
+        root.check(svc.moduleSetting("codex", "command") === "codex", "codex's command default: " + svc.moduleSetting("codex", "command"))
+        root.check(svc.agentCommand("media", "toggle").indexOf("no agent media") === 0, "media took an agent command")
         svc.setConfigValue("osd.enabled", undefined)
       }],
       [100, function() {
@@ -1327,6 +1331,31 @@ ShellRoot {
       [300, function() {
         root.check(shellCmd.out.split("\n")[2] !== pid, "new did not start another claude")
         m.closeNotch()
+      }]
+    ], function() {
+      m.stop()
+      root.done()
+    })
+  }
+
+  // Bug: a shortcut named the notch (toggleNotch claude), and renaming the
+  // notch in settings broke it without a word. `agent <id> toggle` finds
+  // the notch by the module it shows.
+  function agentToggle() {
+    var m = claudeSvc.moduleById("claude")
+    var copy = claudeSvc.notches[0].copies[0]
+    root.steps([
+      // The last case's view is still closing.
+      [600, function() {
+        root.check(claudeSvc.notches[0].notchId !== "claude", "the test notch is called claude: the case proves nothing")
+        root.check(claudeSvc.agentCommand("claude", "toggle") === "ok", "toggle failed")
+        root.check(copy.pinned, "toggle did not open the notch")
+      }],
+      [400, function() {
+        root.check(m.viewsOpen > 0, "open, no view shows claude")
+        root.check(claudeSvc.agentCommand("claude", "toggle") === "ok", "toggle again failed")
+        root.check(!copy.pinned, "toggle did not close the notch")
+        root.check(claudeSvc.agentCommand("nope", "toggle").indexOf("no agent nope") === 0, "an unknown agent did not say so")
       }]
     ], function() {
       m.stop()

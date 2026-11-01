@@ -9,7 +9,6 @@ import "../Agent.js" as Agent
 // claude.svg (see NOTICE).
 TerminalModule {
   appName: "Claude"
-  defaultCommand: "claude"
   parseTitle: Agent.claudeTitle
   logoSource: Qt.resolvedUrl("claude.svg")
 }

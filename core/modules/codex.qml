@@ -8,6 +8,5 @@ import "../Agent.js" as Agent
 // the title Codex gives the terminal (Agent.codexTitle).
 TerminalModule {
   appName: "Codex"
-  defaultCommand: "codex"
   parseTitle: Agent.codexTitle
 }

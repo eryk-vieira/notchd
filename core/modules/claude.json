@@ -1,57 +1,9 @@
 {
   "title": "Claude",
-  "settings": [
-    {
-      "key": "directory",
-      "type": "string",
-      "label": "Folder",
-      "default": "~",
-      "help": "Where Claude Code starts; ~ is your home. Applies the next time it starts (the restart button)."
-    },
-    {
-      "key": "command",
-      "type": "string",
-      "label": "Command",
-      "default": "claude",
-      "help": "The command line that runs Claude Code, e.g. \"claude --permission-mode auto\". Applies the next time it starts."
-    },
-    {
-      "key": "idleMinutes",
-      "type": "integer",
-      "label": "Stop when idle",
-      "default": 0,
-      "min": 0,
-      "max": 240,
-      "step": 15,
-      "unit": "min",
-      "help": "Closed and not working this long, Claude Code stops; the next time the notch opens, a new one starts (/resume brings the conversation back). 0 keeps it running."
-    },
-    {
-      "key": "width",
-      "type": "integer",
-      "label": "Width",
-      "default": 760,
-      "min": 480,
-      "max": 1600,
-      "step": 20,
-      "unit": "px"
-    },
-    {
-      "key": "height",
-      "type": "integer",
-      "label": "Terminal height",
-      "default": 420,
-      "min": 200,
-      "max": 1000,
-      "step": 20,
-      "unit": "px"
-    },
-    {
-      "key": "font",
-      "type": "string",
-      "label": "Font",
-      "default": "",
-      "help": "A monospace font family for the terminal; empty uses the theme's. Applies the next time it starts."
+  "agent": {
+    "command": "claude",
+    "help": {
+      "command": "For example \"claude --permission-mode auto\"."
     }
-  ]
+  }
 }

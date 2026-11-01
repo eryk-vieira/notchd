@@ -78,8 +78,8 @@ Item {
     return out
   }
 
-  // id -> { title, settings, standalone }, from each module's JSON file; a
-  // module without one has none of them.
+  // id -> { title, settings, standalone, agent }, from each module's JSON
+  // file (Settings.parseModuleInfo); a module without one has none of them.
   property var moduleInfo: ({})
   // Every module has its file read (or found missing): modules load only
   // then, so a standalone one never starts out in a notch.
@@ -89,12 +89,24 @@ Item {
   onModuleInfoReadyChanged: if (svc.moduleInfoReady) svc.refreshModuleIds()
   onConfigResolvedChanged: svc.refreshModuleIds()
   // Every module with its title and fields: [{ moduleId, title, settings,
-  // standalone }].
+  // standalone, agent }].
   readonly property var moduleCatalog: svc.availableModuleIds.map(function(id) {
     var info = svc.moduleInfo[id] || {}
     return { moduleId: id, title: Settings.moduleTitle(id, info), settings: info.settings || [],
-             standalone: !!info.standalone }
+             standalone: !!info.standalone, agent: !!info.agent }
   })
+  // Agents (`"agent"` in their file): coding agents in a terminal
+  // (TerminalModule), with the fields every agent has and the `agent` IPC.
+  function isAgent(id) { return !!svc.moduleInfo[id] && !!svc.moduleInfo[id].agent }
+  // An agent's IPC command (TerminalModule.command): "ok", or what was wrong.
+  function agentCommand(id, command) {
+    if (!svc.isAgent(id)) {
+      var agents = svc.availableModuleIds.filter(function(a) { return svc.isAgent(a) })
+      return "no agent " + id + (agents.length > 0 ? "; agents: " + agents.join(", ") : "")
+    }
+    var m = svc.moduleById(id)
+    return m ? m.command(command) : id + " module not loaded"
+  }
 
   // Standalone modules (`"standalone": true` in their file) have a place of
   // their own, a notch that shows only them, and no notch of the config
@@ -113,6 +125,9 @@ Item {
   function moduleSetting(id, key) {
     var v = Config.valueAt(svc.config, id + "." + key)
     if (v !== undefined) return v
+    return svc.moduleSettingDefault(id, key)
+  }
+  function moduleSettingDefault(id, key) {
     var info = svc.moduleInfo[id]
     return Settings.settingDefault(info ? info.settings : [], key)
   }
@@ -311,7 +326,7 @@ Item {
     if (prefix !== "")
       out.push({ page: own, key: key("id"), type: "string", label: "Name",
                  default: Config.defaultNotchId(n.index),
-                 help: "What IPC calls it: openNotch, closeNotch and toggleNotch take it." })
+                 help: "What IPC calls it: openNotch, closeNotch and toggleNotch take it, so renaming it breaks a shortcut that names it. An agent opens by its own id instead: agent <id> toggle." })
     out.push({ page: own, section: "Modules", key: key("modules"), type: "modules", label: "Loaded modules",
                default: inherited("modules", svc.defaultModules),
                help: (several ? "What this notch shows. A module may show in several notches. Their order breaks ties in the expanded view."
@@ -360,10 +375,13 @@ Item {
                help: several ? "How long it stays open after the pointer leaves. For every notch."
                              : "How long it stays open after the pointer leaves.",
                default: Config.DEFAULTS.hoverCloseDelay, min: 0, max: 2000, step: 10, unit: "ms" })
-    out.push({ page: "modules", type: "moduleCatalog", label: "Notch modules",
+    out.push({ page: "modules", type: "moduleCatalog", part: "notch", label: "Notch modules",
                help: "Shown by notches: which ones a notch shows is set on its page, under Notches. The gear opens a module's own settings." })
+    if (svc.moduleCatalog.some(function(m) { return Settings.moduleKind(m) === "agent" }))
+      out.push({ page: "modules", type: "moduleCatalog", part: "agent", label: "Agents",
+                 help: "Coding agents, each in its own terminal. Notches show them like any module; a notch of their own suits them best. The gear opens an agent's folder, command and size. A shortcut opens one with agent <id> toggle." })
     if (svc.standaloneIds.length > 0)
-      out.push({ page: "modules", type: "moduleCatalog", standalone: true, label: "Standalone modules",
+      out.push({ page: "modules", type: "moduleCatalog", part: "standalone", label: "Standalone modules",
                  help: "Each has a place of its own, over any notch that hangs there, and no notch shows it. Its page switches it on and places it." })
     return out
   }
@@ -645,16 +663,12 @@ Item {
       var m = svc.moduleById("timer")
       return m ? m.command(command) : "timer module not loaded"
     }
-    // The claude and codex modules: "new" starts a new session, "ask
-    // <question>" opens the notch and types it in; see TerminalModule.qml.
-    function claude(command: string): string {
-      var m = svc.moduleById("claude")
-      return m ? m.command(command) : "claude module not loaded"
-    }
-    function codex(command: string): string {
-      var m = svc.moduleById("codex")
-      return m ? m.command(command) : "codex module not loaded"
-    }
+    // An agent, by its module's id: "toggle" opens or closes its notch,
+    // "new" starts a new session, "ask <question>" opens the notch and types
+    // it in; see TerminalModule.qml. `claude` and `codex` are the same.
+    function agent(id: string, command: string): string { return svc.agentCommand(id, command) }
+    function claude(command: string): string { return svc.agentCommand("claude", command) }
+    function codex(command: string): string { return svc.agentCommand("codex", command) }
     function state(): string {
       return JSON.stringify({
         notches: svc.notches.map(function(n) {

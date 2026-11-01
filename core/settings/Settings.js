@@ -88,9 +88,11 @@ function sections(schema, page) {
 function modulePageId(moduleId) { return "modules/" + moduleId }
 
 // A module's JSON file (media.json next to media.qml): its `title`,
-// `settings` fields and whether it is `standalone` (no notch shows it; it
-// has a place of its own). Anything malformed is dropped, so a bad file costs
-// the module its page and nothing else; `error` says why.
+// `settings` fields, whether it is `standalone` (no notch shows it; it has
+// a place of its own) and whether it is an `agent` (a coding agent in a
+// terminal: `"agent": { "command": ... }`, which brings the fields every
+// agent has, agentSettings). Anything malformed is dropped, so a bad file
+// costs the module its page and nothing else; `error` says why.
 function parseModuleInfo(text) {
   var info = { title: "", settings: [] }
   var data
@@ -98,9 +100,49 @@ function parseModuleInfo(text) {
   if (!data || typeof data !== "object" || Array.isArray(data)) { info.error = "not an object"; return info }
   if (typeof data.title === "string") info.title = data.title
   if (data.standalone === true) info.standalone = true
+  var own = []
   if (Array.isArray(data.settings))
-    info.settings = data.settings.filter(function(f) { return f && typeof f === "object" && !Array.isArray(f) && typeof f.type === "string" })
+    own = data.settings.filter(function(f) { return f && typeof f === "object" && !Array.isArray(f) && typeof f.type === "string" })
+  var inherited = []
+  var agent = data.agent
+  if (agent !== undefined) {
+    if (agent && typeof agent === "object" && !Array.isArray(agent) && typeof agent.command === "string" && agent.command.trim() !== "") {
+      info.agent = true
+      inherited = agentSettings(agent, info.title)
+    } else {
+      info.error = "agent: needs a command"
+    }
+  }
+  // A field of its own replaces an inherited one with the same key.
+  var ownKeys = own.map(function(f) { return f.key })
+  info.settings = inherited.filter(function(f) { return ownKeys.indexOf(f.key) === -1 }).concat(own)
   return info
+}
+
+// The fields every agent has, from its file's `agent`: where it starts,
+// the command line (`agent.command` is its default), when it stops, its
+// size and font. `agent.help` adds to a field's help, by key: what only
+// that agent needs said. `title` names it in the texts.
+function agentSettings(agent, title) {
+  var name = title || "the agent"
+  var extra = agent.help && typeof agent.help === "object" && !Array.isArray(agent.help) ? agent.help : {}
+  var later = "Applies the next time it starts (the restart button)."
+  var fields = [
+    { key: "directory", type: "string", label: "Folder", "default": "",
+      help: "Where " + name + " starts; ~ is your home. Empty is notchd's own folder, notchd in your Documents folder, made the first time. " + later },
+    { key: "command", type: "string", label: "Command", "default": agent.command.trim(),
+      help: "The command line that runs " + name + ". " + later },
+    { key: "idleMinutes", type: "integer", label: "Stop when idle", "default": 0, min: 0, max: 240, step: 15, unit: "min",
+      help: "Closed and not working this long, " + name + " stops; the next time the notch opens, a new one starts (/resume brings the session back). 0 keeps it running." },
+    { key: "width", type: "integer", label: "Width", "default": 760, min: 480, max: 1600, step: 20, unit: "px" },
+    { key: "height", type: "integer", label: "Terminal height", "default": 420, min: 200, max: 1000, step: 20, unit: "px" },
+    { key: "font", type: "string", label: "Font", "default": "",
+      help: "A monospace font family for the terminal; empty uses the theme's. " + later }
+  ]
+  fields.forEach(function(f) {
+    if (typeof extra[f.key] === "string" && extra[f.key] !== "") f.help = f.help ? f.help + " " + extra[f.key] : extra[f.key]
+  })
+  return fields
 }
 
 // The JSON file of the module at `url` (its .qml): the same path, .json.
@@ -184,11 +226,18 @@ function moduleTitle(id, module) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-// The Modules page's two lists: the catalog's modules that notches show,
-// or (`standalone`) the ones with a place of their own, in catalog order.
-function catalogPart(catalog, standalone) {
+// Which list of the Modules page a module is in: "standalone" (a place of
+// its own), "agent" (a coding agent), else "notch".
+function moduleKind(m) {
+  if (m && m.standalone) return "standalone"
+  if (m && m.agent) return "agent"
+  return "notch"
+}
+
+// One of the Modules page's lists (`part`, a moduleKind), in catalog order.
+function catalogPart(catalog, part) {
   return Array.prototype.filter.call(catalog || [], function(m) {
-    return !!(m && m.standalone) === !!standalone
+    return !!m && moduleKind(m) === (part || "notch")
   })
 }
 

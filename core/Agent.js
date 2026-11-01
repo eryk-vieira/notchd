@@ -52,12 +52,14 @@ function donePeek(s) {
   return !!s.wasWorking && !s.working && !s.open && !!s.typed
 }
 
-// An IPC command: "new" starts a new session, "ask <text>" opens the notch
-// and types the text in, followed by Enter ("ask" alone only opens it).
-// { action: "new" | "ask" | "usage", text }. The text is one line: a line
-// break would send it early.
+// An IPC command: "toggle" opens the agent's notch on it, or closes it if
+// it shows it; "new" starts a new session; "ask <text>" opens the notch and
+// types the text in, followed by Enter ("ask" alone only opens it).
+// { action: "toggle" | "new" | "ask" | "usage", text }. The text is one
+// line: a line break would send it early.
 function parseCommand(raw) {
   var cmd = text(raw)
+  if (cmd === "toggle") return { action: "toggle", text: "" }
   if (cmd === "new") return { action: "new", text: "" }
   if (cmd === "ask" || cmd.indexOf("ask ") === 0)
     return { action: "ask", text: cmd.slice(3).replace(/\s*[\r\n]+\s*/g, " ").trim() }

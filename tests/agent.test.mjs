@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { load, plain } from './load.mjs';
 
 const Agent = load('core/Agent.js');
@@ -100,4 +103,29 @@ test('isLeaveKey: Ctrl+Escape alone; plain Escape is the agent\'s', () => {
   assert.equal(Terminal.isLeaveKey(ESC, 0), false);
   assert.equal(Terminal.isLeaveKey(ESC, CTRL | SHIFT), false);
   assert.equal(Terminal.isLeaveKey(0x43, CTRL), false);   // Ctrl+C goes to the agent
+});
+
+test('parseCommand: toggle', () => {
+  assert.deepEqual(plain(Agent.parseCommand(' toggle ')), { action: 'toggle', text: '' });
+  assert.equal(Agent.parseCommand('toggle now').action, 'usage');
+});
+
+// No folder set: notchd's own, notchd in the documents folder, made first.
+test('shellArgs: own folder in the documents folder, ~/Documents when there is none', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'notchd-agent-'));
+  try {
+    const env = { HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), PATH: process.env.PATH };
+    const pwd = () => execFileSync('/bin/sh', plain(Terminal.shellArgs('pwd', [], true)), { encoding: 'utf8', cwd: home, env }).trim();
+    assert.equal(pwd(), path.join(home, 'Documents', 'notchd'));
+    fs.mkdirSync(path.join(home, '.config'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.config', 'user-dirs.dirs'), 'XDG_DOCUMENTS_DIR="$HOME/Documentos"\n');
+    let hasXdg = true;
+    try { execFileSync('sh', ['-c', 'command -v xdg-user-dir'], { env }); } catch { hasXdg = false; }
+    if (hasXdg) assert.equal(pwd(), path.join(home, 'Documentos', 'notchd'));
+    assert.ok(fs.statSync(path.join(home, 'Documents', 'notchd')).isDirectory());
+    // A folder of its own: the command runs where it is started.
+    assert.equal(execFileSync('/bin/sh', plain(Terminal.shellArgs('pwd', [])), { encoding: 'utf8', cwd: home, env }).trim(), home);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

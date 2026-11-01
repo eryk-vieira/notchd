@@ -39,7 +39,7 @@ A peek asked for while the notch is open (on another tab, say) doesn't show. For
 
 ## Settings
 
-A module's title, settings fields and whether it is standalone live in a JSON file next to its QML, with the same name (`resources.json` for `resources.qml`, the same for a host's modules). The service reads it whether the module loads or not, so the module has its page in the settings window (Modules, then its gear) even while no notch shows it. `settings` uses the settings schema's format (see [settings.md](settings.md)) with `key` relative to the module; values are stored under the module's id, and the module reads them with `setting(key)`: the config's value, else the field's default. A field that names another `page` shows there, under the module's title. A `title` set in the QML wins over the file's; without either, the title is the id. `tests/settings.test.mjs` checks every module file.
+A module's title, settings fields and whether it is standalone or an [agent](#agents) live in a JSON file next to its QML, with the same name (`resources.json` for `resources.qml`, the same for a host's modules). The service reads it whether the module loads or not, so the module has its page in the settings window (Modules, then its gear) even while no notch shows it. `settings` uses the settings schema's format (see [settings.md](settings.md)) with `key` relative to the module; values are stored under the module's id, and the module reads them with `setting(key)`: the config's value, else the field's default. A field that names another `page` shows there, under the module's title. A `title` set in the QML wins over the file's; without either, the title is the id. `tests/settings.test.mjs` checks every module file.
 
 ```json
 {
@@ -82,9 +82,23 @@ expanded: Component {
 }
 ```
 
-## A program's terminal UI
+## Agents
 
-`TerminalModule` (a `NotchModule`) runs a program's own terminal UI in the expanded view, as `claude` and `codex` do: set `appName`, `defaultCommand`, `parseTitle` (the terminal's title to `{ working, title }`, see `core/Agent.js`) and, for an image mark, `logoSource`; declare the settings in its JSON file as `modules/codex.json` does (directory, command, idleMinutes, width, height, font). The terminal comes from the optional `qmltermwidget` package, probed before it loads, and keeps running while the notch is closed. It takes every key, Escape included, except Ctrl+Escape, which closes the notch and leaves the program running (`Terminal.isLeaveKey`); so does the header's button.
+A coding agent (`claude`, `codex`) is a module that runs the agent's own terminal UI in the expanded view: a `TerminalModule` (a `NotchModule`), with `"agent"` in its JSON file. Notches show it like any module; the Modules page lists agents apart, under Agents. Adding one takes three things:
+
+- `modules/<id>.json`: its title and `"agent": { "command": "<its command>" }`. That brings the fields every agent has (`Settings.agentSettings`): `directory`, `command` (the command is its default), `idleMinutes`, `width`, `height`, `font`. `agent.help` adds a sentence to a field's help, by key, for what only that agent needs said; a field of its own in `settings` with the same key replaces the inherited one.
+- `modules/<id>.qml`: a `TerminalModule` with `appName`, `parseTitle` (the terminal's title to `{ working, title }`) and, for an image mark, `logoSource`.
+- Its title parser in `core/Agent.js` (`claudeTitle`, `codexTitle`), with a test in `tests/agent.test.mjs`: the closed notch's title and working dot come from the title the agent gives the terminal.
+
+```json
+{
+  "title": "Codex",
+  "agent": {
+    "command": "codex",
+    "help": { "idleMinutes": "Codex takes 500 to 700 MB, besides its shared background server." }
+  }
+}
+```
 
 ```qml
 import ".."
@@ -92,10 +106,11 @@ import "../Agent.js" as Agent
 
 TerminalModule {
   appName: "Codex"
-  defaultCommand: "codex"
   parseTitle: Agent.codexTitle
 }
 ```
+
+Without a `directory`, an agent starts in notchd's own folder, `notchd` in your documents folder (`xdg-user-dir DOCUMENTS`, else `~/Documents`), made the first time (`Terminal.OWN_DIR`); `/resume` in Claude Code and Codex lists the sessions of the folder they start in, so it is always the same one. The terminal comes from the optional `qmltermwidget` package, probed before it loads, and keeps running while the notch is closed. It takes every key, Escape included, except Ctrl+Escape, which closes the notch and leaves the program running (`Terminal.isLeaveKey`); so does the header's button. Over IPC, `agent <id> <command>` reaches it by its id ([ipc.md](ipc.md#agents)), whatever notch shows it. `TerminalModule` without `"agent"` runs any program the same way, with `defaultCommand` and fields of its own.
 
 ## The scope rule
 

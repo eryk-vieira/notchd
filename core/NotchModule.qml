@@ -84,6 +84,10 @@ Item {
   function setting(key) {
     return notch ? notch.moduleSetting(moduleId, key) : undefined
   }
+  // A setting's default, from its field: for a value left empty.
+  function settingDefault(key) {
+    return notch ? notch.moduleSettingDefault(moduleId, key) : undefined
+  }
 
   function requestPeek(ms) {
     if (notch) notch.requestPeek(module, ms === undefined ? 2500 : ms)

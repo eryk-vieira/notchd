@@ -13,9 +13,9 @@ Every host exposes the same methods on its `ipcTarget`. The CLI depends on the h
 | `clear <id>` | remove one; `""` removes all |
 | `open`, `toggle` | pin the first notch open on the focused monitor, or flip it |
 | `close` | close every notch |
-| `openNotch <id>`, `closeNotch <id>`, `toggleNotch <id>` | the same for one notch, by its `id` (`main`, `notch-2`...) |
-| `claude <command>` | the `claude` module: `new` starts a new session, `"ask <question>"` opens it and types the question in ([below](#claude-and-codex)) |
-| `codex <command>` | the `codex` module, the same commands |
+| `openNotch <id>`, `closeNotch <id>`, `toggleNotch <id>` | the same for one notch, by its `id` (`main`, `notch-2`...), its Name in settings: renaming it breaks a shortcut that names it |
+| `agent <id> <command>` | an agent (`claude`, `codex`) by its id: `toggle` opens or closes its notch, `new` starts a new session, `"ask <question>"` opens it and types the question in ([below](#agents)) |
+| `claude <command>`, `codex <command>` | the same as `agent claude <command>`, `agent codex <command>` |
 | `timer <command>` | the `timer` module: start, pause or stop a countdown or a pomodoro (below) |
 | `settings` | open or close the settings window |
 | `recenter` | put every notch back in the middle of the top edge, following focus (removes each `position`) |
@@ -76,22 +76,23 @@ omarchy-shell eryk.notchd timer toggle
 
 It answers `ok`, `no timer running`, the usage, or `timer module not loaded` when no notch lists `timer`.
 
-## Claude and Codex
+## Agents
 
-The `claude` and `codex` modules run Claude Code and Codex in a terminal in the notch; the notch that shows one opens with `toggleNotch <id>`, which you can bind to a key. From a Hyprland binding:
+The agents (`claude`, `codex`) run in a terminal in the notch. `agent <id> toggle` opens the notch that shows one, on its tab, or closes it: bind that to a key, since it finds the notch by the agent it shows, whatever the notch is called or wherever the agent is. From a Hyprland binding:
 
 ```sh
-bind = SUPER ALT, C, exec, omarchy-shell eryk.notchd toggleNotch claude
+bind = SUPER ALT, C, exec, omarchy-shell eryk.notchd agent claude toggle
 ```
 
 | Command | |
 |---|---|
+| `toggle` | open the agent's notch (the first that lists it) on its tab, or close it while it shows the agent |
 | `new` | a new session: the running one stops (`/resume` brings it back) |
-| `"ask <question>"` | open the module's notch (the first that lists it) and type the question in, then Enter, once the agent is up; `ask` alone only opens it |
+| `"ask <question>"` | open the agent's notch and type the question in, then Enter, once the agent is up; `ask` alone only opens it |
 
 ```sh
-omarchy-shell eryk.notchd claude "ask what does EXDEV mean?"
-omarchy-shell eryk.notchd codex "ask explain: $(wl-paste --primary)"   # the selected text, as one line
+omarchy-shell eryk.notchd agent claude "ask what does EXDEV mean?"
+omarchy-shell eryk.notchd agent codex "ask explain: $(wl-paste --primary)"   # the selected text, as one line
 ```
 
-It answers `ok`, `no notch shows <id>`, `the terminal needs the qmltermwidget package`, the usage, or `<id> module not loaded` when no notch lists it.
+It answers `ok`, `no notch shows <id>`, `the terminal needs the qmltermwidget package`, the usage, `<id> module not loaded` when no notch lists it, or `no agent <id>` with the agents there are.

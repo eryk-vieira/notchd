@@ -172,11 +172,37 @@ test('moduleStatus says where a module shows, or whether a standalone one is on'
   assert.equal(Settings.moduleStatus('timer', undefined), 'Off');
 });
 
-test('catalogPart splits the Modules page into notch and standalone modules', () => {
-  const catalog = [{ moduleId: 'media' }, { moduleId: 'osd', standalone: true }, { moduleId: 'timer', standalone: false }];
-  assert.deepEqual(plain(Settings.catalogPart(catalog, false).map((m) => m.moduleId)), ['media', 'timer']);
-  assert.deepEqual(plain(Settings.catalogPart(catalog, true).map((m) => m.moduleId)), ['osd']);
-  assert.deepEqual(plain(Settings.catalogPart(undefined, true)), []);
+test('catalogPart splits the Modules page into notch modules, agents and standalone ones', () => {
+  const catalog = [{ moduleId: 'media' }, { moduleId: 'osd', standalone: true }, { moduleId: 'claude', agent: true },
+                   { moduleId: 'timer', standalone: false }];
+  assert.deepEqual(plain(Settings.catalogPart(catalog, 'notch').map((m) => m.moduleId)), ['media', 'timer']);
+  assert.deepEqual(plain(Settings.catalogPart(catalog).map((m) => m.moduleId)), ['media', 'timer']);
+  assert.deepEqual(plain(Settings.catalogPart(catalog, 'standalone').map((m) => m.moduleId)), ['osd']);
+  assert.deepEqual(plain(Settings.catalogPart(catalog, 'agent').map((m) => m.moduleId)), ['claude']);
+  assert.deepEqual(plain(Settings.catalogPart(undefined, 'agent')), []);
+});
+
+test('an agent\'s file brings the fields every agent has, its command the default', () => {
+  const info = plain(Settings.parseModuleInfo(JSON.stringify({
+    title: 'Aider', agent: { command: ' aider ', help: { idleMinutes: 'It is light.' } },
+    settings: [{ key: 'font', type: 'string', label: 'Its font', default: 'Mono' }, { key: 'extra', type: 'boolean', default: true }]
+  })));
+  assert.equal(info.agent, true);
+  assert.deepEqual(info.settings.map((f) => f.key), ['directory', 'command', 'idleMinutes', 'width', 'height', 'font', 'extra']);
+  assert.equal(Settings.settingDefault(info.settings, 'command'), 'aider');
+  // Empty: notchd's own folder.
+  assert.equal(Settings.settingDefault(info.settings, 'directory'), '');
+  assert.match(info.settings.find((f) => f.key === 'idleMinutes').help, /Aider stops.*It is light\.$/);
+  // Its own field wins over the inherited one.
+  assert.equal(info.settings.find((f) => f.key === 'font').label, 'Its font');
+});
+
+test('an agent without a command is an error, not an agent', () => {
+  for (const agent of [{}, { command: '' }, { command: 3 }, 'claude', []]) {
+    const info = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'X', agent })));
+    assert.equal(info.agent, undefined, JSON.stringify(agent));
+    assert.equal(info.error, 'agent: needs a command');
+  }
 });
 
 test('parseModuleInfo keeps a title and well-formed fields, drops the rest', () => {
@@ -228,10 +254,11 @@ test('every module JSON file is well-formed', () => {
     assert.equal(info.error, undefined, file);
     assert.ok(info.title, `${file}: no title`);
     const keys = Object.keys(JSON.parse(text));
-    assert.deepEqual(keys.filter((k) => !['title', 'settings', 'standalone'].includes(k)), [], `${file}: unknown keys`);
+    assert.deepEqual(keys.filter((k) => !['title', 'settings', 'standalone', 'agent'].includes(k)), [], `${file}: unknown keys`);
     if (info.standalone)
       for (const f of info.settings) assert.ok(!['enabled', 'position'].includes(String(f.key).split('.')[0]), `${file}: ${f.key} is the standalone switch's or position's`);
-    assert.equal(info.settings.length, JSON.parse(text).settings?.length ?? 0, `${file}: a field was dropped`);
+    const inherited = info.agent ? Settings.agentSettings(JSON.parse(text).agent, info.title).length : 0;
+    assert.ok(info.settings.length >= Math.max(inherited, JSON.parse(text).settings?.length ?? 0), `${file}: a field was dropped`);
     for (const f of info.settings) {
       if (f.type === 'note') continue;
       assert.ok(f.key && f.default !== undefined, `${file}: ${JSON.stringify(f)}`);
