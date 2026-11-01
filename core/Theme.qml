@@ -7,7 +7,7 @@ import QtQuick
 // back to the defaults here. Bindings on Theme follow the provider live.
 //
 //   foreground, background, accent,
-//   danger                                 colors
+//   danger, success                        colors
 //   fontFamily                             font family name
 //   fontCaption, fontBodySmall, fontBody,
 //   fontHeading, fontDisplay               pixel sizes
@@ -27,6 +27,7 @@ QtObject {
   readonly property color background: pick("background", "#101315")
   readonly property color accent: pick("accent", theme.foreground)
   readonly property color danger: pick("danger", "#e06c75")
+  readonly property color success: pick("success", "#98c379")
 
   // Derived tones. Use these instead of ad-hoc alphas, so every surface
   // (notch, modules, settings) shades the same way on any theme.

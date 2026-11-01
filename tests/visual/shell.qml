@@ -123,6 +123,7 @@ ShellRoot {
   // The claude chat with a demo conversation; its process is the fake
   // `claude` (scripts/visual-test.sh), its state in the scratch dir.
   DemoService { id: claudeSvc; tag: "claude"; defaultModules: ["claude"] }
+  DemoService { id: claudeBusySvc; tag: "claude-busy"; defaultModules: ["claude"] }
   readonly property var demoChat: ({
     sessionId: "demo", busy: false, activity: "", error: "", notice: "", retry: false,
     title: "Convert HEIC photos to JPG",
@@ -178,6 +179,7 @@ ShellRoot {
       done.requestPeek(600000)
       claudeSvc.moduleById("claude").chat = root.demoChat
       claudeSvc.open()
+      claudeBusySvc.moduleById("claude").chat = Object.assign({}, root.demoChat, { busy: true, activity: "writing" })
     }
   }
 
@@ -400,7 +402,9 @@ ShellRoot {
     Row {
       id: chatScene
       padding: Theme.space(16)
+      spacing: Theme.space(16)
       MockScreen { svc: claudeSvc; width: Theme.space(720); height: Theme.space(700); caption: "claude, expanded" }
+      MockScreen { svc: claudeBusySvc; width: Theme.space(360); height: Theme.space(120); caption: "claude, compact (answering)" }
     }
   }
 

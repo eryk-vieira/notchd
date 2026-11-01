@@ -10,6 +10,7 @@
 | `background` | `#101315` | the notch and windows |
 | `accent` | the foreground | selection, progress, focus |
 | `danger` | `#e06c75` | errors, invalid input |
+| `success` | `#98c379` | working, all good (the claude module's dot while it answers) |
 | `fontFamily` | `monospace` | use a Nerd Font, so icons render |
 | `fontCaption`, `fontBodySmall`, `fontBody`, `fontHeading`, `fontDisplay` | 10, 11, 12, 16, 24 | pixel sizes |
 | `spacingScale` | 1 | multiplier behind `Theme.space()` |
