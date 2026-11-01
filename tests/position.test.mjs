@@ -158,6 +158,15 @@ test('configValue writes what differs from the inherited position, defaults incl
   assert.deepEqual(plain(Position.configValue({ edge: 'right', offset: 0.957, screen: 'DP-1' }, top)), { edge: 'right' });
 });
 
+test('cornerInput: the full item for the asked kind of edge, else only where it is', () => {
+  const top = { edge: 'top', windowScreenName: 'A', cornerItem: { screen: 'A', edge: 'top', atStart: true, depth: 30, shown: true } };
+  const side = { edge: 'left', windowScreenName: 'A', cornerItem: { screen: 'A', edge: 'left', atStart: true, depth: 20, shown: true } };
+  assert.equal(Position.cornerInput(top, false), top.cornerItem);
+  assert.deepEqual(plain(Position.cornerInput(side, false)), { screen: 'A', edge: 'left' });
+  assert.equal(Position.cornerInput(side, true), side.cornerItem);
+  assert.deepEqual(plain(Position.cornerInput(top, true)), { screen: 'A', edge: 'top' });
+});
+
 test('configValue keeps the home screen, even at top-center', () => {
   assert.deepEqual(plain(Position.configValue({ edge: 'top', offset: 0.5, screen: 'eDP-1' })), { screen: 'eDP-1' });
   assert.deepEqual(plain(Position.configValue({ edge: 'left', screen: 'DP-1' })), { edge: 'left', screen: 'DP-1' });

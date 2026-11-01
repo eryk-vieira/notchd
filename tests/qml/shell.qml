@@ -102,7 +102,8 @@ ShellRoot {
       { name: "claude: a session Claude Code no longer has starts over and asks again", run: root.claudeSessionGone },
       { name: "claude: ask over IPC opens the chat's notch and asks", run: root.claudeAsk },
       { name: "claude: back from a terminal, the chat is read again with its title", run: root.claudeReadsTranscript },
-      { name: "claude: the closed notch keeps its size while an answer is on its way", run: root.claudeBusySteady }
+      { name: "claude: the closed notch keeps its size while an answer is on its way", run: root.claudeBusySteady },
+      { name: "corners: a side notch's place never feeds back into the insets it takes", run: root.cornersNoLoop }
     ]
     Qt.callLater(root.next)
   }
@@ -1285,5 +1286,43 @@ ShellRoot {
       m.chat = Claude.EMPTY
       root.done()
     })
+  }
+
+  // ---------------------------------------------------------------- corners
+  // Bug: NotchSurface read every window's cornerItem for the insets side
+  // notches take, then threw the side ones away; the binding still depended
+  // on them, and a side notch's cornerItem comes from its place, which comes
+  // from those insets: ~1300 binding-loop warnings at start, with notches on
+  // the top and left edges of one screen. The same bindings as NotchSurface
+  // and NotchWindow, on plain objects (PanelWindow can't load offscreen);
+  // qml-test.sh fails on the warning a loop logs.
+  QtObject {
+    id: cornerSurface
+    property var windows: []
+    readonly property var cornerInsets: Position.corners(cornerSurface.windows.map(function(w) { return Position.cornerInput(w, false) }))
+    function insetOf(w) { var i = cornerSurface.windows.indexOf(w); return i >= 0 ? cornerSurface.cornerInsets[i] : null }
+  }
+  QtObject {
+    id: cornerTop
+    readonly property string edge: "top"
+    readonly property string windowScreenName: "A"
+    readonly property var cornerItem: ({ screen: "A", edge: "top", atStart: true, atEnd: false, depth: 30, shown: true })
+  }
+  QtObject {
+    id: cornerSide
+    readonly property string edge: "left"
+    readonly property string windowScreenName: "A"
+    // Its place starts below the inset the top notch gives it.
+    readonly property var inset: cornerSurface.insetOf(cornerSide)
+    readonly property var cornerItem: ({ screen: "A", edge: "left", atStart: !cornerSide.inset || cornerSide.inset.start === 0,
+                                         atEnd: false, depth: 20, shown: true })
+  }
+  function cornersNoLoop() {
+    cornerSurface.windows = [cornerTop, cornerSide]
+    var inset = cornerSide.inset
+    root.check(!!inset && inset.start > 0, "the side notch takes no inset from the top one: " + JSON.stringify(inset))
+    root.check(cornerSide.cornerItem.atStart === false, "the side notch's place ignored its inset")
+    cornerSurface.windows = []
+    root.done()
   }
 }
