@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Renders the README image (docs/images/hero.webp, or $1) from
 # tests/visual/hero.qml: the real notch in four states, offscreen, on a
-# private D-Bus where the only media player is tests/visual/demo-player.py.
+# private D-Bus where the only media player is tests/visual/demo-player.py,
+# with the demo agents of tests/visual/bin.
 #
 # The tiles show WALLPAPER, by default Omarchy's Gruvbox "The Backwater"
 # (the wallpaper is not in the repo; only the rendered image is). Without
@@ -30,8 +31,11 @@ ln -s -- "$root/core" "$scratch/config/core"
 ln -s -- "$root/hosts" "$scratch/config/hosts"
 ln -s -- "$root/tests/visual/hero.qml" "$scratch/config/shell.qml"
 
-# Cut off from the session, with the demo player as the only MPRIS player.
+# Cut off from the session, with the demo player as the only MPRIS player,
+# and the demo `claude` and `codex` (tests/visual/bin), state in the scratch dir.
 NOTCHD_VISUAL_DIR="$scratch/out" NOTCHD_HERO_FILE="$scratch/out/hero.png" \
+  XDG_STATE_HOME="$scratch/out/state" CLAUDE_CONFIG_DIR="$scratch/out/claude" \
+  PATH="$root/tests/visual/bin:$PATH" \
   "$root/scripts/with-demo-player.sh" "$scratch/demo" "$scratch/log" \
   timeout 30 quickshell -p "$scratch/config" --no-color || true
 

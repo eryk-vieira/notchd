@@ -1,0 +1,6 @@
+#!/bin/sh
+# The `codex` of the README image (scripts/hero.sh puts it first on PATH):
+# idle in its tab. Nothing runs; it waits for its end.
+printf '\033]0;notchd\007'
+printf '\033[1m>_ Codex\033[0m  \033[38;5;245m~/Documents/notchd\033[0m\n\n› '
+exec cat > /dev/null

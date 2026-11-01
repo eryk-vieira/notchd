@@ -1,6 +1,6 @@
 # <img src="assets/icons/hicolor/scalable/apps/notchd.svg" alt="" width="40" align="top"> notchd
 
-![notchd in its four states: compact, peek, OSD and expanded](docs/images/hero.webp)
+![notchd with Claude Code and Codex: both in the closed notch, a plan-usage warning, a fine-tune pushed by a script, and Claude open in its terminal](docs/images/hero.webp)
 
 A dynamic notch for Wayland desktops, built with Quickshell. It hangs from an edge of the focused screen (the top by default) and shows modules: media, OSD, script activities, system resources, a timer, Claude Code or Codex in a terminal, or anything you write. You can have several notches, each with its own modules and place, and one on every monitor.
 

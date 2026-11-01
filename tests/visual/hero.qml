@@ -8,7 +8,9 @@ import "core"
 // states, each driven by its own NotchService with demo data, over a mock
 // desktop in Omarchy's Gruvbox theme. scripts/hero.sh runs it offscreen on a
 // private D-Bus with demo-player.py, so the media module shows a fictional
-// track, and passes the wallpaper (a gradient stands in without one).
+// track, with tests/visual/bin's `claude` and `codex` (a finished
+// conversation, printed) first on PATH, and passes the wallpaper (a
+// gradient stands in without one).
 ShellRoot {
   id: root
 
@@ -31,25 +33,26 @@ ShellRoot {
     ipcTarget: "notchd-hero-" + tag
     configPath: root.outDir + "/hero-" + tag + ".json"
   }
-  Service { id: compactSvc; tag: "compact"; defaultModules: ["media"] }
+  Service { id: compactSvc; tag: "compact"; defaultModules: ["claude", "codex"] }
   Service { id: activitySvc; tag: "activity"; defaultModules: ["activities"] }
-  Service {
-    id: osdSvc; tag: "osd"; defaultModules: []
-    hostModules: ({ osd: Qt.resolvedUrl("hosts/omarchy/modules/osd.qml") })
+  Service { id: usageSvc; tag: "usage"; defaultModules: ["claude"] }
+  Service { id: expandedSvc; tag: "expanded"; defaultModules: ["claude", "codex", "media"] }
+
+  // The plan's limits, by hand: offscreen nothing asks the network.
+  function limits(week) {
+    var later = function(mins) { return new Date(Date.now() + mins * 60000).toISOString() }
+    return { limits: [
+      { kind: "session", group: "session", percent: 42, resets_at: later(130) },
+      { kind: "weekly_all", group: "weekly", percent: week, resets_at: later(3 * 1440 + 200) },
+      { kind: "weekly_scoped", group: "weekly", percent: 5, resets_at: later(3 * 1440 + 200),
+        scope: { model: { display_name: "Fable" } } } ] }
   }
-  Service { id: expandedSvc; tag: "expanded"; defaultModules: ["media", "activities"] }
 
   // A slice of a desktop: wallpaper, a bar, and the notch hanging from it.
   component Screen: Rectangle {
     id: screen
     property var svc: null
-    // The copy to draw: the service's first notch's; the OSD, standalone,
-    // has a notch of its own.
-    readonly property var copy: {
-      if (!screen.svc) return null
-      var own = screen.svc.standaloneNotch("osd")
-      return own && own.copies.length > 0 ? own.copies[0] : screen.svc.firstCopy
-    }
+    readonly property var copy: screen.svc ? screen.svc.firstCopy : null
     readonly property int barHeight: Theme.space(26)
 
     readonly property real cornerRadius: Theme.space(14)
@@ -205,7 +208,7 @@ ShellRoot {
           }
           Text {
             Layout.fillWidth: true
-            text: "A dynamic notch for Wayland, built with Quickshell. It hangs from the top edge and shows what your system is doing: media, volume, script activities, or any module you write."
+            text: "A dynamic notch for Wayland, built with Quickshell. It hangs from the top edge and shows what your system is doing: Claude Code and Codex at work, media, script activities, or any module you write."
             wrapMode: Text.Wrap
             color: Theme.muted
             font.family: Theme.font.family
@@ -218,9 +221,9 @@ ShellRoot {
           spacing: scene.gap
           Repeater {
             model: [
-              { svc: compactSvc, title: "Compact", detail: "Something is active: a sliver hangs from the bar." },
-              { svc: activitySvc, title: "Peek", detail: "A script pushes an activity; it pops open for a moment." },
-              { svc: osdSvc, title: "OSD", detail: "Volume and brightness, in place of the stock OSD." }
+              { svc: compactSvc, title: "Compact", detail: "Claude works; Codex finished while you looked away." },
+              { svc: usageSvc, title: "Plan usage", detail: "A limit nears: it warns once, with when it resets." },
+              { svc: activitySvc, title: "Peek", detail: "A script pushes an activity, a training run, a build: it pops open for a moment." }
             ]
             ColumnLayout {
               required property var modelData
@@ -242,13 +245,13 @@ ShellRoot {
           spacing: Theme.space(10)
           Screen {
             Layout.fillWidth: true
-            Layout.preferredHeight: Theme.space(290)
+            Layout.preferredHeight: Theme.space(390)
             svc: expandedSvc
           }
           Caption {
             Layout.fillWidth: true
             title: "Expanded"
-            detail: "Hover or click: every active module at once, with its controls."
+            detail: "Hover or click: the agent in its terminal, the plan's limits above it, the other modules a tab away."
           }
         }
       }
@@ -261,13 +264,28 @@ ShellRoot {
     interval: 1500; running: true
     onTriggered: {
       activitySvc.moduleById("activities").push(JSON.stringify({
-        id: "deploy", icon: "󰜎", title: "Deploying api", subtitle: "staging · 3 of 5",
+        id: "train", icon: "󰚩", title: "Fine-tuning a LoRA", subtitle: "epoch 2 of 3 · loss 1.42",
         progress: 64, duration: 600000 }))
-      osdSvc.moduleById("osd").show(JSON.stringify({ icon: "volume", value: "62", duration: "600000" }))
-      expandedSvc.moduleById("activities").push(JSON.stringify({
-        id: "build", icon: "󰒓", title: "Building notchd", subtitle: "make check",
-        progress: 80, sticky: true, peek: false }))
+      // Agents in notchd's folder here, not the real one.
+      var services = [compactSvc, usageSvc, expandedSvc]
+      for (var i = 0; i < services.length; i++) {
+        services[i].setConfigValue("claude.directory", root.outDir)
+        services[i].setConfigValue("codex.directory", root.outDir)
+      }
+      compactSvc.moduleById("claude").status = { working: true, title: "Port to Rust" }
+      var codex = compactSvc.moduleById("codex")
+      codex.status = { working: false, title: "Fix flaky CI" }
+      codex.attention = true
+      // The week passes the warning between two answers: the peek.
+      var claude = usageSvc.moduleById("claude")
+      claude.usage.apply(root.limits(76))
+      claude.usage.apply(root.limits(83))
+      claude.requestPeek(600000)
+      expandedSvc.setConfigValue("claude.width", 700)
+      expandedSvc.setConfigValue("claude.height", 215)
+      expandedSvc.moduleById("claude").usage.apply(root.limits(83))
       expandedSvc.open()
+      expandedSvc.firstCopy.showTab("claude")
       grabTimer.start()
     }
   }

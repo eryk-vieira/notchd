@@ -1,0 +1,19 @@
+#!/bin/sh
+# The `claude` of the README image (scripts/hero.sh puts it first on PATH):
+# a finished conversation, printed, and the terminal titled the way Claude
+# Code titles it. Nothing runs; it waits for its end.
+printf '\033]0;✳ Parser memory leak\007'
+o='\033[38;5;173m'   # Claude's orange
+g='\033[38;5;245m'   # faint
+b='\033[1m'
+c='\033[38;5;109m'   # code
+r='\033[0m'
+printf "${g}>${r} Why does the parser blow up to 2 GB on large files?\n\n"
+printf "${o}●${r} ${b}Read${r}(src/parser/lexer.rs)\n"
+printf "  ${g}⎿  Read 214 lines${r}\n\n"
+printf "${o}●${r} ${b}Grep${r}(\"pending.push\", path: \"src/parser\")\n"
+printf "  ${g}⎿  Found 3 matches${r}\n\n"
+printf "${o}●${r} The lexer keeps every token in ${c}pending${r} until EOF. Draining it after\n"
+printf "  each statement takes the peak from 1.8 GB to 40 MB. Want me to patch it?\n\n"
+printf "${g}>${r} "
+exec cat > /dev/null
