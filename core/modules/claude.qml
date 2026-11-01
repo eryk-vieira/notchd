@@ -292,9 +292,9 @@ NotchModule {
     body: Theme.font.body, heading: Theme.font.heading, gap: Theme.space(10), lineHeight: 140
   })
 
-  readonly property var spinnerFrames: ["·", "✢", "✳", "✶", "✻", "✽"]
-  property int spinnerIndex: 0
-  readonly property string mark: m.chat.busy ? m.spinnerFrames[m.spinnerIndex] : "✻"
+  // The mark stays put: a spinner of glyphs of different widths kept the
+  // closed notch resizing. A dot on it says an answer is on its way.
+  readonly property string mark: "✻"
   readonly property string activityText: m.chat.activity === "searching" ? "Searching the web…"
     : m.chat.activity === "writing" ? "Writing…" : m.chat.activity === "thinking" ? "Thinking…" : ""
 
@@ -587,22 +587,34 @@ NotchModule {
     }
   }
 
-  // The spinner turns like Claude Code's, while an answer is on its way.
-  Timer {
-    interval: 120
-    repeat: true
-    running: m.chat.busy
-    onTriggered: m.spinnerIndex = (m.spinnerIndex + 1) % m.spinnerFrames.length
-  }
-
   // ------------------------------------------------------------ components
-  component Mark: Text {
+  // The ✻, and while an answer is on its way a green dot on its corner,
+  // drawn over it so the notch keeps its size.
+  component Mark: Item {
+    id: markItem
     property int size: Theme.font.body
-    textFormat: Text.PlainText
-    text: m.mark
-    color: Theme.accent
-    font.family: Theme.font.family
-    font.pixelSize: size
+    implicitWidth: glyph.implicitWidth
+    implicitHeight: glyph.implicitHeight
+    Text {
+      id: glyph
+      textFormat: Text.PlainText
+      text: m.mark
+      color: Theme.accent
+      font.family: Theme.font.family
+      font.pixelSize: markItem.size
+    }
+    Rectangle {
+      visible: m.chat.busy
+      readonly property int ring: Math.max(1, Math.round(markItem.size / 10))
+      width: Math.max(Theme.space(4), Math.round(markItem.size * 0.36)) + 2 * ring
+      height: width
+      radius: width / 2
+      x: glyph.width - width * 0.25
+      y: Math.round(glyph.height * 0.2) - width / 2
+      color: Theme.success
+      border.width: ring
+      border.color: Theme.background
+    }
   }
   component IconButton: Item {
     id: btn

@@ -101,7 +101,8 @@ ShellRoot {
       { name: "a notch in the list dropped on the top edge stays there", run: root.dropOnTopStays },
       { name: "claude: a session Claude Code no longer has starts over and asks again", run: root.claudeSessionGone },
       { name: "claude: ask over IPC opens the chat's notch and asks", run: root.claudeAsk },
-      { name: "claude: back from a terminal, the chat is read again with its title", run: root.claudeReadsTranscript }
+      { name: "claude: back from a terminal, the chat is read again with its title", run: root.claudeReadsTranscript },
+      { name: "claude: the closed notch keeps its size while an answer is on its way", run: root.claudeBusySteady }
     ]
     Qt.callLater(root.next)
   }
@@ -1245,6 +1246,39 @@ ShellRoot {
                  "the chat was not read again: " + JSON.stringify(m.chat.messages))
       root.check(m.chatTitle === "Conversa no terminal", "the title is " + m.chatTitle)
       m.newChat()
+      root.done()
+    })
+  }
+
+  // Bug: while busy the mark cycled through spinner glyphs of different
+  // widths, so the closed notch kept resizing (it springs to fit). Now the
+  // mark stays and a dot on it says it is working.
+  NotchCard {
+    id: chatCard
+    notch: chatSvc.notches.length > 0 ? chatSvc.notches[0].copies[0] : null
+  }
+  function claudeBusySteady() {
+    var m = chatSvc.moduleById("claude")
+    m.newChat()
+    chatSvc.close()
+    var widths = []
+    root.steps([
+      [400, function() {
+        m.chat = Object.assign({}, Claude.EMPTY, { busy: true, activity: "thinking",
+          messages: [{ role: "user", text: "q", tools: [] }, { role: "assistant", text: "", tools: [] }] })
+      }],
+      [500, function() { widths.push(chatCard.width) }],
+      [130, function() { widths.push(chatCard.width) }],
+      [130, function() { widths.push(chatCard.width) }],
+      [130, function() { widths.push(chatCard.width) }],
+      [130, function() { widths.push(chatCard.width) }],
+      [130, function() { widths.push(chatCard.width) }]
+    ], function() {
+      root.check(chatCard.mode === "compact", "the notch is " + chatCard.mode)
+      var min = Math.min.apply(null, widths), max = Math.max.apply(null, widths)
+      root.check(max - min < 0.5, "the closed notch changed width while busy: " + JSON.stringify(widths))
+      root.check(m.mark === "✻", "the mark changed while busy: " + m.mark)
+      m.chat = Claude.EMPTY
       root.done()
     })
   }
