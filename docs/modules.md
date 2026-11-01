@@ -74,6 +74,21 @@ expanded: Component {
 }
 ```
 
+## A program's terminal UI
+
+`TerminalModule` (a `NotchModule`) runs a program's own terminal UI in the expanded view, as `claude` and `codex` do: set `appName`, `defaultCommand`, `parseTitle` (the terminal's title to `{ working, title }`, see `core/Agent.js`) and, for an image mark, `logoSource`; declare the settings in its JSON file as `modules/codex.json` does (directory, command, idleMinutes, width, height, font). The terminal comes from the optional `qmltermwidget` package, probed before it loads, and keeps running while the notch is closed. It takes every key, Escape included, so the notch closes from the header's button.
+
+```qml
+import ".."
+import "../Agent.js" as Agent
+
+TerminalModule {
+  appName: "Codex"
+  defaultCommand: "codex"
+  parseTitle: Agent.codexTitle
+}
+```
+
 ## The scope rule
 
 A module **shows** state, it does not **own** it. A notifications module mirrors toasts; it does not register as the notification server. The one exception today is the Omarchy `osd` module, which takes the `osd` IPC target from the stock OSD plugin (and says so in its README).

@@ -8,11 +8,13 @@ QMLLINT ?= $(firstword $(wildcard /usr/lib/qt6/bin/qmllint /usr/lib64/qt6/bin/qm
 # Omarchy shell, so lint skips it; `make restart` and the shell log cover it.
 LINT_FILES = shell.qml core/*.qml core/settings/*.qml core/settings/previews/*.qml \
 	core/modules/*.qml
+# Not core/terminal/: it imports QMLTermWidget, whose package ships no type
+# information for qmllint. The QML tests load it where it is installed.
 
 # Dev config for `make dev`, so it never touches ~/.config/notchd.
 DEV_CONFIG ?= $(CURDIR)/build/dev-config.json
 
-.PHONY: check test qmltest visual hero icons bench lint validate dev restart clean
+.PHONY: check test qmltest visual hero icons bench lint validate dev restart deps clean
 
 check: test qmltest lint validate visual
 
@@ -70,9 +72,24 @@ dev:
 	@mkdir -p build
 	NOTCHD_CONFIG="$(DEV_CONFIG)" quickshell -p .
 
-# The Omarchy shell does not hot-reload plugin QML.
-restart:
+# The Omarchy shell does not hot-reload plugin QML. Installs the optional
+# packages first (deps).
+restart: deps
 	omarchy restart shell
+
+# Optional packages the modules use: qmltermwidget, the codex module's
+# terminal. Installed with pacman only when missing (sudo asks then); without
+# pacman, says what to install.
+OPTIONAL_PACKAGES = qmltermwidget
+deps:
+	@for pkg in $(OPTIONAL_PACKAGES); do \
+	  if ! command -v pacman >/dev/null 2>&1; then \
+	    echo "notchd: install $$pkg with your package manager for the codex module" >&2; \
+	  elif ! pacman -Q "$$pkg" >/dev/null 2>&1; then \
+	    echo "notchd: installing $$pkg (the codex module's terminal)"; \
+	    sudo pacman -S --needed --noconfirm "$$pkg"; \
+	  fi; \
+	done
 
 clean:
 	rm -rf build

@@ -14,7 +14,8 @@ Every host exposes the same methods on its `ipcTarget`. The CLI depends on the h
 | `open`, `toggle` | pin the first notch open on the focused monitor, or flip it |
 | `close` | close every notch |
 | `openNotch <id>`, `closeNotch <id>`, `toggleNotch <id>` | the same for one notch, by its `id` (`main`, `notch-2`...) |
-| `claude <command>` | the `claude` module: `new` starts a new chat, `"ask <question>"` opens it and asks (below) |
+| `claude <command>` | the `claude` module: `new` starts a new session, `"ask <question>"` opens it and types the question in ([below](#claude-and-codex)) |
+| `codex <command>` | the `codex` module, the same commands |
 | `timer <command>` | the `timer` module: start, pause or stop a countdown or a pomodoro (below) |
 | `settings` | open or close the settings window |
 | `recenter` | put every notch back in the middle of the top edge, following focus (removes each `position`) |
@@ -75,9 +76,9 @@ omarchy-shell eryk.notchd timer toggle
 
 It answers `ok`, `no timer running`, the usage, or `timer module not loaded` when no notch lists `timer`.
 
-## Claude
+## Claude and Codex
 
-The `claude` module is a quick chat; the notch that shows it opens with `toggleNotch <id>`, which you can bind to a key. From a Hyprland binding:
+The `claude` and `codex` modules run Claude Code and Codex in a terminal in the notch; the notch that shows one opens with `toggleNotch <id>`, which you can bind to a key. From a Hyprland binding:
 
 ```sh
 bind = SUPER ALT, C, exec, omarchy-shell eryk.notchd toggleNotch claude
@@ -85,12 +86,12 @@ bind = SUPER ALT, C, exec, omarchy-shell eryk.notchd toggleNotch claude
 
 | Command | |
 |---|---|
-| `new` | a new chat: the context starts empty |
-| `"ask <question>"` | open the chat's notch (the first that lists `claude`) and ask; `ask` alone only opens it |
+| `new` | a new session: the running one stops (`/resume` brings it back) |
+| `"ask <question>"` | open the module's notch (the first that lists it) and type the question in, then Enter, once the agent is up; `ask` alone only opens it |
 
 ```sh
 omarchy-shell eryk.notchd claude "ask what does EXDEV mean?"
-omarchy-shell eryk.notchd claude "ask explain: $(wl-paste --primary)"   # the selected text
+omarchy-shell eryk.notchd codex "ask explain: $(wl-paste --primary)"   # the selected text, as one line
 ```
 
-It answers `ok`, `busy: an answer is on its way` (an ask while one is), `no notch shows claude`, the usage, or `claude module not loaded` when no notch lists `claude`.
+It answers `ok`, `no notch shows <id>`, `the terminal needs the qmltermwidget package`, the usage, or `<id> module not loaded` when no notch lists it.

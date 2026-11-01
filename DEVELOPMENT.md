@@ -13,6 +13,7 @@ Working on notchd itself. For using it, see the [README](README.md); for the rul
 | JetBrainsMono Nerd Font | `ttf-jetbrains-mono-nerd` | `make hero` |
 | `rsvg-convert` | `librsvg` | `make icons` |
 | Omarchy 4 | | the Omarchy host, `make validate`, `make restart` |
+| `qmltermwidget` (optional) | `qmltermwidget` | the `claude` and `codex` modules' terminal (`make deps`); without it their QML tests only check the message that asks for it |
 
 ## Layout
 
@@ -34,11 +35,13 @@ core/                 the framework: no desktop-specific code
   Outline.js          the notch's outline: shoulders, corners, joins (pure JS)
   Resources.js        /proc and df parsing, when a resource runs short (pure JS)
   Countdown.js        timer and pomodoro: durations, commands, the countdown (pure JS)
-  Claude.js           the claude chat: its command line, stream-json events, transcripts (pure JS)
-  Markdown.js         Markdown to rich text styled from the theme, for the chat's answers (pure JS)
+  TerminalModule.qml  base type for a module that runs a program's terminal UI (claude, codex)
+  Agent.js            what Claude Code's and Codex's terminal titles say, when to peek, IPC commands (pure JS)
+  Terminal.js         the terminal view: the command line, the folder, the color scheme (pure JS)
+  terminal/           TerminalView.qml: a terminal (QMLTermWidget, optional package); lint skips it
   ReservedSpace.qml   how much of its edge windows leave to the closed notch
   *Compositor.qml     compositor adapters (Hyprland, generic)
-  modules/            built-in modules: media, activities, resources, timer, claude
+  modules/            built-in modules: media, activities, resources, timer, claude, codex
   settings/           the settings window, its controls and Settings.js
 hosts/
   omarchy/            Omarchy shell plugin entry points and the osd module
@@ -46,8 +49,8 @@ tests/
   *.test.mjs          Node tests of the pure-JS rules
   load.mjs            loads a core .js file the way QML sees it
   qml/shell.qml       QML behaviour tests, regression tests among them
-  qml/fixtures/       modules only the QML tests load (a module you type into), and a fake `claude`
-  fixtures/           recorded `claude` stream-json events (scrubbed), for claude.test.mjs and the fake
+  qml/fixtures/       modules only the QML tests load (a module you type into), and fake `claude` and `codex`
+                      terminal UIs that set the terminal's title as the real ones do
   visual/shell.qml    offscreen scenarios: the settings window, the notch per edge
   visual/hero.qml     the README image: the real notch in four states
   visual/demo-player.py  a fake MPRIS player with a fictional track
@@ -70,10 +73,10 @@ The plugin folder is a symlink to the checkout:
 
 ```sh
 ln -sfn "$PWD" ~/.config/omarchy/plugins/eryk.notchd
-make restart                 # omarchy restart shell
+make restart                 # make deps, then omarchy restart shell
 ```
 
-The shell does not hot-reload plugin QML: run `make restart` after changing it. Config changes apply live. How the plugin gets enabled, and the stock OSD it replaces, are in [hosts/omarchy](hosts/omarchy/README.md).
+The shell does not hot-reload plugin QML: run `make restart` after changing it. It runs `make deps` first, which installs the optional packages the modules use (`qmltermwidget`, for the `codex` module) with pacman when they are missing; sudo asks for your password only then. Config changes apply live. How the plugin gets enabled, and the stock OSD it replaces, are in [hosts/omarchy](hosts/omarchy/README.md).
 
 The shell's log:
 

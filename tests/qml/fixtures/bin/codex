@@ -1,0 +1,23 @@
+#!/bin/sh
+# A fake `codex` for the QML tests (scripts/qml-test.sh puts it first on
+# PATH). It records its arguments, folder and pid, then sets the terminal's
+# title the way Codex does by default: a spinner while it starts, then the
+# project. Each line typed to it: "work" spins a while and names the
+# thread ("<thread> | <project>"), "quit" exits; anything else is recorded after the arguments.
+printf '%s\n%s\n%s\n' "$*" "$PWD" "$$" > "${NOTCHD_FAKE_CODEX_ARGS:-/dev/null}"
+project=${PWD##*/}
+title() { printf '\033]0;%s\007' "$1"; }
+title "⠋ $project"
+sleep 0.2
+title "$project"
+echo "fake codex ready"
+while IFS= read -r line; do
+  case "$line" in
+    work)
+      title "⠙ $project"; sleep 0.3
+      title "⠹ Fake thread | $project"; sleep 0.3
+      title "Fake thread | $project"; echo "worked" ;;
+    quit) echo "bye"; exit 0 ;;
+    *) echo "got: $line"; printf 'got %s\n' "$line" >> "${NOTCHD_FAKE_CODEX_ARGS:-/dev/null}" ;;
+  esac
+done

@@ -63,7 +63,9 @@ ShellRoot {
     { name: "edge-left", edge: "left", theme: root.dark },
     { name: "edge-right", edge: "right", theme: root.light },
     { name: "claude-dark", chat: true, theme: root.dark },
-    { name: "claude-light", chat: true, theme: root.light }
+    { name: "claude-light", chat: true, theme: root.light },
+    { name: "codex-dark", codex: true, theme: root.dark },
+    { name: "codex-light", codex: true, theme: root.light }
   ]
   property int index: -1
   readonly property var scenario: index >= 0 && index < scenarios.length ? scenarios[index] : null
@@ -120,26 +122,12 @@ ShellRoot {
   DemoService { id: timerIdleSvc; tag: "timer-idle"; defaultModules: ["timer"] }
   DemoService { id: timerDoneSvc; tag: "timer-done"; defaultModules: ["timer"] }
   DemoService { id: restSvc; tag: "rest"; defaultModules: [] }
-  // The claude chat with a demo conversation; its process is the fake
-  // `claude` (scripts/visual-test.sh), its state in the scratch dir.
+  // Claude Code and Codex in their terminals (the fake `claude` and `codex`),
+  // and closed while they work.
   DemoService { id: claudeSvc; tag: "claude"; defaultModules: ["claude"] }
   DemoService { id: claudeBusySvc; tag: "claude-busy"; defaultModules: ["claude"] }
-  readonly property var demoChat: ({
-    sessionId: "demo", busy: false, activity: "", error: "", notice: "", retry: false,
-    title: "Convert HEIC photos to JPG",
-    messages: [
-      { role: "user", text: "How do I convert HEIC photos to JPG on Linux, keeping the metadata?", tools: [] },
-      { role: "assistant", tools: ["WebSearch"], text: "## Two ways\n\n"
-        + "- **libheif** ships `heif-convert`, the quickest for a few files.\n"
-        + "- **ImageMagick** does batches:\n"
-        + "    - one file: `magick in.heic out.jpg`\n"
-        + "    - a folder: `magick mogrify -format jpg *.heic`\n\n"
-        + "Both keep the EXIF data. To check, compare the tags:\n\n"
-        + "```sh\nexiftool -a -G1 photo.heic > before.txt\nexiftool -a -G1 photo.jpg > after.txt\n```\n\n"
-        + "> On Arch, `pacman -S libheif imagemagick perl-image-exiftool`.\n\n"
-        + "Sources: [libheif](https://github.com/strukturag/libheif), [ImageMagick](https://imagemagick.org)" }
-    ]
-  })
+  DemoService { id: codexSvc; tag: "codex"; defaultModules: ["codex"] }
+  DemoService { id: codexBusySvc; tag: "codex-busy"; defaultModules: ["codex"] }
   readonly property var demoServices: [mediaSvc, activitySvc, osdSvc, openSvc, resourcesSvc, resourcesOpenSvc,
                                        timerSvc, pomodoroSvc, timerIdleSvc, timerDoneSvc, restSvc]
 
@@ -177,9 +165,12 @@ ShellRoot {
       var done = timerDoneSvc.moduleById("timer")
       done.countdown = { status: "done", kind: "timer", label: "Tea", duration: 3 * 60000 }
       done.requestPeek(600000)
-      claudeSvc.moduleById("claude").chat = root.demoChat
+      claudeSvc.setConfigValue("claude.directory", root.outDir)
       claudeSvc.open()
-      claudeBusySvc.moduleById("claude").chat = Object.assign({}, root.demoChat, { busy: true, activity: "writing" })
+      claudeBusySvc.moduleById("claude").status = { working: true, title: "Convert HEIC photos to JPG" }
+      codexSvc.setConfigValue("codex.directory", root.outDir)
+      codexSvc.open()
+      codexBusySvc.moduleById("codex").status = { working: true, title: "Fix the flaky login test" }
     }
   }
 
@@ -403,8 +394,23 @@ ShellRoot {
       id: chatScene
       padding: Theme.space(16)
       spacing: Theme.space(16)
-      MockScreen { svc: claudeSvc; width: Theme.space(720); height: Theme.space(700); caption: "claude, expanded" }
-      MockScreen { svc: claudeBusySvc; width: Theme.space(360); height: Theme.space(120); caption: "claude, compact (answering)" }
+      MockScreen { svc: claudeSvc; width: Theme.space(880); height: Theme.space(580); caption: "claude, expanded" }
+      MockScreen { svc: claudeBusySvc; width: Theme.space(360); height: Theme.space(120); caption: "claude, compact (working)" }
+    }
+  }
+
+  FloatingWindow {
+    id: codexWin
+    visible: !!root.scenario && !!root.scenario.codex
+    implicitWidth: codexScene.width
+    implicitHeight: codexScene.height
+    color: Theme.background
+    Row {
+      id: codexScene
+      padding: Theme.space(16)
+      spacing: Theme.space(16)
+      MockScreen { svc: codexSvc; width: Theme.space(880); height: Theme.space(580); caption: "codex, expanded" }
+      MockScreen { svc: codexBusySvc; width: Theme.space(360); height: Theme.space(120); caption: "codex, compact (working)" }
     }
   }
 
@@ -423,7 +429,7 @@ ShellRoot {
     svc.settingsNotch = root.scenario.notch || 0
     for (var i = 0; i < root.demoServices.length; i++)
       root.demoServices[i].setConfigValue("position", root.scenario.edge ? { edge: root.scenario.edge } : undefined)
-    grabTimer.interval = root.scenario.edge || root.scenario.chat ? 1200 : 400
+    grabTimer.interval = root.scenario.edge || root.scenario.chat || root.scenario.codex ? 1200 : 400
     grabTimer.start()
     scrollTimer.start()
   }
@@ -434,7 +440,8 @@ ShellRoot {
     interval: 400
     onTriggered: {
       var name = root.scenario.name
-      var target = root.scenario.chat ? chatScene : root.scenario.edge ? notchScene : win.contentItem.children[0]
+      var target = root.scenario.chat ? chatScene : root.scenario.codex ? codexScene
+        : root.scenario.edge ? notchScene : win.contentItem.children[0]
       target.grabToImage(function(result) {
         if (!result.saveToFile(root.outDir + "/" + name + ".png")) console.warn("could not save " + name)
         root.next()
