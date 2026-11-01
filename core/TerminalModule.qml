@@ -238,11 +238,26 @@ NotchModule {
       Working { anchors.verticalCenter: parent.verticalCenter }
     }
   }
+  // Down a side edge: the mark, the dot a badge on its corner. A place of
+  // its own under the mark, kept while the dot is off, left a gap under
+  // every agent in the notch.
   verticalCompact: Component {
-    Column {
-      spacing: Theme.space(6)
-      Logo { anchors.horizontalCenter: parent.horizontalCenter }
-      Working { anchors.horizontalCenter: parent.horizontalCenter }
+    Item {
+      implicitWidth: sideLogo.implicitWidth
+      implicitHeight: sideLogo.implicitHeight
+      Logo { id: sideLogo }
+      Rectangle {
+        visible: m.working || m.attention
+        readonly property real ring: Theme.space(2)
+        width: Theme.space(7) + 2 * ring
+        height: width
+        radius: width / 2
+        x: sideLogo.width - width * 0.6
+        y: sideLogo.height - height * 0.6
+        color: m.working ? Theme.success : Theme.accent
+        border.width: ring
+        border.color: Theme.background
+      }
     }
   }
 

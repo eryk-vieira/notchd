@@ -50,6 +50,8 @@ Item {
   readonly property bool reserveSpace: !!notch.spec && notch.spec.reserveSpace
   // The open notch shows one module at a time, picked from tabs.
   readonly property bool tabs: !!notch.spec && notch.spec.tabs
+  // A module with nothing to show closed shows its icon there.
+  readonly property bool idleIcons: !!notch.spec && notch.spec.idleIcons
   // Workspaces the closed notch hangs on (ids or names); null: every one.
   readonly property var workspaces: notch.spec ? notch.spec.workspaces : null
   // The configured position, { edge, offset, screen } (Position.js).
@@ -103,7 +105,8 @@ Item {
   readonly property var compactModule: State.compactModule(notch.activeModules)
   // What the closed notch shows side by side (State.compactModules): with
   // tabs, every active module's compact view; else the compact module's.
-  readonly property var compactModules: State.compactModules(notch.activeModules, notch.tabs)
+  // With idleIcons, a module with nothing to show closed as its icon.
+  readonly property var compactModules: State.compactModules(notch.activeModules, notch.tabs, notch.idleIcons)
   readonly property var expandedModules: notch.activeModules.filter(function(m) { return !!m.expanded })
 
   // ---------------------------------------------------------------- screens

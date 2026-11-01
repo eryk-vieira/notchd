@@ -43,6 +43,12 @@ Item {
   // module peeks, wherever it is.
   property bool peekOnFocusedScreen: false
 
+  // A Nerd Font glyph for the module. Active with nothing to show closed
+  // (no `compact` view right now, like a timer that isn't running), the
+  // closed notch shows it, unless the notch's `idleIcons` is off. Without
+  // one, the module stays out of the closed notch then.
+  property string icon: ""
+
   // Has news you haven't seen, such as an agent that finished while you
   // weren't looking at it. Set it before requestPeek(): a peek the notch
   // can't show then (open on another tab, say) shows as it closes. Its tab

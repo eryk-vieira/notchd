@@ -18,13 +18,15 @@ notchd runs inside a *host*: the desktop-specific wiring around the generic core
 | State | When | Shows |
 |---|---|---|
 | rest | nothing active | a small lip |
-| compact | a module is active | the highest-priority active module's `compact` view, hanging from its edge; with `tabs`, every active module's, side by side |
+| compact | a module is active | with several modules, every active module's `compact` view, side by side (with `tabs: false`, only the highest-priority one's), hanging from its edge; a module with nothing to show closed, like a stopped timer, as its icon |
 | peek | a module calls `requestPeek()` | that module's `peek` view, for a few seconds |
-| expanded | hover (click pins it, click outside unpins) | the `expanded` view of every active module, one above the other; with `tabs`, one at a time |
+| expanded | hover (click pins it, click outside unpins) | the `expanded` view of one active module at a time, with a tab for each; with `tabs: false`, all of them, one above the other |
 
 Over a fullscreen app only peeks show.
 
-The open notch is as large as what it shows, up to the screen less a margin; past that, the modules scroll: the mouse wheel (over a terminal it scrolls the terminal's own history) and a scrollbar beside them. `tabs: true` shows one module at a time instead, with a tab for each; opening the notch from a module (a shortcut, `claude "ask ..."`) picks its tab. Closed, a notch with tabs shows every active module side by side. An agent that finishes while you look at another tab gets a dot on its tab and on the closed notch, and its peek shows as the notch closes. Handy for a notch with `claude` and `codex`.
+The open notch is as large as what it shows, up to the screen less a margin; past that, the modules scroll: the mouse wheel (over a terminal it scrolls the terminal's own history) and a scrollbar beside them. A notch with several modules shows one at a time, with a tab for each; opening the notch from a module (a shortcut, `claude "ask ..."`) picks its tab, and closed it shows every active module side by side. An agent that finishes while you look at another tab gets a dot on its tab and on the closed notch, and its peek shows as the notch closes. `tabs: false` puts them back one above the other, the closed notch showing the highest-priority one.
+
+A module that is active with nothing to show closed (a timer that isn't running) shows its icon in the closed notch; `idleIcons: false` leaves it out until it has something. The resources module set to `"short"` stays out either way.
 
 Hold the notch for a moment, then drag it to move it (a quick click only pins it open): it closes as it is picked up, jumps to the screen edge nearest the pointer as you go, sits with its middle under the pointer, snaps to the middle of an edge when close to it, and stays where you drop it. With more than one monitor you can drag it onto another one: a preview shows it there, and the monitor you drop it on becomes its home, where it stays whichever monitor has focus. A peek shows on the notch, and also at the top of the monitor you work on if no notch there shows it. The volume and brightness OSD, standalone, shows in its own place on the monitor you work on. If that monitor shows a workspace left out of `workspaces`, the drop adds it; on another such workspace later, the notch goes back to the monitors whose workspace takes it. `draggable: false` turns dragging off, and `recenter` over IPC puts it back at the top, following focus.
 
@@ -84,7 +86,8 @@ The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/no
 | `position` | top, middle, following focus | `{ "edge", "offset", "screen" }`: where the notch sits; see above; *per notch* |
 | `draggable` | `true` | drag the notch to move it; *per notch* |
 | `reserveSpace` | `false` | keep windows clear of the closed notch; see above; *per notch* |
-| `tabs` | `false` | open, show one module at a time, with a tab for each; see above; *per notch* |
+| `tabs` | `true` | a notch with several modules shows one at a time open, with a tab for each, and all of them side by side closed; see above; *per notch* |
+| `idleIcons` | `true` | a module with nothing to show closed shows its icon there; see above; *per notch* |
 | `workspaces` | every one | workspaces the closed notch shows on; see above; *per notch* |
 | `notches` | one notch | `[{ "id", ...per-notch keys }]`; see [Several notches](#several-notches) |
 

@@ -323,7 +323,10 @@ Item {
                help: "Windows keep clear of the closed notch instead of going under it, along its whole edge: a sliver at rest, more while a module is active. Peeks and the open notch still cover them." })
     out.push({ page: own, section: "Layout", key: key("tabs"), type: "boolean",
                label: "Tabs", default: inherited("tabs", Config.DEFAULTS.tabs),
-               help: "Open, the notch shows one module at a time, with a tab for each, instead of all of them one above the other. For modules that take room, like a terminal. Opening the notch from a module (a shortcut, IPC) picks its tab." })
+               help: "Open, the notch shows one module at a time, with a tab for each, instead of all of them one above the other; closed, every active module side by side. Opening the notch from a module (a shortcut, IPC) picks its tab. Only a notch with several modules has tabs." })
+    out.push({ page: own, section: "Layout", key: key("idleIcons"), type: "boolean",
+               label: "Icons for idle modules", default: inherited("idleIcons", Config.DEFAULTS.idleIcons),
+               help: "A module with nothing to show closed, like a timer that isn't running, shows its icon in the closed notch. Off, it stays out until it has something." })
     out.push({ page: own, section: "Position", key: key("position.edge"), type: "choice", display: "cards",
                label: "Edge", default: inherited("position.edge", "top"),
                help: "The screen edge the notch hangs from. On a side edge, an active module without a vertical view shows a dot.",
@@ -659,6 +662,7 @@ Item {
             id: n.notchId,
             reserveSpace: n.reserveSpace,
             tabs: n.tabs,
+            idleIcons: n.idleIcons,
             workspaces: n.workspaces,
             position: n.placement,
             draggable: n.canDrag,

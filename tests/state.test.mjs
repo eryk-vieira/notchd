@@ -99,6 +99,20 @@ test('compactModules: with tabs every active compact view, else the compact modu
   assert.deepEqual(ids(State.compactModules(null, true)), []);
 });
 
+test('compactModules: with icons an idle module shows its icon', () => {
+  const claude = mod('claude', 40, { compact: {} });
+  const timer = mod('timer', 60, { icon: 'T' });             // idle: no compact view
+  const bare = mod('resources', 30);                           // no icon: stays out
+  const ids = (list) => plain(list.map((m) => m.id));
+  // With tabs, every module that has something: its view or its icon.
+  assert.deepEqual(ids(State.compactModules([timer, claude, bare], true, true)), ['timer', 'claude']);
+  assert.deepEqual(ids(State.compactModules([timer, claude, bare], true, false)), ['claude']);
+  // Without tabs, the compact module first; the icon only without one.
+  assert.deepEqual(ids(State.compactModules([timer, claude], false, true)), ['claude']);
+  assert.deepEqual(ids(State.compactModules([bare, timer], false, true)), ['timer']);
+  assert.deepEqual(ids(State.compactModules([timer], false, false)), []);
+});
+
 test('attentionPeek: the first module with something unseen and a peek', () => {
   const codex = mod('codex', 40, { attention: false });
   const claude = mod('claude', 40, { attention: true });

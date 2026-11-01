@@ -22,14 +22,23 @@ function compactModule(active) {
 
 // The modules the closed notch shows, side by side: with the notch's `tabs`,
 // every active one with a compact view (all of them at a glance, as the
-// open notch has them all a tab away); else just the compact module.
-function compactModules(active, tabs) {
+// open notch has them all a tab away); else just the compact module. With
+// `icons`, an active module with nothing to show closed (a timer that isn't
+// running) shows its icon instead (`hasIcon`): without tabs, only when no
+// module has a compact view.
+function hasIcon(m) {
+  return !!m && !m.compact && !!m.icon
+}
+function compactModules(active, tabs, icons) {
   active = active || []
   if (!tabs) {
     var one = compactModule(active)
-    return one ? [one] : []
+    if (one) return [one]
+    for (var i = 0; icons && i < active.length; i++)
+      if (hasIcon(active[i])) return [active[i]]
+    return []
   }
-  return active.filter(function(m) { return !!m && !!m.compact })
+  return active.filter(function(m) { return !!m && (!!m.compact || (!!icons && hasIcon(m))) })
 }
 
 // The module to peek as the notch closes: the first (highest priority)

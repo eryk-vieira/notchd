@@ -56,18 +56,20 @@ const one = (cfg, defaults = ['media']) => plain(Config.notches(cfg, defaults))[
 test('notches: without a list, the top level is the one notch, at its defaults', () => {
   assert.deepEqual(plain(Config.notches({}, ['media'])), [{
     id: 'main', index: 0, prefix: '', moduleIds: ['media'],
-    reserveSpace: false, draggable: true, tabs: false, workspaces: null, position: undefined
+    reserveSpace: false, draggable: true, tabs: true, idleIcons: true, workspaces: null, position: undefined
   }].map(plain));
   assert.equal(plain(Config.notches({ notches: [] }, [])).length, 1);
 });
 
 test('notches: reads and clamps the notch keys', () => {
-  const n = one({ modules: ['osd', 3], reserveSpace: true, draggable: false, tabs: true, workspaces: [1, 'code'] }, []);
+  const n = one({ modules: ['osd', 3], reserveSpace: true, draggable: false, tabs: false, workspaces: [1, 'code'] }, []);
   assert.deepEqual(n.moduleIds, ['osd', '3']);
   assert.equal(n.reserveSpace, true);
   assert.equal(n.draggable, false);
-  assert.equal(n.tabs, true);
-  assert.equal(one({ tabs: 'yes' }).tabs, false);
+  assert.equal(n.tabs, false);
+  assert.equal(one({ tabs: 'no' }).tabs, true);
+  assert.equal(one({ idleIcons: false }).idleIcons, false);
+  assert.equal(one({ idleIcons: 'no' }).idleIcons, true);
   assert.deepEqual(n.workspaces, [1, 'code']);
   // The compact style left with the notch in the bar: a config that still
   // has one changes nothing.
@@ -82,10 +84,10 @@ test('notches: reads and clamps the notch keys', () => {
 test('notches: each listed notch inherits the top-level keys it leaves out', () => {
   const cfg = {
     modules: ['media'], reserveSpace: true, position: { edge: 'left', offset: 0.2 },
-    notches: [{}, { id: 'jobs', modules: ['activities'], reserveSpace: false, tabs: true, position: { offset: 0.8, screen: 'all' } }]
+    notches: [{}, { id: 'jobs', modules: ['activities'], reserveSpace: false, tabs: false, position: { offset: 0.8, screen: 'all' } }]
   };
   const [main, jobs] = plain(Config.notches(cfg, ['osd']));
-  assert.deepEqual([main.tabs, jobs.tabs], [false, true]);
+  assert.deepEqual([main.tabs, jobs.tabs], [true, false]);
   assert.deepEqual([main.id, main.prefix, main.moduleIds, main.reserveSpace], ['main', 'notches.0.', ['media'], true]);
   assert.deepEqual(main.position, { edge: 'left', offset: 0.2 });
   assert.deepEqual([jobs.id, jobs.index, jobs.prefix, jobs.moduleIds, jobs.reserveSpace],

@@ -72,9 +72,11 @@ Item {
     if (card.mode === "peek" && card.peekModule)
       return card.verticalPeek ? card.peekModule.verticalPeek : card.peekModule.peek
     if (card.mode === "expanded") return expandedView
-    // With tabs, every active module side by side (State.compactModules).
+    // With tabs, every active module side by side; an idle one as its icon
+    // (State.compactModules).
     var several = card.notch.compactModules || []
-    if (card.mode === "compact" && several.length > 1) return compactRowView
+    if (card.mode === "compact" && (several.length > 1 || (several.length === 1 && !several[0].compact)))
+      return compactRowView
     var m = card.notch.compactModule
     if (card.mode === "compact" && m && m.compact)
       return !card.vertical ? m.compact : (m.verticalCompact || dotView)
@@ -223,7 +225,8 @@ Item {
 
   // Several modules' compact views in one closed notch (a notch with tabs):
   // side by side, a thin line between them; down a side edge, one under
-  // the other, each its vertical view (or a dot).
+  // the other, each its vertical view (or a dot). A module with nothing to
+  // show closed shows its icon (NotchModule.icon, the notch's idleIcons).
   Component {
     id: compactRowView
     Grid {
@@ -236,12 +239,31 @@ Item {
       horizontalItemAlignment: Grid.AlignHCenter
       Repeater {
         // A module, then a line before the next: [m0, line, m1, line, m2].
-        model: compactRow.modules.length * 2 - 1
-        delegate: Loader {
+        model: Math.max(0, compactRow.modules.length * 2 - 1)
+        delegate: Item {
+          id: slot
           required property int index
-          readonly property var module: index % 2 === 0 ? compactRow.modules[index / 2] : null
-          sourceComponent: !module ? lineView
-            : card.vertical ? (module.verticalCompact || dotView) : module.compact
+          readonly property var module: slot.index % 2 === 0 ? compactRow.modules[slot.index / 2] : null
+          readonly property Component view: !slot.module ? lineView
+            : !slot.module.compact ? null
+            : card.vertical ? (slot.module.verticalCompact || dotView) : slot.module.compact
+          implicitWidth: slot.view ? slotView.implicitWidth : slotIcon.implicitWidth
+          implicitHeight: slot.view ? slotView.implicitHeight : slotIcon.implicitHeight
+          Loader {
+            id: slotView
+            anchors.centerIn: parent
+            sourceComponent: slot.view
+          }
+          Text {
+            id: slotIcon
+            anchors.centerIn: parent
+            visible: !slot.view
+            textFormat: Text.PlainText
+            text: slot.module && !slot.view ? slot.module.icon : ""
+            color: Theme.muted
+            font.family: Theme.font.family
+            font.pixelSize: Theme.font.body + 2
+          }
         }
       }
       Component {

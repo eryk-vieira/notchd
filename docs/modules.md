@@ -15,6 +15,8 @@ NotchModule {
   // peekOnFocusedScreen: true  // peek once, on the focused screen only (feedback on what you just did there)
   // wantsKeyboard: true        // you type into its expanded view (see Typing)
   // expandedWidth: 520         // its expanded view's width, unscaled px (default 400)
+  // icon: String.fromCodePoint(0xF051B)  // shown closed while active with no compact view
+  // attention: true           // news you haven't seen: a dot on its tab, its peek as the notch closes
 
   compact: Component { Text { text: "hi"; color: Theme.foreground } }
   verticalCompact: Component { Text { text: "h\ni"; color: Theme.foreground } }  // optional, for a side edge
@@ -29,7 +31,9 @@ NotchModule {
 
 A module that is `active` but has no `compact` view right now leaves the closed notch at rest and still shows when expanded: the `resources` module, set to `"short"`, binds `compact` to null until a resource runs short.
 
-The expanded view is as tall as it lays itself out; it needn't fit the screen. Past the room the notch has, the open notch scrolls its modules (the wheel, where your view doesn't take it, and a scrollbar), and with the notch's `tabs` it shows one module at a time, its `title` on the tab. `openNotch()` picks the module's own tab. Closed, a notch with tabs shows every active module's `compact` view side by side, so keep it short.
+The expanded view is as tall as it lays itself out; it needn't fit the screen. Past the room the notch has, the open notch scrolls its modules (the wheel, where your view doesn't take it, and a scrollbar), and in a notch with several modules (its `tabs`, on by default) it shows one module at a time, its `title` on the tab. `openNotch()` picks the module's own tab. Closed, such a notch shows every active module's `compact` view side by side, so keep it short.
+
+Give the module an `icon` (a Nerd Font glyph, e.g. `String.fromCodePoint(0xF051B)`). While it is active with no `compact` view (the timer, stopped), the closed notch shows the icon in its place, unless the notch's `idleIcons` is off. Without an icon it stays out of the closed notch then.
 
 A peek asked for while the notch is open (on another tab, say) doesn't show. For news that matters, set `attention: true` before `requestPeek()`: its tab gets a dot, and the peek shows once as the notch closes, unless you have seen it by then. Clear `attention` once you have (the terminal modules clear it when their view opens). The rule is `State.attentionPeek`.
 

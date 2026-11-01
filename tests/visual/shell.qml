@@ -129,13 +129,13 @@ ShellRoot {
   DemoService { id: claudeBusySvc; tag: "claude-busy"; defaultModules: ["claude"] }
   DemoService { id: codexSvc; tag: "codex"; defaultModules: ["codex"] }
   DemoService { id: codexBusySvc; tag: "codex-busy"; defaultModules: ["codex"] }
-  // Both in one notch: with tabs, and one above the other on a screen too
-  // short for them, which scrolls.
+  // Both in one notch: with tabs (the default), and one above the other
+  // (tabs off) on a screen too short for them, which scrolls.
   DemoService { id: agentsTabsSvc; tag: "agents-tabs"; defaultModules: ["claude", "codex"] }
   DemoService { id: agentsStackSvc; tag: "agents-stack"; defaultModules: ["claude", "codex"] }
   // Closed, with tabs: both side by side, claude working, codex done unseen.
-  DemoService { id: agentsClosedSvc; tag: "agents-closed"; defaultModules: ["claude", "codex"] }
-  DemoService { id: agentsSideSvc; tag: "agents-side"; defaultModules: ["claude", "codex"] }
+  DemoService { id: agentsClosedSvc; tag: "agents-closed"; defaultModules: ["timer", "claude", "codex"] }
+  DemoService { id: agentsSideSvc; tag: "agents-side"; defaultModules: ["timer", "claude", "codex"] }
   readonly property var demoServices: [mediaSvc, activitySvc, osdSvc, openSvc, resourcesSvc, resourcesOpenSvc,
                                        timerSvc, pomodoroSvc, timerIdleSvc, timerDoneSvc, restSvc]
 
@@ -184,12 +184,10 @@ ShellRoot {
         agents[a].setConfigValue("claude.directory", root.outDir)
         agents[a].setConfigValue("codex.directory", root.outDir)
       }
-      agentsTabsSvc.setConfigValue("tabs", true)
-      agentsClosedSvc.setConfigValue("tabs", true)
+      agentsStackSvc.setConfigValue("tabs", false)
       agentsClosedSvc.moduleById("claude").status = { working: true, title: "Convert HEIC photos to JPG" }
       agentsClosedSvc.moduleById("codex").status = { working: false, title: "Fix the flaky login test" }
       agentsClosedSvc.moduleById("codex").attention = true
-      agentsSideSvc.setConfigValue("tabs", true)
       agentsSideSvc.setConfigValue("position", { edge: "right", offset: 0.5 })
       agentsSideSvc.moduleById("claude").status = { working: true, title: "" }
       agentsSideSvc.moduleById("codex").attention = true
@@ -451,7 +449,7 @@ ShellRoot {
       spacing: Theme.space(16)
       MockScreen { svc: agentsTabsSvc; width: Theme.space(880); height: Theme.space(620); caption: "claude and codex, tabs" }
       MockScreen { svc: agentsStackSvc; width: Theme.space(880); height: Theme.space(620); caption: "claude and codex, too tall: scrolls" }
-      MockScreen { svc: agentsClosedSvc; width: Theme.space(880); height: Theme.space(120); caption: "tabs, closed: claude working, codex done unseen" }
+      MockScreen { svc: agentsClosedSvc; width: Theme.space(880); height: Theme.space(120); caption: "closed: timer idle, claude working, codex done unseen" }
       MockScreen { svc: agentsSideSvc; width: Theme.space(880); height: Theme.space(200); caption: "the same on the right edge" }
     }
   }

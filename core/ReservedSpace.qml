@@ -38,7 +38,7 @@ Item {
   // State.js has the rules.
   readonly property int target: State.reservedSpace({
     enabled: !!reserve.notch && reserve.notch.reserveSpace,
-    compact: !!reserve.notch && !!reserve.notch.compactModule && !!reserve.notch.compactModule.compact,
+    compact: !!reserve.notch && (reserve.notch.compactModules || []).length > 0,
     baseline: reserve.compactBaseline,
     tallest: reserve.deepestCompact,
     rest: reserve.notchCard ? reserve.notchCard.restDepth : 0

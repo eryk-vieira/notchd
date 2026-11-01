@@ -22,8 +22,10 @@ NotchModule {
   priority: 60
   // Its end must show even while the notch is open.
   urgentPeek: true
-  // Idle, the expanded notch offers the quick starts.
+  // Idle, the expanded notch offers the quick starts, and the closed notch
+  // shows the icon (the notch's idleIcons).
   active: true
+  icon: String.fromCodePoint(0xF051B)  // nf-md-timer_outline
 
   readonly property var pomodoro: ({
     focus: t.setting("focus"), shortBreak: t.setting("shortBreak"), longBreak: t.setting("longBreak"),
@@ -39,7 +41,7 @@ NotchModule {
   readonly property real progress: Countdown.progress(t.countdown, t.now)
   readonly property string clock: Countdown.format(t.remaining)
   readonly property string heading: Countdown.title(t.countdown)
-  readonly property int icon: t.status === "done" ? 0xF009E                     // nf-md-bell_ring
+  readonly property int stateGlyph: t.status === "done" ? 0xF009E                     // nf-md-bell_ring
     : t.countdown.kind === "pomodoro" ? (t.countdown.phase === "focus" ? 0xF09D1 : 0xF0176)  // nf-md-brain / nf-md-coffee
     : 0xF051B                                                                    // nf-md-timer_outline
   // What the closed notch says once the time is up.
@@ -111,7 +113,7 @@ NotchModule {
       Text {
         anchors.verticalCenter: parent.verticalCenter
         textFormat: Text.PlainText
-        text: String.fromCodePoint(t.icon)
+        text: String.fromCodePoint(t.stateGlyph)
         color: t.status === "paused" ? Theme.muted : Theme.accent
         font.family: Theme.font.family
         font.pixelSize: Theme.font.body
@@ -136,7 +138,7 @@ NotchModule {
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
         textFormat: Text.PlainText
-        text: String.fromCodePoint(t.icon)
+        text: String.fromCodePoint(t.stateGlyph)
         color: t.status === "paused" ? Theme.muted : Theme.accent
         font.family: Theme.font.family
         font.pixelSize: Theme.font.body
@@ -164,7 +166,7 @@ NotchModule {
         spacing: Theme.space(12)
         Text {
           textFormat: Text.PlainText
-          text: String.fromCodePoint(t.icon)
+          text: String.fromCodePoint(t.stateGlyph)
           color: Theme.accent
           font.family: Theme.font.family
           font.pixelSize: Theme.font.heading
@@ -241,7 +243,7 @@ NotchModule {
         visible: t.status !== "idle"
         Layout.fillWidth: true
         spacing: Theme.space(12)
-        Glyph { glyph: t.icon; color: t.status === "paused" ? Theme.muted : Theme.accent; size: Theme.font.heading }
+        Glyph { glyph: t.stateGlyph; color: t.status === "paused" ? Theme.muted : Theme.accent; size: Theme.font.heading }
         ColumnLayout {
           Layout.fillWidth: true
           spacing: 0

@@ -109,7 +109,8 @@ ShellRoot {
       { name: "an open notch taller than its screen fits it and scrolls", run: root.tallNotchScrolls },
       { name: "with tabs the open notch shows one module, and opening for a module picks its tab", run: root.tabsShowOne },
       { name: "with tabs the closed notch shows every module side by side", run: root.tabsCompactAll },
-      { name: "news missed while the notch was open peeks once as it closes", run: root.missedPeekOnClose }
+      { name: "news missed while the notch was open peeks once as it closes", run: root.missedPeekOnClose },
+      { name: "a timer that isn't running shows its icon in the closed notch, unless idleIcons is off", run: root.idleTimerIcon }
     ]
     Qt.callLater(root.next)
   }
@@ -191,6 +192,7 @@ ShellRoot {
     property bool dragging: false
     readonly property bool reserveSpace: true
     property var compactModule: fakeModule
+    readonly property var compactModules: cardSvc.compactModule ? [cardSvc.compactModule] : []
     readonly property var peekModule: fakeModule
     readonly property var expandedModules: []
     function togglePinned(screenName) {}
@@ -1550,6 +1552,8 @@ ShellRoot {
   function tallNotchScrolls() {
     var copy = tallSvc.notches.length > 0 ? tallSvc.notches[0].copies[0] : null
     if (!root.check(!!copy, "the notch did not load")) { root.done(); return }
+    // One above the other: the stack is what runs past the screen.
+    tallSvc.setConfigValue("tabs", false)
     copy.open()
     var flick = null
     root.steps([
@@ -1568,6 +1572,7 @@ ShellRoot {
       }]
     ], function() {
       copy.close()
+      tallSvc.setConfigValue("tabs", undefined)
       root.done()
     })
   }
@@ -1581,10 +1586,12 @@ ShellRoot {
     var typing = tallSvc.moduleById("typing")
     var tall = tallSvc.moduleById("tall")
     if (!root.check(!!copy && !!typing && !!tall, "the notch or its modules did not load")) { root.done(); return }
+    tallSvc.setConfigValue("tabs", false)
     root.check(copy.shownModules.length === 2 && copy.tabModules.length === 0, "without tabs it shows "
                + copy.shownModules.length + " modules and " + copy.tabModules.length + " tabs")
-    tallSvc.setConfigValue("tabs", true)
-    root.check(copy.tabModules.length === 2, "with tabs, " + copy.tabModules.length + " tabs")
+    // Tabs are the default for a notch with several modules.
+    tallSvc.setConfigValue("tabs", undefined)
+    root.check(copy.tabModules.length === 2, "by default, " + copy.tabModules.length + " tabs")
     root.check(copy.shownModules.length === 1 && copy.shownModules[0] === typing, "with tabs it does not show the first module alone")
     tall.openNotch()
     root.check(copy.pinned, "opening for a module did not open the notch")
@@ -1593,8 +1600,9 @@ ShellRoot {
     copy.showTab("typing")
     root.check(copy.keyboardFocus === "exclusive", "on the typing module's tab, pinned, it takes " + copy.keyboardFocus)
     copy.close()
-    tallSvc.setConfigValue("tabs", undefined)
+    tallSvc.setConfigValue("tabs", false)
     root.check(copy.tabModules.length === 0, "tabs off, " + copy.tabModules.length + " tabs")
+    tallSvc.setConfigValue("tabs", undefined)
     root.done()
   }
 
@@ -1618,8 +1626,9 @@ ShellRoot {
   function tabsCompactAll() {
     var copy = tabsSvc.notches.length > 0 ? tabsSvc.notches[0].copies[0] : null
     if (!root.check(!!copy, "the notch did not load")) { root.done(); return }
+    tabsSvc.setConfigValue("tabs", false)
     root.check(copy.compactModules.length === 1, "without tabs the closed notch shows " + copy.compactModules.length + " modules")
-    tabsSvc.setConfigValue("tabs", true)
+    tabsSvc.setConfigValue("tabs", undefined)
     root.steps([[600, function() {
       root.check(copy.mode === "compact", "the notch is " + copy.mode)
       root.check(copy.compactModules.length === 2, "with tabs the closed notch shows " + copy.compactModules.length + " modules")
@@ -1667,5 +1676,49 @@ ShellRoot {
       tabsSvc.setConfigValue("tabs", undefined)
       root.done()
     })
+  }
+
+  // A timer that isn't running has no compact view: the closed notch was
+  // empty (a notch of its own rested; beside claude and codex it was
+  // missing). Now an idle module shows its icon there (NotchModule.icon),
+  // unless the notch's idleIcons is off.
+  NotchService {
+    id: idleSvc
+    ipcTarget: "notchd-qmltest-idle"
+    configPath: root.dir + "/idle.json"
+    compositor: workspace4
+    defaultModules: ["timer", "news"]
+    hostModules: ({ news: Qt.resolvedUrl("fixtures/news.qml") })
+  }
+  NotchCard {
+    id: idleCard
+    notch: idleSvc.notches.length > 0 ? idleSvc.notches[0].copies[0] : null
+  }
+  function idleTimerIcon() {
+    var copy = idleSvc.notches.length > 0 ? idleSvc.notches[0].copies[0] : null
+    var timer = idleSvc.moduleById("timer")
+    if (!root.check(!!copy && !!timer, "the notch or the timer did not load")) { root.done(); return }
+    root.check(timer.status === "idle" && !timer.compact, "the timer is not idle (test setup)")
+    // The module list changing may load the modules again: ask each time.
+    // Alone in its notch.
+    idleSvc.setConfigValue("modules", ["timer"])
+    root.steps([
+      [500, function() {
+        root.check(copy.mode === "compact" && copy.compactModules[0] === idleSvc.moduleById("timer"),
+                   "an idle timer leaves the notch " + copy.mode + ", showing " + copy.compactModules.map(function(m) { return m.moduleId }))
+        root.check(idleCard.height > idleCard.restDepth, "the closed notch shows nothing: " + idleCard.height + " deep")
+        idleSvc.setConfigValue("idleIcons", false)
+      }],
+      [500, function() {
+        root.check(copy.mode === "rest", "idleIcons off, an idle timer leaves the notch " + copy.mode)
+        // Beside another module, with tabs (the default): both.
+        idleSvc.setConfigValue("idleIcons", undefined)
+        idleSvc.setConfigValue("modules", undefined)
+      }],
+      [500, function() {
+        root.check(copy.compactModules.length === 2, "beside another module, the closed notch shows "
+                   + copy.compactModules.length + " modules")
+      }]
+    ], function() { root.done() })
   }
 }
