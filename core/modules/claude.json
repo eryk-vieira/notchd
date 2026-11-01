@@ -21,6 +21,20 @@
       "help": "Lets Claude search the web and read pages, without asking."
     },
     {
+      "key": "titles",
+      "type": "boolean",
+      "label": "Titles by Haiku",
+      "default": true,
+      "help": "After the first answer, Haiku names the chat for the closed notch. Off, the first question names it."
+    },
+    {
+      "key": "terminal",
+      "type": "string",
+      "label": "Terminal",
+      "default": "xdg-terminal-exec",
+      "help": "Opens a terminal running the command after it, for Continue in terminal: xdg-terminal-exec, or e.g. \"alacritty -e\"."
+    },
+    {
       "key": "idleMinutes",
       "type": "integer",
       "label": "Stop when idle",

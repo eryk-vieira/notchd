@@ -8,10 +8,14 @@ import "../Claude.js" as Claude
 // A quick chat with Claude, for everyday questions: the notch is one Claude
 // Code session, run on the user's own login (`claude -p` over stream-json,
 // see Claude.command), and "new chat" starts another, clearing the context.
-// Meant for a notch of its own: closed, it shows the chat's title; open, the
-// chat and a field to type in (wantsKeyboard). Over IPC:
+// Meant for a notch of its own: closed, it shows the chat's title (Haiku
+// names the chat after its first answer); open, the chat and a field to type
+// in (wantsKeyboard). A button hands the session to a terminal (`claude
+// --resume`); back in the notch, the chat is read again, with what was said
+// there. Over IPC:
 //
-//   <notch-ipc> claude new        # a new chat
+//   <notch-ipc> claude new                 # a new chat
+//   <notch-ipc> claude "ask <question>"    # open the chat and ask
 //
 // The process starts when the chat opens, so it is ready by the time you
 // have typed, and stops after `idleMinutes` closed (it takes ~175 MB); the
@@ -54,9 +58,35 @@ NotchModule {
   function newChat() {
     m.queue = []
     m.chat = Claude.EMPTY
+    m.handedOff = false
     m.saveSession()
     m.stop()
   }
+
+  // Opens the chat's notch and asks `text` (just opens it without). "ok",
+  // or why not.
+  function ask(text) {
+    var question = String(text || "").trim()
+    if (question !== "" && m.chat.busy) return "busy: an answer is on its way"
+    if (!m.openNotch()) return "no notch shows claude"
+    if (question !== "") m.send(question)
+    return "ok"
+  }
+
+  // Hands the session to a terminal: `claude --resume` there, with the
+  // whole of Claude Code. The process here stops, so the two don't write to
+  // the session at once, and the notch closes, so the terminal gets the
+  // keyboard. Back in the notch, the chat is read again (handedOff).
+  property bool handedOff: false
+  function continueInTerminal() {
+    if (m.chat.sessionId === "" || m.chat.busy) return
+    m.stop()
+    terminal.command = Claude.terminalCommand(m.setting("terminal"), m.home, m.chat.sessionId)
+    terminal.startDetached()
+    m.handedOff = true
+    m.closeNotch()
+  }
+  Process { id: terminal; workingDirectory: m.home }
 
   function copyLastAnswer() {
     var text = Claude.lastAnswer(m.chat)
@@ -71,7 +101,8 @@ NotchModule {
   function command(text) {
     var cmd = String(text || "").trim()
     if (cmd === "new") { m.newChat(); return "ok" }
-    return "usage: claude new"
+    if (cmd === "ask" || cmd.indexOf("ask ") === 0) return m.ask(cmd.slice(3))
+    return "usage: claude new | claude \"ask <question>\""
   }
 
   // -------------------------------------------------------------- process
@@ -116,8 +147,42 @@ NotchModule {
     var before = m.chat
     m.chat = Claude.apply(m.chat, ev)
     if (m.chat.sessionId !== before.sessionId) m.saveSession()
+    // The session was gone: this process exits; the next one starts a new
+    // session and asks the last question again.
+    if (m.chat.retry) {
+      var again = Claude.resend(m.chat)
+      m.chat = again.state
+      m.queue = [again.line]
+      m.stop()
+      return
+    }
+    if (!before.busy || m.chat.busy) return
     // The answer came while the chat was closed: say so.
-    if (before.busy && !m.chat.busy && m.viewsOpen === 0) m.requestPeek(5000)
+    if (m.viewsOpen === 0) m.requestPeek(5000)
+    if (m.setting("titles") !== false && Claude.wantsTitle(m.chat)) m.requestTitle()
+  }
+
+  // ---------------------------------------------------------------- title
+  // After the first answer Haiku names the chat, on its own (no session
+  // kept). A title for a chat that has moved on since is dropped.
+  property string titleFor: ""
+  function requestTitle() {
+    if (titler.running) return
+    m.titleFor = m.chat.sessionId
+    titler.command = Claude.titleCommand(m.chat)
+    titler.running = true
+  }
+  Process {
+    id: titler
+    workingDirectory: m.home
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var t = Claude.cleanTitle(text)
+        if (t === "" || m.chat.title !== "" || m.chat.sessionId !== m.titleFor) return
+        m.chat = Object.assign({}, m.chat, { title: t })
+        m.saveSession()
+      }
+    }
   }
 
   Process {
@@ -170,28 +235,50 @@ NotchModule {
   Process {
     id: ensureHomeForSave
     command: ["mkdir", "-p", m.home]
-    onExited: sessionFile.setText(JSON.stringify({ sessionId: m.chat.sessionId }) + "\n")
+    onExited: sessionFile.setText(JSON.stringify({ sessionId: m.chat.sessionId, title: m.chat.title }) + "\n")
   }
   FileView {
     id: sessionFile
     path: m.home + "/session.json"
     printErrors: false
     onLoaded: {
-      var id = ""
-      try { id = String(JSON.parse(text()).sessionId || "") } catch (e) { id = "" }
+      var saved = {}
+      try { saved = JSON.parse(text()) || {} } catch (e) { saved = {} }
+      var id = String(saved.sessionId || "")
       if (id !== "" && m.chat.messages.length === 0) {
-        m.chat = Object.assign({}, Claude.EMPTY, { sessionId: id })
+        m.chat = Object.assign({}, Claude.EMPTY, { sessionId: id, title: String(saved.title || "") })
         transcript.path = Claude.transcriptPath(m.claudeDir, m.home, id)
       }
     }
   }
+  // The chat read from the transcript: at start, and back from a terminal
+  // (`reloading`), with what was said there.
+  property bool reloading: false
+  function reloadTranscript() {
+    m.handedOff = false
+    if (m.chat.sessionId === "" || m.chat.busy) return
+    m.reloading = true
+    var path = Claude.transcriptPath(m.claudeDir, m.home, m.chat.sessionId)
+    if (transcript.path === path) transcript.reload()
+    else transcript.path = path
+  }
   FileView {
     id: transcript
     printErrors: false
-    onLoaded: if (m.chat.messages.length === 0) m.chat = Claude.fromTranscript(text(), m.chat.sessionId)
+    onLoaded: {
+      if (m.chat.messages.length > 0 && !m.reloading) return
+      m.reloading = false
+      if (m.chat.busy) return
+      var read = Claude.fromTranscript(text(), m.chat.sessionId)
+      if (read.title === "") read.title = m.chat.title
+      m.chat = read
+    }
     // Gone (cleaned up by Claude Code): start over rather than resume
     // something that isn't there.
-    onLoadFailed: if (m.chat.messages.length === 0) m.chat = Claude.EMPTY
+    onLoadFailed: {
+      m.reloading = false
+      if (m.chat.messages.length === 0) m.chat = Claude.EMPTY
+    }
   }
 
   // ----------------------------------------------------------------- views
@@ -249,7 +336,13 @@ NotchModule {
     ColumnLayout {
       id: view
       spacing: Theme.space(10)
-      Component.onCompleted: { view.sync(); m.viewsOpen++; m.warm(); field.forceActiveFocus() }
+      Component.onCompleted: {
+        view.sync()
+        m.viewsOpen++
+        if (m.handedOff) m.reloadTranscript()
+        m.warm()
+        field.forceActiveFocus()
+      }
       Component.onDestruction: m.viewsOpen--
 
       // The rows the history shows, kept in step with m.chat without being
@@ -284,6 +377,11 @@ NotchModule {
           visible: Claude.lastAnswer(m.chat) !== ""
           glyph: 0xF018F  // nf-md-content_copy
           onActivated: m.copyLastAnswer()
+        }
+        IconButton {
+          visible: m.chat.sessionId !== "" && !m.chat.busy
+          glyph: 0xF018D  // nf-md-console
+          onActivated: m.continueInTerminal()
         }
         IconButton {
           visible: m.chat.messages.length > 0
@@ -385,6 +483,18 @@ NotchModule {
         Layout.fillWidth: true
         textFormat: Text.PlainText
         text: "Ask anything. Enter sends, Shift+Enter starts a new line, Esc closes."
+        wrapMode: Text.Wrap
+        color: Theme.muted
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.caption
+      }
+
+      // Something to know, no error (the earlier chat was gone).
+      Text {
+        visible: m.chat.notice !== ""
+        Layout.fillWidth: true
+        textFormat: Text.PlainText
+        text: m.chat.notice
         wrapMode: Text.Wrap
         color: Theme.muted
         font.family: Theme.font.family
