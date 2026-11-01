@@ -98,17 +98,37 @@ function shownModules(modules, tabs, picked) {
   return { modules: modules.slice(0, 1), tabs: modules.slice() }
 }
 
-// The keyboard a copy's window takes: "exclusive" while it is pinned open
-// (a click, a shortcut) on a module you type into (`wantsKeyboard`, among
-// the ones it shows in `modules`), else "none". Never on hover alone: the
-// pointer passing over the notch must not take the keyboard from the
-// window you are typing in.
-function keyboardFocus(s) {
-  if (!s.pinned || s.mode !== "expanded") return "none"
+// Whether a copy wants the keyboard: pinned open (a click, a shortcut) on a
+// module you type into (`wantsKeyboard`, among the ones it shows in
+// `modules`). Never on hover alone: the pointer passing over the notch must
+// not take the keyboard from the window you are typing in.
+function wantsKeyboard(s) {
+  if (!s.pinned || s.mode !== "expanded") return false
   var modules = s.modules || []
   for (var i = 0; i < modules.length; i++)
-    if (modules[i] && modules[i].wantsKeyboard) return "exclusive"
-  return "none"
+    if (modules[i] && modules[i].wantsKeyboard) return true
+  return false
+}
+
+// The keyboard a copy's window takes while it wants it: "exclusive" until
+// its window has it (`held`), then "ondemand", else "none". A layer only
+// gets the keyboard on its own when it asks for it exclusively (a notch
+// opened by a shortcut has no click to give it focus); kept exclusive, the
+// compositor never lets it go, so moving to a window by the keyboard (a
+// focus or workspace shortcut) did nothing. On demand, it can.
+function keyboardFocus(s) {
+  if (!wantsKeyboard(s)) return "none"
+  return s.held ? "ondemand" : "exclusive"
+}
+
+// What a copy does as its window gains or loses the keyboard (`active`),
+// with `held` whether it had it: "hold" (it has it), "close" (a window took
+// it while the notch wanted it: the notch closes, as a click away does) or
+// "none" (it doesn't want the keyboard, or never had it).
+function keyboardChange(s) {
+  if (!wantsKeyboard(s)) return "none"
+  if (s.active) return "hold"
+  return s.held ? "close" : "none"
 }
 
 // How far windows are kept from the notch's edge (the layer-shell exclusive

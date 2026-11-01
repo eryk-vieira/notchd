@@ -188,8 +188,17 @@ Scope {
     WlrLayershell.layer: WlrLayer.Overlay
     // The keyboard only while pinned open on a module you type into
     // (NotchCopy.keyboardFocus); otherwise typing stays with your windows.
-    WlrLayershell.keyboardFocus: root.copy && root.copy.keyboardFocus === "exclusive"
-      ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: !root.copy ? WlrKeyboardFocus.None
+      : root.copy.keyboardFocus === "exclusive" ? WlrKeyboardFocus.Exclusive
+      : root.copy.keyboardFocus === "ondemand" ? WlrKeyboardFocus.OnDemand
+      : WlrKeyboardFocus.None
+
+    // Tells the copy when the window gains or loses the keyboard
+    // (NotchCopy.windowKeyboard).
+    Item {
+      readonly property bool active: Window.active
+      onActiveChanged: if (root.copy) root.copy.windowKeyboard(active)
+    }
 
     mask: Region { item: hitArea }
 

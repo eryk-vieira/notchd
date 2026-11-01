@@ -1040,6 +1040,14 @@ ShellRoot {
       module.requestKeyboard()
       root.check(copy.pinned, "a press on the field did not pin the notch")
       root.check(copy.keyboardFocus === "exclusive", "pinned on the field, it takes " + copy.keyboardFocus)
+      // Once its window has the keyboard, on demand: kept exclusive, no
+      // shortcut could move focus to a window, only a click away.
+      copy.windowKeyboard(true)
+      root.check(copy.keyboardFocus === "ondemand", "holding the keyboard, it asks for " + copy.keyboardFocus)
+      copy.windowKeyboard(false)
+      root.check(!copy.pinned && copy.keyboardFocus === "none", "a window took the keyboard and the notch stayed open")
+      copy.open()
+      root.check(copy.keyboardFocus === "exclusive", "pinned again, it takes " + copy.keyboardFocus)
       copy.close()
       root.check(copy.keyboardFocus === "none", "closed again, it keeps the keyboard")
       root.done()
@@ -1250,7 +1258,9 @@ ShellRoot {
       }],
       [900, function() {
         root.check(!m.working && m.sessionTitle === expected, "after work: working " + m.working + ", title " + m.sessionTitle)
-        m.closeNotch()
+        // Ctrl+Escape is the way out: the notch closes, the agent goes on.
+        keys.keyClick(Qt.Key_Escape, Qt.ControlModifier)
+        root.check(!copy.pinned, "Ctrl+Escape did not close the notch")
       }],
       [600, function() {
         root.check(m.viewsOpen === 0 && m.term === first && first.parent === m, "closing did not park the terminal")

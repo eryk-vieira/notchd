@@ -6,6 +6,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
+- Leaving the notch from the keyboard: Ctrl+Escape in the `claude` or `codex` terminal closes the notch (the agent goes on), and a focus or workspace shortcut that moves to a window closes it too. Before, the open notch kept the keyboard until a click away.
 - Tabs (`tabs`, on by default; settings: Notches › its gear › Layout › Tabs): a notch with several modules shows one at a time open, with a tab for each, instead of all of them one above the other. Opening the notch from a module (a shortcut, `claude "ask ..."`) picks its tab. Closed, it shows every active module side by side, not just the highest-priority one. `tabs: false` brings back the old way.
 - Icons for idle modules (`idleIcons`, on by default; settings: Notches › its gear › Layout): a module that is active with nothing to show closed, like a timer that isn't running, shows its icon in the closed notch. Modules declare it with `icon`.
 - News you missed while the notch was open: an agent that finishes while you look at another tab gets a dot on its tab and on the closed notch (until you open it), and its peek shows as the notch closes. Modules set `attention` for it.

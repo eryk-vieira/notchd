@@ -93,6 +93,7 @@ NotchModule {
       visible: false
     })
     m.term.typed.connect(function() { m.typed = true })
+    m.term.leave.connect(function() { m.closeNotch() })
   }
 
   // A new session: the old program stops with its terminal.

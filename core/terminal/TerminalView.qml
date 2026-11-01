@@ -25,6 +25,9 @@ QMLTermWidget {
   property bool exited: false
   // A key went to the program.
   signal typed()
+  // Ctrl+Escape: the way out. The program takes every other key, Escape
+  // included, which agents use; this one never reaches it.
+  signal leave()
 
   // A whole font: the widget's own has a point size, and a pixel size set
   // on top of it warns.
@@ -47,7 +50,15 @@ QMLTermWidget {
   function write(text) { termSession.sendText(String(text)) }
 
   Keys.priority: Keys.BeforeItem
-  Keys.onPressed: function(event) { view.typed(); event.accepted = false }
+  Keys.onPressed: function(event) {
+    if (Terminal.isLeaveKey(event.key, event.modifiers)) {
+      event.accepted = true
+      view.leave()
+      return
+    }
+    view.typed()
+    event.accepted = false
+  }
 
   session: QMLTermSession {
     id: termSession

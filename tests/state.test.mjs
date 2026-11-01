@@ -132,6 +132,26 @@ test('keyboardFocus: only pinned open on a module that types', () => {
   assert.equal(State.keyboardFocus({ pinned: true, mode: 'expanded' }), 'none');
 });
 
+// The notch held the keyboard exclusively until it closed: no shortcut
+// could move focus to a window, only a click away.
+test('keyboardFocus: exclusive until the window has the keyboard, then on demand', () => {
+  const open = { pinned: true, mode: 'expanded', modules: [mod('claude', 50, { wantsKeyboard: true })] };
+  assert.equal(State.keyboardFocus({ ...open, held: false }), 'exclusive');
+  assert.equal(State.keyboardFocus({ ...open, held: true }), 'ondemand');
+  assert.equal(State.keyboardFocus({ ...open, pinned: false, held: true }), 'none');
+});
+
+test('keyboardChange: losing the keyboard it held closes the notch', () => {
+  const open = { pinned: true, mode: 'expanded', modules: [mod('claude', 50, { wantsKeyboard: true })] };
+  assert.equal(State.keyboardChange({ ...open, active: true, held: false }), 'hold');
+  assert.equal(State.keyboardChange({ ...open, active: false, held: true }), 'close');
+  // Not had yet (the compositor hasn't given it): nothing to give back.
+  assert.equal(State.keyboardChange({ ...open, active: false, held: false }), 'none');
+  // Another tab, or closed: the keyboard goes back by itself, no close.
+  assert.equal(State.keyboardChange({ ...open, modules: [mod('media', 60)], active: false, held: true }), 'none');
+  assert.equal(State.keyboardChange({ ...open, pinned: false, active: false, held: true }), 'none');
+});
+
 test('reservedSpace: only when enabled; compact never below the baseline', () => {
   const on = { enabled: true, compact: true, baseline: 36, tallest: 0, rest: 5 };
   assert.equal(State.reservedSpace(on), 36);

@@ -29,6 +29,18 @@ function shellArgs(command, extra) {
   return ["-c", "TERM=xterm-256color; export TERM; exec " + cmd + " \"$@\"", "sh"].concat(extra || [])
 }
 
+// The key that leaves the terminal (the notch closes, the program goes on):
+// Ctrl+Escape, which neither Claude Code nor Codex binds; plain Escape is
+// theirs (it interrupts them). `key` and `modifiers` as Qt gives them
+// (Qt.Key_Escape is 0x01000000, Qt.ControlModifier 0x04000000); Shift,
+// Alt or Super with it make another key. The keypad flag doesn't count.
+var KEY_ESCAPE = 0x01000000
+var MOD_CONTROL = 0x04000000
+var MOD_KEYPAD = 0x20000000
+function isLeaveKey(key, modifiers) {
+  return key === KEY_ESCAPE && ((modifiers || 0) & ~MOD_KEYPAD) === MOD_CONTROL
+}
+
 // The built-in color scheme behind the ANSI colors; the view sets the
 // theme's background and foreground over it. The widget only reads schemes
 // from its own package's folder, so the theme can't bring a palette of its

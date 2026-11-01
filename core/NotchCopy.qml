@@ -135,10 +135,22 @@ Item {
                                              hovered: copy.hovered, compactModule: copy.compactModules.length > 0 ? copy.compactModules[0] : null,
                                              guest: copy.guest })
   readonly property bool isOpen: copy.mode === "peek" || copy.mode === "expanded"
-  // The keyboard its window takes (State.keyboardFocus): "exclusive" while
-  // pinned open on a module you type into, else "none".
-  readonly property string keyboardFocus: State.keyboardFocus({ pinned: copy.pinned, mode: copy.mode,
-                                                               modules: copy.shownModules })
+  // The keyboard its window takes (State.keyboardFocus), while pinned open
+  // on a module you type into: "exclusive" until the window has it, then
+  // "ondemand", so a focus shortcut can move to a window; else "none".
+  readonly property var keyboardState: ({ pinned: copy.pinned, mode: copy.mode, modules: copy.shownModules })
+  readonly property bool wantsKeyboard: State.wantsKeyboard(copy.keyboardState)
+  // Its window got the keyboard since the copy last wanted it.
+  property bool keyboardHeld: false
+  onWantsKeyboardChanged: if (!copy.wantsKeyboard) copy.keyboardHeld = false
+  readonly property string keyboardFocus: State.keyboardFocus(Object.assign({ held: copy.keyboardHeld }, copy.keyboardState))
+  // Its window gained or lost the keyboard (State.keyboardChange): lost to
+  // a window while it wanted it, the notch closes, as a click away does.
+  function windowKeyboard(active) {
+    var change = State.keyboardChange(Object.assign({ active: active, held: copy.keyboardHeld }, copy.keyboardState))
+    if (change === "hold") copy.keyboardHeld = true
+    else if (change === "close") copy.close()
+  }
 
   // ---------------------------------------------------------------- window
   // Whether its window is on screen (State.needsWindow): a guest's only

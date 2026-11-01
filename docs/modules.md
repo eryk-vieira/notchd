@@ -71,7 +71,7 @@ Give it a `peek` view (and a `verticalPeek` for a side edge); it has no closed o
 
 ## Typing
 
-A module with a text field in its expanded view sets `wantsKeyboard: true`. The notch's window takes the keyboard (layer-shell exclusive focus) while it is pinned open on the module: a click on the notch, `toggleNotch <id>` from a shortcut, or the module calling `requestKeyboard()`, which pins every notch open on it. Call it when the field is pressed, since a notch opened by hover has no keyboard. Hover alone never takes the keyboard from the window you are typing in. Escape closes the notch: a field leaves it alone and it goes up to the card. The rule is `State.keyboardFocus`.
+A module with a text field in its expanded view sets `wantsKeyboard: true`. The notch's window takes the keyboard while it is pinned open on the module: a click on the notch, `toggleNotch <id>` from a shortcut, or the module calling `requestKeyboard()`, which pins every notch open on it. Call it when the field is pressed, since a notch opened by hover has no keyboard. Hover alone never takes the keyboard from the window you are typing in. The window asks for it exclusively, the only way a layer gets it without a click, and on demand once it has it, so a focus or workspace shortcut can still move to a window; the notch then closes, as a click away does. Escape closes the notch: a field leaves it alone and it goes up to the card. The rules are `State.keyboardFocus` and `State.keyboardChange`.
 
 ```qml
 expanded: Component {
@@ -84,7 +84,7 @@ expanded: Component {
 
 ## A program's terminal UI
 
-`TerminalModule` (a `NotchModule`) runs a program's own terminal UI in the expanded view, as `claude` and `codex` do: set `appName`, `defaultCommand`, `parseTitle` (the terminal's title to `{ working, title }`, see `core/Agent.js`) and, for an image mark, `logoSource`; declare the settings in its JSON file as `modules/codex.json` does (directory, command, idleMinutes, width, height, font). The terminal comes from the optional `qmltermwidget` package, probed before it loads, and keeps running while the notch is closed. It takes every key, Escape included, so the notch closes from the header's button.
+`TerminalModule` (a `NotchModule`) runs a program's own terminal UI in the expanded view, as `claude` and `codex` do: set `appName`, `defaultCommand`, `parseTitle` (the terminal's title to `{ working, title }`, see `core/Agent.js`) and, for an image mark, `logoSource`; declare the settings in its JSON file as `modules/codex.json` does (directory, command, idleMinutes, width, height, font). The terminal comes from the optional `qmltermwidget` package, probed before it loads, and keeps running while the notch is closed. It takes every key, Escape included, except Ctrl+Escape, which closes the notch and leaves the program running (`Terminal.isLeaveKey`); so does the header's button.
 
 ```qml
 import ".."
