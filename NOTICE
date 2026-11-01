@@ -9,3 +9,9 @@ Omarchy's OSD (shell/plugins/osd/OsdModel.js, https://github.com/basecamp/omarch
 distributed under the MIT License:
 
   Copyright (c) David Heinemeier Hansson
+
+Third-party assets
+
+core/modules/claude.svg is the Claude logo, a trademark of Anthropic, shown
+to identify the claude module's integration with Claude Code. The file is
+the one Omarchy ships (shell/plugins/agents/assets/claude.svg).

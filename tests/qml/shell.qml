@@ -1252,7 +1252,7 @@ ShellRoot {
 
   // Bug: while busy the mark cycled through spinner glyphs of different
   // widths, so the closed notch kept resizing (it springs to fit). Now the
-  // mark stays and a dot on it says it is working.
+  // logo stays, and the working dot's place is kept while it is off.
   NotchCard {
     id: chatCard
     notch: chatSvc.notches.length > 0 ? chatSvc.notches[0].copies[0] : null
@@ -1264,7 +1264,12 @@ ShellRoot {
     var widths = []
     root.steps([
       [400, function() {
-        m.chat = Object.assign({}, Claude.EMPTY, { busy: true, activity: "thinking",
+        m.chat = Object.assign({}, Claude.EMPTY, { title: "A title", sessionId: "s",
+          messages: [{ role: "user", text: "q", tools: [] }, { role: "assistant", text: "a", tools: [] }] })
+      }],
+      [500, function() { widths.push(chatCard.width) }],
+      [0, function() {
+        m.chat = Object.assign({}, Claude.EMPTY, { busy: true, activity: "thinking", title: "A title", sessionId: "s",
           messages: [{ role: "user", text: "q", tools: [] }, { role: "assistant", text: "", tools: [] }] })
       }],
       [500, function() { widths.push(chatCard.width) }],
@@ -1276,8 +1281,7 @@ ShellRoot {
     ], function() {
       root.check(chatCard.mode === "compact", "the notch is " + chatCard.mode)
       var min = Math.min.apply(null, widths), max = Math.max.apply(null, widths)
-      root.check(max - min < 0.5, "the closed notch changed width while busy: " + JSON.stringify(widths))
-      root.check(m.mark === "✻", "the mark changed while busy: " + m.mark)
+      root.check(max - min < 0.5, "the closed notch changed width going busy and while busy: " + JSON.stringify(widths))
       m.chat = Claude.EMPTY
       root.done()
     })
