@@ -104,7 +104,8 @@ ShellRoot {
       { name: "claude: ask over IPC opens the notch and types the question in; new starts another", run: root.claudeAsk },
       { name: "claude: the closed notch keeps its size while it works", run: root.agentBusySteady },
       { name: "codex: closed and idle for idleMinutes, it stops; opened again, it starts", run: root.codexIdle },
-      { name: "terminal: the band behind your messages (ANSI 8) is gray, not orange", run: root.messageBandGray }
+      { name: "terminal: the band behind your messages (ANSI 8) is gray, not orange", run: root.messageBandGray },
+      { name: "a window its monitor took away comes back with the monitor", run: root.keepShownReopens }
     ]
     Qt.callLater(root.next)
   }
@@ -1451,5 +1452,56 @@ ShellRoot {
     root.check(cornerSide.cornerItem.atStart === false, "the side notch's place ignored its inset")
     cornerSurface.windows = []
     root.done()
+  }
+
+  // ------------------------------------------------------- monitor off/on
+  // Bug: switching a monitor off and on left the notches gone. The
+  // compositor closes the layer surfaces on an output that goes away and
+  // Quickshell marks those windows hidden itself; their `visible` binding
+  // never changed, so nothing showed them again. A stand-in for the window
+  // (PanelWindow can't load offscreen): `closed` is the compositor closing
+  // it, and setting `visible` true again (KeepShown.shown) reopens it.
+  QtObject {
+    id: keptWindow
+    property bool closed: false
+    readonly property bool visible: windowKept.shown && !keptWindow.closed
+    readonly property Connections reopened: Connections {
+      target: windowKept
+      function onShownChanged() { if (windowKept.shown) keptWindow.closed = false }
+    }
+  }
+  KeepShown {
+    id: windowKept
+    target: keptWindow
+    wanted: false
+  }
+  function keepShownReopens() {
+    windowKept.wanted = true
+    windowKept.screen = { name: "A" }
+    root.check(keptWindow.visible, "not shown at first")
+    root.steps([
+      // Its monitor goes off: closed, and its copy moves to another screen.
+      [0, function() { keptWindow.closed = true; windowKept.screen = { name: "B" } }],
+      [50, function() {
+        root.check(keptWindow.visible, "not back on the screen it moved to")
+        // Every monitor off: closed, and nowhere to go.
+        keptWindow.closed = true
+        windowKept.screen = null
+      }],
+      [50, function() {
+        root.check(!keptWindow.visible, "shown with no screen")
+        windowKept.screen = { name: "A" }
+      }],
+      [50, function() {
+        root.check(keptWindow.visible, "not back when a monitor came back")
+        // Closed on the same screen: back too.
+        keptWindow.closed = true
+      }],
+      [50, function() { root.check(keptWindow.visible, "not back after a close on the same screen") }]
+    ], function() {
+      windowKept.wanted = false
+      windowKept.screen = null
+      root.done()
+    })
   }
 }

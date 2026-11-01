@@ -167,12 +167,19 @@ Scope {
   })
 
   // ---------------------------------------------------------------- window
+  KeepShown {
+    id: windowKeeper
+    target: window
+    wanted: !root.copy || root.copy.needsWindow
+    screen: root.targetScreen
+  }
   PanelWindow {
     id: window
     screen: root.targetScreen
     // Off while its copy has nothing to show (a closed guest): a hidden
-    // window gives back its buffers.
-    visible: !root.copy || root.copy.needsWindow
+    // window gives back its buffers. Back after its monitor goes away and
+    // comes back (KeepShown).
+    visible: windowKeeper.shown
 
     anchors { top: true; left: true; right: true; bottom: true }
     color: "transparent"

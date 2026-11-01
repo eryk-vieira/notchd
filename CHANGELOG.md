@@ -52,6 +52,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Fixed
 
+- Switching a monitor off and on again no longer leaves its notches gone: they move to another monitor while it is off and come back to it, with the space they reserve.
 - About 1300 binding-loop warnings in the log at start (and wasted work) with notches on a top or bottom edge and a side edge of one screen: the corners' insets read every notch's place, the side ones' included, which come from those insets.
 - A notch in `notches` dragged to the top edge (or to the middle, or off its home screen) jumped back: the drop left out what equals the default, and the notch took it from the top-level `position` instead. The drop now writes whatever differs from what the notch inherits.
 - Media artwork took a texture atlas the size of the monitor (about 25 MB) for an 80 px cover; it now gets a texture of its own, and scales down smoother.

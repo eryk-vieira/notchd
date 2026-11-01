@@ -111,11 +111,18 @@ Item {
       readonly property string screenName: modelData.split("|")[0]
       readonly property string edge: modelData.split("|")[1]
       readonly property int space: root.zones[modelData] || 0
-      screen: {
+      readonly property var targetScreen: {
         var screens = Quickshell.screens || []
         for (var i = 0; i < screens.length; i++) if (screens[i].name === strip.screenName) return screens[i]
         return null
       }
+      screen: strip.targetScreen
+      // Back after its monitor goes away and comes back (KeepShown).
+      readonly property KeepShown keeper: KeepShown {
+        target: strip
+        screen: strip.targetScreen
+      }
+      visible: strip.keeper.shown
       anchors {
         top: strip.edge !== "bottom"
         bottom: strip.edge !== "top"

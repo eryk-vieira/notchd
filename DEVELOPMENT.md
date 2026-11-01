@@ -40,6 +40,7 @@ core/                 the framework: no desktop-specific code
   Terminal.js         the terminal view: the command line, the folder, the color scheme (pure JS)
   terminal/           TerminalView.qml: a terminal (QMLTermWidget, optional package); lint skips it
   ReservedSpace.qml   how much of its edge windows leave to the closed notch
+  KeepShown.qml       shows a window again after its monitor goes away and comes back
   *Compositor.qml     compositor adapters (Hyprland, generic)
   modules/            built-in modules: media, activities, resources, timer, claude, codex
   settings/           the settings window, its controls and Settings.js
