@@ -3,7 +3,8 @@ import QtQuick.Layouts
 import ".."
 
 // `string` and `color` fields. A color adds a swatch and is validated.
-// Emptying the field removes the key, so the default comes back.
+// Emptying the field removes the key, so the default comes back; for a
+// `required` one, emptying it is refused, as a bad color is.
 RowLayout {
   id: control
 
@@ -21,7 +22,11 @@ RowLayout {
 
   function commit() {
     var t = input.text.trim()
-    if (t === "") { control.invalid = false; control.edited(undefined); return }
+    if (t === "") {
+      control.invalid = !!control.field.required
+      if (!control.invalid) control.edited(undefined)
+      return
+    }
     if (control.isColor && !/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(t)) {
       control.invalid = true
       return

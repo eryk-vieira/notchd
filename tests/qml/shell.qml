@@ -106,6 +106,9 @@ ShellRoot {
       { name: "agent usage: the limits show in the open notch, and passing the warning peeks once", run: root.agentUsage },
       { name: "claude: the closed notch keeps its size while it works", run: root.agentBusySteady },
       { name: "codex: closed and idle for idleMinutes, it stops; opened again, it starts", run: root.codexIdle },
+      { name: "a terminal of your own: from the config, in your home, its title closed, terminal <id> toggle", run: root.ownTerminal },
+      { name: "settings: Add terminal makes one and opens its page; its trash can takes it out of the config", run: root.addAndRemoveTerminal },
+      { name: "settings: a required text field refuses to be emptied", run: root.requiredTextField },
       { name: "terminal: the band behind your messages (ANSI 8) is gray, not orange", run: root.messageBandGray },
       { name: "a window its monitor took away comes back with the monitor", run: root.keepShownReopens },
       { name: "an open notch taller than its screen fits it and scrolls", run: root.tallNotchScrolls },
@@ -863,7 +866,7 @@ ShellRoot {
         root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "osd" && m.standalone }), "the OSD left the catalog")
         root.check(svc.settingsSchema.some(function(f) { return f.key === "osd.enabled" && f.page === "modules/osd" }), "no switch on its page")
         var lists = svc.settingsSchema.filter(function(f) { return f.type === "moduleCatalog" }).map(function(f) { return f.part })
-        root.check(JSON.stringify(lists) === JSON.stringify(["notch", "agent", "standalone"]),
+        root.check(JSON.stringify(lists) === JSON.stringify(["notch", "agent", "terminal", "standalone"]),
                    "the Modules page does not list agents and standalone modules apart: " + JSON.stringify(lists))
         root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "claude" && m.agent && !m.standalone }), "claude is no agent")
         root.check(svc.moduleSetting("codex", "command") === "codex", "codex's command default: " + svc.moduleSetting("codex", "command"))
@@ -1646,6 +1649,116 @@ ShellRoot {
       m.status = { working: false, title: "" }
       root.done()
     })
+  }
+
+  // A terminal of your own (`terminals`): its id is a module a notch lists,
+  // with its title and the fields of a terminal; it runs its command in
+  // your home, shows the title the program sets, and `terminal <id>`
+  // reaches it, `agent <id>` doesn't.
+  NotchService {
+    id: ownTermSvc
+    ipcTarget: "notchd-qmltest-own-terminal"
+    configPath: root.dir + "/own-terminal.json"
+    compositor: workspace4
+    defaultModules: []
+  }
+  NotchCard { notch: ownTermSvc.notches.length > 0 ? ownTermSvc.notches[0].copies[0] : null }
+  function ownTerminal() {
+    var pwdFile = root.dir + "/own-terminal-pwd"
+    ownTermSvc.replaceConfig({
+      terminals: { mine: { title: "Mine", command: "printf '\\033]0;Own title\\007'; pwd > " + pwdFile + "; exec cat" } },
+      modules: ["mine"]
+    })
+    var m = null
+    var copy = null
+    root.steps([
+      [500, function() {
+        m = ownTermSvc.moduleById("mine")
+        if (!root.check(!!m, "the terminal from the config did not load")) return
+        copy = ownTermSvc.notches[0].copies[0]
+        root.check(m.title === "Mine" && m.appName === "Mine", "its title: " + m.title + ", " + m.appName)
+        root.check(ownTermSvc.moduleCatalog.some(function(c) { return c.moduleId === "mine" && c.terminal && !c.agent }),
+                   "the catalog has no terminal mine")
+        root.check(ownTermSvc.settingsSchema.some(function(f) { return f.key === "terminals.mine.command" && f.page === "modules/mine" }),
+                   "its page has no command field")
+        root.check(ownTermSvc.settingsSchema.some(function(f) { return f.type === "moduleCatalog" && f.part === "terminal" }),
+                   "the Modules page does not list terminals apart")
+        root.check(m.defaultCommand.indexOf("printf") === 0, "it does not run its entry's command: " + m.defaultCommand)
+        root.check(ownTermSvc.agentCommand("mine", "toggle").indexOf("no agent mine") === 0, "a terminal took an agent command")
+        root.check(ownTermSvc.terminalCommand("nope", "toggle") === "no terminal nope; terminals: mine", "an unknown terminal did not say so")
+        if (!m.available) return
+        root.check(ownTermSvc.terminalCommand("mine", "toggle") === "ok", "toggle failed")
+      }],
+      [900, function() {
+        if (!m || !m.available) return
+        root.check(copy.pinned && !!m.term && !m.exited, "toggle did not open it running: pinned " + copy.pinned + ", term " + !!m.term + ", exited " + m.exited)
+        root.check(m.sessionTitle === "Own title" && !m.working, "its title: " + m.sessionTitle + ", working " + m.working)
+        root.run(["cat", pwdFile])
+      }],
+      [300, function() {
+        if (!m || !m.available) return
+        root.check(shellCmd.out.trim() === Quickshell.env("HOME"), "it started in " + shellCmd.out.trim())
+        root.check(ownTermSvc.terminalCommand("mine", "toggle") === "ok" && !copy.pinned, "toggle did not close it")
+      }]
+    ], function() {
+      if (m) {
+        if (!m.available) console.log("NOTE " + root.current + ": qmltermwidget is not installed; the terminal was not run")
+        m.stop()
+      }
+      root.done()
+    })
+  }
+
+  function addAndRemoveTerminal() {
+    var start = { modules: ["activities"] }
+    ownTermSvc.replaceConfig(start)
+    catalog.svc = ownTermSvc
+    var add = null
+    for (var i = 0; i < catalog.children.length; i++)
+      if (catalog.children[i].text === "Add terminal") add = catalog.children[i]
+    if (!root.check(!!add && add.visible, "the Terminals list has no Add button")) { root.done(); return }
+    add.clicked()
+    root.check(JSON.stringify(ownTermSvc.config.terminals) === JSON.stringify({ terminal: { title: "Terminal", command: "$SHELL" } }),
+               "the new terminal: " + JSON.stringify(ownTermSvc.config.terminals))
+    root.check(ownTermSvc.settingsPage === "modules/terminal", "Add did not open its page: " + ownTermSvc.settingsPage)
+    root.check(catalog.modules.length === 1 && catalog.modules[0].moduleId === "terminal", "the list does not show it")
+    ownTermSvc.setConfigValue("modules", ["activities", "terminal"])
+    ownTermSvc.removeTerminal("terminal")
+    root.check(JSON.stringify(ownTermSvc.config) === JSON.stringify(start), "the config came back as " + JSON.stringify(ownTermSvc.config))
+    root.check(catalog.modules.length === 0, "removed, the list still shows it")
+    ownTermSvc.settingsPage = "general"
+    catalog.svc = null
+    root.done()
+  }
+  ModuleCatalog {
+    id: catalog
+    width: 400
+    field: ({ type: "moduleCatalog", part: "terminal" })
+  }
+
+  // Bug guarded: emptying a terminal's command removed it, and with it the
+  // terminal.
+  function requiredTextField() {
+    var got = []
+    var record = function(v) { got.push(v) }
+    requiredText.edited.connect(record)
+    requiredText.commit()
+    root.check(got.length === 1 && got[0] === "btop", "its text did not go through: " + JSON.stringify(got))
+    got = []
+    // Emptied (the text follows the stored value).
+    requiredText.stored = undefined
+    requiredText.commit()
+    root.check(got.length === 0 && requiredText.invalid, "emptying a required field went through: " + JSON.stringify(got))
+    requiredText.field = { key: "x", type: "string" }
+    requiredText.commit()
+    root.check(got.length === 1 && got[0] === undefined && !requiredText.invalid, "emptying a plain field did not remove it")
+    requiredText.edited.disconnect(record)
+    root.done()
+  }
+  TextControl {
+    id: requiredText
+    field: ({ key: "x", type: "string", required: true })
+    stored: "btop"
   }
 
   function codexIdle() {

@@ -16,6 +16,7 @@ Every host exposes the same methods on its `ipcTarget`. The CLI depends on the h
 | `openNotch <id>`, `closeNotch <id>`, `toggleNotch <id>` | the same for one notch, by its `id` (`main`, `notch-2`...), its Name in settings: renaming it breaks a shortcut that names it |
 | `agent <id> <command>` | an agent (`claude`, `codex`) by its id: `toggle` opens or closes its notch, `new` starts a new session, `"ask <question>"` opens it and types the question in ([below](#agents)) |
 | `claude <command>`, `codex <command>` | the same as `agent claude <command>`, `agent codex <command>` |
+| `terminal <id> <command>` | a terminal of your own (the config's `terminals`) by its id, with the same commands as an agent ([below](#terminals)) |
 | `timer <command>` | the `timer` module: start, pause or stop a countdown or a pomodoro (below) |
 | `navigate` | start or leave navigation: every notch highlighted and numbered, the keyboard picks one ([below](#navigation)) |
 | `settings` | open or close the settings window |
@@ -124,3 +125,14 @@ omarchy-shell eryk.notchd agent codex "ask explain: $(wl-paste --primary)"   # t
 ```
 
 It answers `ok`, `no notch shows <id>`, `the terminal needs the qmltermwidget package`, the usage, `<id> module not loaded` when no notch lists it, or `no agent <id>` with the agents there are.
+
+## Terminals
+
+A terminal of your own (an entry of the config's `terminals`) takes the same commands by its id: `terminal <id> toggle`, `terminal <id> new` (its command starts again), `terminal <id> "ask <text>"` (the text typed in, then Enter: a command for a shell, say).
+
+```sh
+bind = SUPER ALT, B, exec, omarchy-shell eryk.notchd terminal btop toggle
+omarchy-shell eryk.notchd terminal shell "ask git status"
+```
+
+It answers as `agent` does, with `no terminal <id>` and the terminals there are for an unknown one.

@@ -40,6 +40,15 @@ NotchModule {
   property var parseTitle: null
   // The mark: an image, or a prompt drawn in a tile without one.
   property url logoSource: ""
+  // Without a `directory`, start in notchd's own folder (Terminal.OWN_DIR),
+  // as an agent does; off, in your home.
+  property bool ownDir: true
+  // The command is a shell script ("a; b", "cd x && y"), run as is, not
+  // one program put in the shell's place (Terminal.shellArgs).
+  property bool script: false
+  // The IPC function that reaches it, for its usage text: "agent", or
+  // "terminal" for one of the config's `terminals`.
+  property string ipcName: "agent"
 
   // ----------------------------------------------------------------- state
   // The widget is installed (Terminal.PROBE). Tests set it.
@@ -121,7 +130,7 @@ NotchModule {
     m.term = c.createObject(m, {
       program: "/bin/sh",
       programArguments: Terminal.shellArgs(String(m.setting("command") || "").trim() || m.settingDefault("command") || m.defaultCommand,
-                                           [], dir === ""),
+                                           [], dir === "" && m.ownDir, m.script),
       workingDirectory: Terminal.expandHome(dir, Quickshell.env("HOME")),
       fontFamily: String(m.setting("font") || ""),
       width: Theme.space(m.expandedWidth),
@@ -226,7 +235,7 @@ NotchModule {
     if (cmd.action === "toggle") return m.toggle()
     if (cmd.action === "new") { m.restart(); return "ok" }
     if (cmd.action === "ask") return m.ask(cmd.text)
-    return "usage: agent " + m.moduleId + " toggle | new | \"ask <question>\""
+    return "usage: " + m.ipcName + " " + m.moduleId + " toggle | new | \"ask <question>\""
   }
 
   // Opens the notch that shows it, on its tab, or closes it while a view

@@ -47,6 +47,11 @@ ShellRoot {
     { name: "modules-dark", page: "modules", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { notches: [{}, { id: "jobs", modules: ["activities", "timer"] }] } },
     { name: "module-resources-light", page: "modules/resources", theme: root.light, bar: true, fields: root.omarchyFields },
+    { name: "modules-end-dark", page: "modules", theme: root.dark, bar: true, fields: root.omarchyFields, scrollTo: "end",
+      config: { terminals: { btop: { title: "System", command: "btop" }, dev: { command: "cd ~/app && npm run dev" } },
+                modules: ["media", "btop"] } },
+    { name: "module-terminal-light", page: "modules/btop", theme: root.light, bar: true, fields: root.omarchyFields,
+      config: { terminals: { btop: { title: "System", command: "btop" } }, btop: { width: 900 } } },
     { name: "appearance-omarchy-dark", page: "appearance", theme: root.dark, bar: true, fields: root.omarchyFields },
     { name: "notch-hanging-dark", page: "notch/0", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { position: { edge: "left", offset: 0.3 } }, scrollTo: "end" },
@@ -488,6 +493,10 @@ ShellRoot {
     svc.setConfigValue("workspaces", root.scenario.bar ? [1, 2, 3] : undefined)
     svc.setConfigValue("osd.enabled", false)
     var cfg = root.scenario.config || {}
+    // Every key a scenario sets, so the next one starts without it. The
+    // terminals first: `modules` may list one.
+    svc.setConfigValue("terminals", cfg.terminals)
+    svc.setConfigValue("btop", cfg.btop)
     svc.setConfigValue("position", cfg.position)
     svc.setConfigValue("notches", cfg.notches)
     svc.setConfigValue("modules", cfg.modules)

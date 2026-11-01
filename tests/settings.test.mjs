@@ -306,3 +306,23 @@ test('a standalone module\'s page starts with its switch and position', () => {
   ]);
   assert.equal(fields[1].options[0].preview, 'edge.qml');
 });
+
+// Its title and command are its entry's, edited in place: a `command`
+// under its id as well would be a second command for the same terminal.
+test('a terminal of your own: its entry\'s title and command, then the fields of a terminal, its own list', () => {
+  const info = plain(Settings.terminalInfo({ id: 'btop', title: 'System', command: 'btop' }));
+  assert.equal(info.title, 'System');
+  assert.equal(info.terminal, true);
+  assert.deepEqual(info.settings.map((f) => f.key),
+    ['terminals.btop.title', 'terminals.btop.command', 'directory', 'idleMinutes', 'width', 'height', 'font']);
+  assert.ok(info.settings[0].absolute && info.settings[1].absolute && info.settings[1].required);
+  assert.ok(info.settings[2].help.includes('Empty is your home'), info.settings[2].help);
+  assert.equal(Settings.moduleKind({ terminal: true }), 'terminal');
+  assert.equal(Settings.moduleKind({ agent: true }), 'agent');
+  // Without a title, the id names it.
+  assert.ok(plain(Settings.terminalInfo({ id: 'logs', title: '', command: 'x' })).settings[3].help.includes('logs stops'));
+  // On its page, the entry's keys stay as they are; the others go under its id.
+  const fields = plain(Settings.moduleFields([{ moduleId: 'btop', title: 'System', terminal: true, settings: info.settings }]));
+  assert.deepEqual(fields.map((f) => f.key).slice(0, 3), ['terminals.btop.title', 'terminals.btop.command', 'btop.directory']);
+  assert.ok(fields.every((f) => f.page === 'modules/btop'));
+});

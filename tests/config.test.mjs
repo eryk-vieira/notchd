@@ -170,3 +170,59 @@ test('moduleLoadList: what notches show, never a standalone module, then the sta
   assert.deepEqual(plain(Config.moduleLoadList(specs, [], ['media'])), ['osd', 'media', 'activities'], 'enabled only counts for standalone ones');
   assert.deepEqual(plain(Config.moduleLoadList([], undefined, undefined)), []);
 });
+
+test('terminals: each entry with a command, in order, its title or ""', () => {
+  const r = plain(Config.terminals({ terminals: {
+    btop: { title: 'System', command: ' btop ' },
+    logs: { command: 'journalctl -f' }
+  } }));
+  assert.deepEqual(r, { list: [
+    { id: 'btop', title: 'System', command: 'btop' },
+    { id: 'logs', title: '', command: 'journalctl -f' }
+  ], errors: [] });
+  assert.deepEqual(plain(Config.terminals({})), { list: [], errors: [] });
+});
+
+// An id is a config key too ("btop": { "width" }): one the config already
+// has, a module's, or one with a dot would read or write something else.
+test('terminals: an id that is taken or no key, or an entry without a command, is left out with why', () => {
+  const r = plain(Config.terminals({ terminals: {
+    theme: { command: 'x' }, tabs: { command: 'x' }, media: { command: 'x' },
+    'a.b': { command: 'x' }, '1x': { command: 'x' },
+    empty: { command: '  ' }, none: {}, bad: 'btop', ok: { command: 'x' }
+  } }, ['media']));
+  assert.deepEqual(r.list.map((t) => t.id), ['ok']);
+  assert.equal(r.errors.length, 8, r.errors.join('\n'));
+  assert.ok(r.errors[0].startsWith('theme: taken'));
+  assert.ok(r.errors[2].startsWith('media: taken'));
+  assert.equal(Config.terminals({ terminals: ['btop'] }).errors.length, 1);
+});
+
+test('withTerminalAdded: a free id, running your shell', () => {
+  const first = plain(Config.withTerminalAdded({ modules: ['media'] }, []));
+  assert.equal(first.id, 'terminal');
+  assert.deepEqual(first.config, { modules: ['media'], terminals: { terminal: { title: 'Terminal', command: '$SHELL' } } });
+  // Taken by a terminal, a config key or a module: the next number.
+  const next = plain(Config.withTerminalAdded({ terminals: { terminal: { command: 'x' } }, 'terminal-2': { width: 1 } }, ['terminal-3']));
+  assert.equal(next.id, 'terminal-4');
+  assert.deepEqual(next.config.terminals['terminal-4'], { title: 'Terminal 4', command: '$SHELL' });
+  assert.deepEqual(plain(Config.terminals(next.config)).errors, []);
+});
+
+test('withoutTerminal: its entry, its settings and its place in every notch go', () => {
+  const cfg = {
+    modules: ['media', 'btop'],
+    notches: [{}, { id: 'tools', modules: ['btop', 'dev'] }],
+    terminals: { btop: { command: 'btop' }, dev: { command: 'npm run dev' } },
+    btop: { width: 900 }
+  };
+  assert.deepEqual(plain(Config.withoutTerminal(cfg, 'btop')), {
+    modules: ['media'],
+    notches: [{}, { id: 'tools', modules: ['dev'] }],
+    terminals: { dev: { command: 'npm run dev' } }
+  });
+  const none = plain(Config.withoutTerminal(Config.withoutTerminal(cfg, 'btop'), 'dev'));
+  assert.equal(none.terminals, undefined);
+  // Not a terminal: nothing changes, a module's settings least of all.
+  assert.deepEqual(plain(Config.withoutTerminal({ media: { equalizer: 'light' } }, 'media')), { media: { equalizer: 'light' } });
+});

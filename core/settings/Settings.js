@@ -128,19 +128,9 @@ function parseModuleInfo(text) {
 function agentSettings(agent, title) {
   var name = title || "the agent"
   var extra = agent.help && typeof agent.help === "object" && !Array.isArray(agent.help) ? agent.help : {}
-  var later = "Applies the next time it starts (the restart button)."
-  var fields = [
-    { key: "directory", type: "string", label: "Folder", "default": "",
-      help: "Where " + name + " starts; ~ is your home. Empty is notchd's own folder, notchd in your Documents folder, made the first time. " + later },
-    { key: "command", type: "string", label: "Command", "default": agent.command.trim(),
-      help: "The command line that runs " + name + ". " + later },
-    { key: "idleMinutes", type: "integer", label: "Stop when idle", "default": 0, min: 0, max: 240, step: 15, unit: "min",
-      help: "Closed and not working this long, " + name + " stops; the next time the notch opens, a new one starts (/resume brings the session back). 0 keeps it running." },
-    { key: "width", type: "integer", label: "Width", "default": 760, min: 480, max: 1600, step: 20, unit: "px" },
-    { key: "height", type: "integer", label: "Terminal height", "default": 420, min: 200, max: 1000, step: 20, unit: "px" },
-    { key: "font", type: "string", label: "Font", "default": "",
-      help: "A monospace font family for the terminal; empty uses the theme's. " + later }
-  ]
+  var fields = terminalFields(agent.command.trim(), name,
+    "Empty is notchd's own folder, notchd in your Documents folder, made the first time.",
+    "Closed and not working this long, " + name + " stops; the next time the notch opens, a new one starts (/resume brings the session back). 0 keeps it running.")
   // `agent.usage`: the plan's limits, asked the way its CLI does.
   if (typeof agent.usage === "string" && agent.usage !== "") fields.push(
     { key: "usage", type: "boolean", label: "Plan usage", "default": true, section: "Usage",
@@ -151,6 +141,49 @@ function agentSettings(agent, title) {
     if (typeof extra[f.key] === "string" && extra[f.key] !== "") f.help = f.help ? f.help + " " + extra[f.key] : extra[f.key]
   })
   return fields
+}
+
+// The fields of a program in a terminal (TerminalModule), an agent or one
+// of your own: folder, command (`command` its default), when it stops,
+// size, font. `name` names it in the texts; `emptyDir` says where it
+// starts without a folder, `idle` what stopping when idle does.
+function terminalFields(command, name, emptyDir, idle) {
+  var later = "Applies the next time it starts (the restart button)."
+  return [
+    { key: "directory", type: "string", label: "Folder", "default": "",
+      help: "Where " + name + " starts; ~ is your home. " + emptyDir + " " + later },
+    { key: "command", type: "string", label: "Command", "default": command,
+      help: "The command line that runs " + name + ". " + later },
+    { key: "idleMinutes", type: "integer", label: "Stop when idle", "default": 0, min: 0, max: 240, step: 15, unit: "min",
+      help: idle },
+    { key: "width", type: "integer", label: "Width", "default": 760, min: 320, max: 1600, step: 20, unit: "px" },
+    { key: "height", type: "integer", label: "Terminal height", "default": 420, min: 120, max: 1000, step: 20, unit: "px" },
+    { key: "font", type: "string", label: "Font", "default": "",
+      help: "A monospace font family for the terminal; empty uses the theme's. " + later }
+  ]
+}
+
+// The module info of a terminal of your own (Config.terminals' { id,
+// title, command }), as parseModuleInfo gives a module's file: its title
+// and the fields of a program in a terminal, `terminal` set. Its title and
+// command are its entry's, edited there (`absolute` keys): the command is
+// `required`, since an entry without one is no terminal.
+function terminalInfo(t) {
+  var name = t.title || t.id
+  var entry = "terminals." + t.id + "."
+  var later = "Applies the next time it starts (the restart button)."
+  var own = [
+    { key: entry + "title", absolute: true, type: "string", label: "Title", "default": "",
+      help: "Its name, in the notch and here; empty is its id, " + t.id + "." },
+    { key: entry + "command", absolute: true, required: true, type: "string", label: "Command",
+      help: "The command line it runs, in a shell: \"btop\", \"cd ~/app && npm run dev\". " + later }
+  ]
+  var fields = terminalFields(t.command, name, "Empty is your home.",
+    "Closed this long, " + name + " stops; the next time the notch opens, it starts again. 0 keeps it running.")
+  return {
+    title: t.title, terminal: true,
+    settings: own.concat(fields.filter(function(f) { return f.key !== "command" }))
+  }
 }
 
 // The JSON file of the module at `url` (its .qml): the same path, .json.
@@ -198,7 +231,7 @@ function standaloneFields(id, edgePreview) {
 
 // The settings fields of every module (`modules`: [{ moduleId, title,
 // settings, standalone }], from their JSON files), with their keys under
-// the module's id, on the module's own page unless they name another (then
+// the module's id (but an `absolute` one's, a config key as given), on the module's own page unless they name another (then
 // under its title); a standalone module's switch and position first.
 function moduleFields(modules, edgePreview) {
   var out = []
@@ -207,7 +240,7 @@ function moduleFields(modules, edgePreview) {
     if (m.standalone) out = out.concat(standaloneFields(m.moduleId, edgePreview))
     Array.prototype.forEach.call(m.settings || [], function(f) {
       var field = Object.assign({}, f)
-      if (f.key) field.key = m.moduleId + "." + f.key
+      if (f.key && !f.absolute) field.key = m.moduleId + "." + f.key
       if (!field.page) field.page = modulePageId(m.moduleId)
       else if (!field.section) field.section = m.title || m.moduleId
       out.push(field)
@@ -235,10 +268,12 @@ function moduleTitle(id, module) {
 }
 
 // Which list of the Modules page a module is in: "standalone" (a place of
-// its own), "agent" (a coding agent), else "notch".
+// its own), "agent" (a coding agent), "terminal" (one of the config's
+// `terminals`), else "notch".
 function moduleKind(m) {
   if (m && m.standalone) return "standalone"
   if (m && m.agent) return "agent"
+  if (m && m.terminal) return "terminal"
   return "notch"
 }
 

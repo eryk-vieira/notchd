@@ -31,10 +31,14 @@ var OWN_DIR = "d=$(xdg-user-dir DOCUMENTS 2>/dev/null); "
 // notchd's own folder with `ownDir` (OWN_DIR). The shell parses the
 // command, so it can be anything a shell takes; `extra` reaches the program
 // as given, never parsed again. TERM says what the widget emulates (it sets
-// plain "xterm" for every session; it does 256 colors).
-function shellArgs(command, extra, ownDir) {
+// plain "xterm" for every session; it does 256 colors). With `script`, the
+// command is a script of its own ("cd ~/app && npm run dev", "a; b"), run
+// as is, `extra` its "$@": exec in front of it would run its first command
+// alone.
+function shellArgs(command, extra, ownDir, script) {
   var cmd = String(command || "").trim()
-  return ["-c", (ownDir ? OWN_DIR : "") + "TERM=xterm-256color; export TERM; exec " + cmd + " \"$@\"", "sh"].concat(extra || [])
+  var run = script ? cmd : "exec " + cmd + " \"$@\""
+  return ["-c", (ownDir ? OWN_DIR : "") + "TERM=xterm-256color; export TERM; " + run, "sh"].concat(extra || [])
 }
 
 // The key that leaves the terminal (the notch closes, the program goes on):
@@ -56,3 +60,9 @@ function isLeaveKey(key, modifiers) {
 // Codex, which can't ask this terminal for its background (the widget
 // doesn't answer OSC 11), paints your messages with it. Breeze's is orange.
 var SCHEME = "Tango"
+
+// A program of your own (the config's `terminals`): the terminal's title
+// as it is, never working. A shell sets it to where it is, or the command.
+function plainTitle(raw) {
+  return { working: false, title: String(raw === undefined || raw === null ? "" : raw).trim() }
+}

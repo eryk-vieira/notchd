@@ -48,6 +48,21 @@ The notch covers the windows under it. `reserveSpace: true` keeps windows clear 
 | `codex` | [Codex](https://github.com/openai/codex), OpenAI's coding agent, the same way as `claude`: its own terminal UI in the notch (needs `codex` on `PATH` and `qmltermwidget`), the thread's title, which Codex makes after the first message, and a green dot closed, `agent codex toggle`, `agent codex new` and `agent codex "ask <question>"` over [IPC](docs/ipc.md#agents). It runs as plain `codex`, connected to the shared background server: options that change its config (`-c`, `--search`) run it without, while `--approve-for-me` doesn't. Its plan's limits show and warn as Claude's do. Settings: Modules › Agents › Codex (folder, notchd's own by default; plan usage; command; size; font; stopping it after a while closed: it takes 500 to 700 MB). Not loaded by default |
 | `osd` | volume and brightness, Omarchy host only (see [hosts/omarchy](hosts/omarchy/README.md)). Standalone: no notch shows it, it has a place of its own, at the top center of the monitor you work on, over any notch there. `"osd": { "position": { "edge": "bottom", "offset": 0.5 } }` moves it and `"osd": { "enabled": false }` switches it off (settings: Modules › OSD) |
 
+Your own **terminals** are modules too: each entry of the config's `terminals` runs its command in a terminal in the notch (`qmltermwidget` again), and a notch shows it by its id like any module:
+
+```json
+{
+  "terminals": {
+    "btop": { "title": "System", "command": "btop" },
+    "dev": { "title": "Dev server", "command": "cd ~/app && npm run dev" }
+  },
+  "notches": [{ "modules": ["media"] }, { "id": "tools", "modules": ["btop", "dev"] }],
+  "btop": { "width": 900, "height": 500 }
+}
+```
+
+The command is a shell command line, run in your home unless the terminal's `directory` says otherwise. It starts the first time the notch opens and keeps running while it is closed; closed, the notch shows the title the program gives the terminal (a shell's is where it is), else the entry's `title`. Its other settings live under its id, as an agent's do (`directory`, `idleMinutes`, `width`, `height`, `font`), so the id can't be a config key or another module's. The settings window makes them too: Modules › Terminals › Add terminal starts one running your shell and opens its page (title, command, folder, size); its trash can takes it out of the config and of every notch. `terminal <id> toggle` over [IPC](docs/ipc.md#terminals) opens or closes it.
+
 A **standalone** module (the OSD) has a fixed job and a place of its own: no notch shows it, even one whose `modules` list it. It loads unless `<id>.enabled` is `false`, shows on the monitor you work on where `<id>.position` (`edge`, `offset`) says, top center by default, and draws over any notch that hangs there, which hides until it goes.
 
 To write your own, see [docs/modules.md](docs/modules.md).
@@ -111,6 +126,7 @@ The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/no
 | `idleIcons` | `true` | a module with nothing to show closed shows its icon there; see above; *per notch* |
 | `workspaces` | every one | workspaces the closed notch shows on; see above; *per notch* |
 | `notches` | one notch | `[{ "id", ...per-notch keys }]`; see [Several notches](#several-notches) |
+| `terminals` | none | `{ "<id>": { "command", "title" } }`: terminals of your own, modules a notch lists by id; see [Modules](#modules) |
 
 Hosts add their own keys; the standalone host, for example, adds `topOffset` and `theme`. A module's own settings live under its id, `resources` for example. A key missing from the file falls back to its default.
 

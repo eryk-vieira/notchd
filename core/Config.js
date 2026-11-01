@@ -237,3 +237,71 @@ function withWorkspace(list, ws) {
     return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0
   })
 }
+
+// ---------------------------------------------------------------- terminals
+// Terminals of your own: `"terminals": { "<id>": { "command", "title" } }`.
+// Each is a module that runs `command` in a terminal in the notch
+// (TerminalModule, terminal/CustomTerminal.qml), shown by a notch that lists its
+// id like any module, with its settings under its id ("btop": { "width" }).
+// The id is a config key then, so it can't be one the config already has
+// (RESERVED_KEYS, and the host's `taken`: its modules and its own keys),
+// nor have a dot in it.
+var RESERVED_KEYS = ["modules", "notches", "position", "theme", "terminals"]
+  .concat(Object.keys(DEFAULTS), NOTCH_KEYS)
+var TERMINAL_ID = /^[A-Za-z][A-Za-z0-9_-]*$/
+
+// { list: [{ id, title, command }], errors: ["<id>: why"] }: the entries
+// that make a terminal, in the file's order; each one that doesn't, with
+// why. `title` is "" when the entry has none.
+function terminals(cfg, taken) {
+  var out = { list: [], errors: [] }
+  var all = cfg && cfg.terminals
+  if (all === undefined) return out
+  if (!all || typeof all !== "object" || Array.isArray(all)) {
+    out.errors.push("terminals: not an object of terminals by id")
+    return out
+  }
+  var reserved = RESERVED_KEYS.concat(Array.prototype.slice.call(taken || []))
+  Object.keys(all).forEach(function(id) {
+    var entry = all[id]
+    if (!TERMINAL_ID.test(id)) { out.errors.push(id + ": an id is a letter, then letters, digits, - or _"); return }
+    if (reserved.indexOf(id) !== -1) { out.errors.push(id + ": taken, by a config key or a module"); return }
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) { out.errors.push(id + ": not an object"); return }
+    var command = typeof entry.command === "string" ? entry.command.trim() : ""
+    if (command === "") { out.errors.push(id + ": needs a command"); return }
+    out.list.push({ id: id, title: typeof entry.title === "string" ? entry.title.trim() : "", command: command })
+  })
+  return out
+}
+
+// A copy of cfg with a new terminal: { config, id }. Its id is "terminal",
+// else terminal-<n>, the first one no config key, terminal or `taken` id
+// has; it runs your shell, for its page to change.
+function withTerminalAdded(cfg, taken) {
+  var out = JSON.parse(JSON.stringify(cfg || {}))
+  var used = RESERVED_KEYS.concat(Array.prototype.slice.call(taken || []), Object.keys(out),
+                                  out.terminals && typeof out.terminals === "object" ? Object.keys(out.terminals) : [])
+  var n = 1
+  while (used.indexOf(n === 1 ? "terminal" : "terminal-" + n) !== -1) n++
+  var id = n === 1 ? "terminal" : "terminal-" + n
+  if (!out.terminals || typeof out.terminals !== "object" || Array.isArray(out.terminals)) out.terminals = {}
+  out.terminals[id] = { title: n === 1 ? "Terminal" : "Terminal " + n, command: "$SHELL" }
+  return { config: out, id: id }
+}
+
+// A copy of cfg without terminal `id`: its entry, its settings (the key of
+// its id) and its place in every notch's `modules`. `terminals` goes once
+// empty.
+function withoutTerminal(cfg, id) {
+  var out = JSON.parse(JSON.stringify(cfg || {}))
+  if (!out.terminals || typeof out.terminals !== "object" || Array.isArray(out.terminals) || !(id in out.terminals)) return out
+  delete out.terminals[id]
+  if (Object.keys(out.terminals).length === 0) delete out.terminals
+  delete out[id]
+  var drop = function(entry) {
+    if (entry && Array.isArray(entry.modules)) entry.modules = entry.modules.filter(function(m) { return m !== id })
+  }
+  drop(out)
+  if (Array.isArray(out.notches)) out.notches.forEach(drop)
+  return out
+}

@@ -65,23 +65,60 @@ Item {
 
   function moduleUrl(id) {
     if (svc.hostModules && svc.hostModules[id]) return svc.hostModules[id]
-    return svc.builtinModules[id] || ""
+    if (svc.builtinModules[id]) return svc.builtinModules[id]
+    return svc.isTerminal(id) ? Qt.resolvedUrl("terminal/CustomTerminal.qml") : ""
   }
 
-  // Every module this host can load, built-ins first. Its title and settings
-  // fields are in a JSON file next to its QML (media.json), read whether it
-  // loads or not (moduleInfo).
-  readonly property var availableModuleIds: {
+  // Every module that has a file: built-ins first, then the host's. Its
+  // title and settings fields are in a JSON file next to its QML
+  // (media.json), read whether it loads or not (moduleInfo).
+  readonly property var fileModuleIds: {
     var out = Object.keys(svc.builtinModules)
     var host = Object.keys(svc.hostModules || {})
     for (var i = 0; i < host.length; i++)
       if (out.indexOf(host[i]) === -1) out.push(host[i])
     return out
   }
+  // Every module this host can load: those, then the config's terminals.
+  readonly property var availableModuleIds: svc.fileModuleIds.concat(svc.terminalSpecs.map(function(t) { return t.id }))
 
-  // id -> { title, settings, standalone, agent }, from each module's JSON
-  // file (Settings.parseModuleInfo); a module without one has none of them.
-  property var moduleInfo: ({})
+  // Terminals of your own, from the config's `terminals` (Config.terminals):
+  // [{ id, title, command }]. Each loads terminal/CustomTerminal.qml, its info made
+  // from its entry (Settings.terminalInfo) instead of read from a file.
+  property var terminalSpecs: []
+  function isTerminal(id) {
+    return svc.terminalSpecs.some(function(t) { return t.id === id })
+  }
+  function terminalCommandLine(id) {
+    var t = svc.terminalSpecs.filter(function(s) { return s.id === id })[0]
+    return t ? t.command : ""
+  }
+  // A new terminal, running your shell (Config.withTerminalAdded): its id.
+  function addTerminal() {
+    var r = Config.withTerminalAdded(svc.config, svc.takenIds())
+    svc.replaceConfig(r.config)
+    return r.id
+  }
+  // A terminal out of the config, its settings and the notches that list
+  // it (Config.withoutTerminal).
+  function removeTerminal(id) { svc.replaceConfig(Config.withoutTerminal(svc.config, id)) }
+  // The ids a terminal can't take: the modules' and the config keys the
+  // settings window writes (the host's included), by their first part.
+  function takenIds() {
+    var keys = svc.hostSettingsSchema.map(function(f) { return String(f.key || "").split(".")[0] })
+    return svc.fileModuleIds.concat(keys.filter(function(k) { return k !== "" }))
+  }
+  property string terminalErrors: ""
+
+  // id -> { title, settings, standalone, agent, terminal }, from each
+  // module's JSON file (Settings.parseModuleInfo; a module without one has
+  // none of them), and each terminal's entry.
+  property var fileModuleInfo: ({})
+  readonly property var moduleInfo: {
+    var out = Object.assign({}, svc.fileModuleInfo)
+    svc.terminalSpecs.forEach(function(t) { out[t.id] = Settings.terminalInfo(t) })
+    return out
+  }
   // Every module has its file read (or found missing): modules load only
   // then, so a standalone one never starts out in a notch.
   readonly property bool moduleInfoReady: svc.availableModuleIds.every(function(id) {
@@ -90,11 +127,11 @@ Item {
   onModuleInfoReadyChanged: if (svc.moduleInfoReady) svc.refreshModuleIds()
   onConfigResolvedChanged: svc.refreshModuleIds()
   // Every module with its title and fields: [{ moduleId, title, settings,
-  // standalone, agent }].
+  // standalone, agent, terminal }].
   readonly property var moduleCatalog: svc.availableModuleIds.map(function(id) {
     var info = svc.moduleInfo[id] || {}
     return { moduleId: id, title: Settings.moduleTitle(id, info), settings: info.settings || [],
-             standalone: !!info.standalone, agent: !!info.agent }
+             standalone: !!info.standalone, agent: !!info.agent, terminal: !!info.terminal }
   })
   // Agents ask their plan usage over the network, with the logins their
   // CLIs keep (AgentUsage). Off offscreen (scripts/isolated.sh sets
@@ -108,6 +145,15 @@ Item {
     if (!svc.isAgent(id)) {
       var agents = svc.availableModuleIds.filter(function(a) { return svc.isAgent(a) })
       return "no agent " + id + (agents.length > 0 ? "; agents: " + agents.join(", ") : "")
+    }
+    var m = svc.moduleById(id)
+    return m ? m.command(command) : id + " module not loaded"
+  }
+  // The same for a terminal of your own (`terminals`).
+  function terminalCommand(id, command) {
+    if (!svc.isTerminal(id)) {
+      var ids = svc.terminalSpecs.map(function(t) { return t.id })
+      return "no terminal " + id + (ids.length > 0 ? "; terminals: " + ids.join(", ") : "")
     }
     var m = svc.moduleById(id)
     return m ? m.command(command) : id + " module not loaded"
@@ -137,14 +183,14 @@ Item {
     return Settings.settingDefault(info ? info.settings : [], key)
   }
   function setModuleInfo(id, info) {
-    var next = Object.assign({}, svc.moduleInfo)
+    var next = Object.assign({}, svc.fileModuleInfo)
     next[id] = info
-    svc.moduleInfo = next
+    svc.fileModuleInfo = next
   }
   function moduleInfoPath(url) { return Settings.moduleInfoPath(url, Quickshell.shellDir) }
 
   Instantiator {
-    model: svc.availableModuleIds
+    model: svc.fileModuleIds
     delegate: FileView {
       required property string modelData
       path: svc.moduleInfoPath(svc.moduleUrl(modelData))
@@ -196,6 +242,11 @@ Item {
   function applyConfig(cfg) {
     var r = Config.resolve(cfg)
     var specs = Config.notches(cfg, svc.defaultModules)
+    var terminals = Config.terminals(cfg, svc.takenIds())
+    var errors = terminals.errors.join("; ")
+    if (errors !== "" && errors !== svc.terminalErrors) console.warn(svc.logName + ": skipping terminals: " + errors)
+    svc.terminalErrors = errors
+    if (!svc.sameList(terminals.list, svc.terminalSpecs)) svc.terminalSpecs = terminals.list
     svc.config = cfg
     svc.hoverOpenDelay = r.hoverOpenDelay
     svc.hoverCloseDelay = r.hoverCloseDelay
@@ -385,6 +436,8 @@ Item {
     if (svc.moduleCatalog.some(function(m) { return Settings.moduleKind(m) === "agent" }))
       out.push({ page: "modules", type: "moduleCatalog", part: "agent", label: "Agents",
                  help: "Coding agents, each in its own terminal. Notches show them like any module; a notch of their own suits them best. The gear opens an agent's folder, command and size. A shortcut opens one with agent <id> toggle." })
+    out.push({ page: "modules", type: "moduleCatalog", part: "terminal", label: "Terminals",
+               help: "Commands of your own, each in a terminal: btop, a dev server, a shell. Add terminal makes one running your shell; its gear changes its command, folder and size. A notch shows it once the notch's page lists it. A shortcut opens one with terminal <id> toggle." })
     if (svc.standaloneIds.length > 0)
       out.push({ page: "modules", type: "moduleCatalog", part: "standalone", label: "Standalone modules",
                  help: "Each has a place of its own, over any notch that hangs there, and no notch shows it. Its page switches it on and places it." })
@@ -800,6 +853,8 @@ Item {
     // "new" starts a new session, "ask <question>" opens the notch and types
     // it in; see TerminalModule.qml. `claude` and `codex` are the same.
     function agent(id: string, command: string): string { return svc.agentCommand(id, command) }
+    // A terminal of your own (`terminals`), by its id: the same commands.
+    function terminal(id: string, command: string): string { return svc.terminalCommand(id, command) }
     function claude(command: string): string { return svc.agentCommand("claude", command) }
     function codex(command: string): string { return svc.agentCommand("codex", command) }
     function state(): string {

@@ -129,3 +129,16 @@ test('shellArgs: own folder in the documents folder, ~/Documents when there is n
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('plainTitle: a terminal of your own shows its title as it is, never working', () => {
+  assert.deepEqual(plain(Terminal.plainTitle(' eryk@box:~ ')), { working: false, title: 'eryk@box:~' });
+  assert.deepEqual(plain(Terminal.plainTitle('⠋ spinner')), { working: false, title: '⠋ spinner' });
+  assert.deepEqual(plain(Terminal.plainTitle(undefined)), { working: false, title: '' });
+});
+
+// Bug: a terminal of your own runs a command line as typed; exec in front
+// of "a; b" ran `a` in the shell's place and never `b`.
+test('shellArgs: a script runs every command in it, its extra arguments as "$@"', () => {
+  const out = execFileSync('/bin/sh', plain(Terminal.shellArgs("printf a; printf '%s' \"$1\" && echo $TERM", ['b'], false, true)), { encoding: 'utf8' });
+  assert.equal(out, 'abxterm-256color\n');
+});
