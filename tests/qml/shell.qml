@@ -109,6 +109,7 @@ ShellRoot {
       { name: "a terminal of your own: from the config, in your home, its title closed, terminal <id> toggle", run: root.ownTerminal },
       { name: "settings: Add terminal makes one and opens its page; its trash can takes it out of the config", run: root.addAndRemoveTerminal },
       { name: "settings: a required text field refuses to be emptied", run: root.requiredTextField },
+      { name: "renaming or removing a terminal keeps the modules ready, and warns of nothing", run: root.terminalRenameStaysReady },
       { name: "terminal: the band behind your messages (ANSI 8) is gray, not orange", run: root.messageBandGray },
       { name: "a window its monitor took away comes back with the monitor", run: root.keepShownReopens },
       { name: "an open notch taller than its screen fits it and scrolls", run: root.tallNotchScrolls },
@@ -1705,6 +1706,35 @@ ShellRoot {
         if (!m.available) console.log("NOTE " + root.current + ": qmltermwidget is not installed; the terminal was not run")
         m.stop()
       }
+      root.done()
+    })
+  }
+
+  // Bug: renaming a terminal (or removing one) warned of an unknown module
+  // and emptied the list of modules for a moment: its new id had no info
+  // yet, so the modules were not ready; they came back with the old id.
+  // (The run fails on the warning.)
+  function terminalRenameStaysReady() {
+    var flips = 0
+    var count = function() { flips++ }
+    ownTermSvc.replaceConfig({ terminals: { a: { command: "cat" } }, modules: ["activities", "a"] })
+    ownTermSvc.moduleInfoReadyChanged.connect(count)
+    root.steps([
+      [200, function() {
+        root.check(!!ownTermSvc.moduleById("activities") && !!ownTermSvc.moduleById("a"), "activities and a did not load")
+        ownTermSvc.replaceConfig({ terminals: { b: { command: "cat" } }, modules: ["activities", "b"] })
+      }],
+      [200, function() {
+        root.check(!!ownTermSvc.moduleById("b") && !ownTermSvc.moduleById("a"), "the rename did not apply")
+        ownTermSvc.replaceConfig({ modules: ["activities"] })
+      }],
+      [200, function() {
+        root.check(!ownTermSvc.moduleById("b"), "the removed terminal is still loaded")
+        root.check(flips === 0, "the modules were not ready for a moment, " + flips + " changes")
+      }]
+    ], function() {
+      ownTermSvc.moduleInfoReadyChanged.disconnect(count)
+      ownTermSvc.replaceConfig({})
       root.done()
     })
   }

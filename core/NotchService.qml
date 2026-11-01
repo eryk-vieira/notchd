@@ -120,9 +120,12 @@ Item {
     return out
   }
   // Every module has its file read (or found missing): modules load only
-  // then, so a standalone one never starts out in a notch.
-  readonly property bool moduleInfoReady: svc.availableModuleIds.every(function(id) {
-    return svc.moduleInfo[id] !== undefined
+  // then, so a standalone one never starts out in a notch. A terminal's
+  // info comes with its entry: counting terminals, a new id made it false
+  // for a moment, which emptied the list of modules and made them all
+  // again, an agent's session with them.
+  readonly property bool moduleInfoReady: svc.fileModuleIds.every(function(id) {
+    return svc.fileModuleInfo[id] !== undefined
   })
   onModuleInfoReadyChanged: if (svc.moduleInfoReady) svc.refreshModuleIds()
   onConfigResolvedChanged: svc.refreshModuleIds()
