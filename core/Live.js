@@ -136,13 +136,24 @@ function wanted(open, stopped) { return !!open && !stopped }
 
 // An IPC command: "start" (opens its notch, which starts a session),
 // "stop", "toggle", "new" (a new session, the transcript cleared), "mute",
-// "unmute", or "avatar <photo>" / "avatar remove" (the rest after "avatar"
-// in `text`, for Avatar.request). { action, text }, action "usage" for
-// anything else.
+// or "unmute". { action, text }, action "usage" for anything else.
 var COMMANDS = ["start", "stop", "toggle", "new", "mute", "unmute"]
 function parseCommand(raw) {
   var s = String(raw || "").trim()
   if (COMMANDS.indexOf(s) !== -1) return { action: s, text: "" }
-  if (s === "avatar" || s.indexOf("avatar ") === 0) return { action: "avatar", text: s.slice(6).trim() }
   return { action: "usage", text: "" }
+}
+
+// The bridge's file as a path: Qt.resolvedUrl gives file:// urls, or under
+// Quickshell `qs:@/qs/<path>` (resolved against `shellDir`) and
+// `qs:///<absolute path>` (the Omarchy shell, for a plugin's core). "" for
+// anything else.
+function localPath(url, shellDir) {
+  var s = String(url || "")
+  var path = ""
+  if (s.indexOf("file://") === 0) path = s.slice(7)
+  else if (s.indexOf("qs:@/qs/") === 0 && shellDir) path = String(shellDir).replace(/\/$/, "") + "/" + s.slice(8)
+  else if (s.indexOf("qs:///") === 0) path = s.slice(5)
+  else return ""
+  return decodeURIComponent(path)
 }

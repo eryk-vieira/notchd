@@ -14,16 +14,14 @@ LINT_FILES = shell.qml core/*.qml core/settings/*.qml core/settings/previews/*.q
 # Dev config for `make dev`, so it never touches ~/.config/notchd.
 DEV_CONFIG ?= $(CURDIR)/build/dev-config.json
 
-.PHONY: check test qmltest visual hero icons shaders bench lint validate dev restart deps avatar-deps live-deps clean
+.PHONY: check test qmltest visual hero icons bench lint validate dev restart deps live-deps clean
 
 check: test qmltest lint validate visual
 
-# Node tests of the pure-JS rules (core/*.js, core/settings/*.js), the
-# avatar pipeline's tests that need no models (skipped without NumPy and
-# Pillow) and the live bridge's that need no GStreamer.
+# Node tests of the pure-JS rules (core/*.js, core/settings/*.js) and the
+# live bridge's that need no GStreamer.
 test:
 	node --test tests/*.test.mjs
-	python3 tests/make_avatar_test.py
 	python3 tests/codex_live_test.py
 
 # QML behaviour tests (tests/qml/shell.qml), offscreen: bindings, signals
@@ -56,15 +54,6 @@ icons:
 bench:
 	scripts/bench.sh
 
-# Shaders: core/avatar/avatar.frag into the .qsb Qt loads, committed (the
-# plugin has no build step). Rerun after editing the .frag; lint checks the
-# .qsb is current.
-QSB ?= $(firstword $(wildcard /usr/lib/qt6/bin/qsb /usr/lib64/qt6/bin/qsb) $(shell command -v qsb 2>/dev/null))
-SHADERS = core/avatar/avatar.frag
-shaders:
-	@test -x "$(QSB)" || { echo "Qt 6 qsb not found (qt6-shadertools)" >&2; exit 1; }
-	@for f in $(SHADERS); do "$(QSB)" --qt6 -o "$$f.qsb" "$$f" && echo "$$f.qsb"; done
-
 # --unqualified disable: delegates read outer ids by design.
 # The filtered line is a qmllint false positive: it ignores a qmldir without
 # a `module` line when linting the singleton itself.
@@ -75,14 +64,6 @@ lint:
 	if printf '%s\n' "$$out" | grep -qE '^(Warning|Error)'; then \
 	  printf '%s\n' "$$out"; exit 1; fi; \
 	echo "qmllint: clean"
-	@if test -x "$(QSB)"; then \
-	  tmp=$$(mktemp); for f in $(SHADERS); do \
-	    "$(QSB)" --qt6 -o "$$tmp" "$$f" >/dev/null && cmp -s "$$tmp" "$$f.qsb" \
-	      || { rm -f "$$tmp"; echo "$$f.qsb is stale or broken: make shaders" >&2; exit 1; }; \
-	  done; rm -f "$$tmp"; echo "shaders: current"; \
-	else echo "qsb not found: shaders not checked" >&2; fi
-	@python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' core/avatar/make-avatar.py \
-	  && echo "make-avatar.py: parses"
 	@python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' core/live/codex-live.py \
 	  && echo "codex-live.py: parses"
 
@@ -113,19 +94,6 @@ deps:
 	    sudo pacman -S --needed --noconfirm "$$pkg"; \
 	  fi; \
 	done
-
-# What an agent's avatar needs to be made from a photo (core/avatar/
-# make-avatar.py). Not part of deps: python-mediapipe pulls in
-# python-tensorflow, about 1.5 GB in all, so only those who want an avatar
-# install it. python-mediapipe comes from the Omarchy repository.
-AVATAR_PACKAGES = python-numpy python-pillow python-onnxruntime-cpu python-mediapipe
-avatar-deps:
-	@if ! command -v pacman >/dev/null 2>&1; then \
-	  echo "notchd: install $(AVATAR_PACKAGES) (or their equivalents) for avatars" >&2; exit 1; fi
-	@missing=; for pkg in $(AVATAR_PACKAGES); do pacman -Q "$$pkg" >/dev/null 2>&1 || missing="$$missing $$pkg"; done; \
-	if [ -z "$$missing" ]; then echo "notchd: the avatar's packages are installed"; \
-	else echo "notchd: installing$$missing (agents' avatars; python-mediapipe brings python-tensorflow, ~1.5 GB in all)"; \
-	  sudo pacman -S --needed$$missing; fi
 
 # What a spoken conversation (the codex-live module, core/live/codex-live.py)
 # needs: GStreamer's WebRTC (gst-plugins-bad, libnice), Opus over RTP

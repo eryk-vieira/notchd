@@ -14,7 +14,6 @@ ShellRoot {
   id: root
 
   readonly property string outDir: Quickshell.env("NOTCHD_VISUAL_DIR")
-  readonly property string avatarFixture: Quickshell.env("NOTCHD_AVATAR_FIXTURE")
 
   readonly property var dark: ({ foreground: "#cacccc", background: "#101315", accent: "#7aa2f7" })
   readonly property var light: ({ foreground: "#2a2b30", background: "#f6f5f1", accent: "#3b6fd8" })
@@ -54,10 +53,6 @@ ShellRoot {
     { name: "module-terminal-light", page: "modules/btop", theme: root.light, bar: true, fields: root.omarchyFields,
       config: { terminals: { btop: { title: "System", command: "btop" } }, btop: { width: 900 } } },
     { name: "appearance-omarchy-dark", page: "appearance", theme: root.dark, bar: true, fields: root.omarchyFields },
-    // An agent's avatar (a drawn head, tests/qml/fixtures/avatar): offscreen
-    // there are no shaders, so the preview is the still cut-out.
-    { name: "module-avatar-dark", page: "modules/claude", theme: root.dark, bar: true, fields: root.omarchyFields,
-      config: { claude: { avatar: root.avatarFixture } }, scrollTo: "end" },
     { name: "notch-hanging-dark", page: "notch/0", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { position: { edge: "left", offset: 0.3 } }, scrollTo: "end" },
     { name: "notches-dark", page: "notch/1", theme: root.dark, bar: true, fields: root.omarchyFields,
@@ -76,7 +71,7 @@ ShellRoot {
     { name: "claude-light", chat: true, theme: root.light },
     { name: "codex-dark", codex: true, theme: root.dark },
     { name: "codex-light", codex: true, theme: root.light },
-    // A spoken conversation, with the fake bridge's lines and a drawn head.
+    // A spoken conversation, with the fake bridge's lines.
     { name: "live-dark", live: true, theme: root.dark },
     { name: "live-light", live: true, theme: root.light },
     { name: "module-live-dark", page: "modules/codex-live", theme: root.dark, bar: true, fields: root.omarchyFields },
@@ -143,10 +138,9 @@ ShellRoot {
   DemoService { id: claudeBusySvc; tag: "claude-busy"; defaultModules: ["claude"] }
   DemoService { id: codexSvc; tag: "codex"; defaultModules: ["codex"] }
   DemoService { id: codexBusySvc; tag: "codex-busy"; defaultModules: ["codex"] }
-  // Codex Live open on a conversation (the fake bridge), with an avatar and
-  // without, and closed while it talks.
+  // Codex Live open on a conversation (the fake bridge), and closed while
+  // it talks.
   DemoService { id: liveSvc; tag: "live"; defaultModules: ["codex-live"] }
-  DemoService { id: liveBareSvc; tag: "live-bare"; defaultModules: ["codex-live"] }
   DemoService { id: liveClosedSvc; tag: "live-closed"; defaultModules: ["codex-live"] }
   // Both in one notch: with tabs (the default), and one above the other
   // (tabs off) on a screen too short for them, which scrolls.
@@ -210,9 +204,7 @@ ShellRoot {
       codexSvc.setConfigValue("codex.directory", root.outDir)
       codexSvc.open()
       codexBusySvc.moduleById("codex").status = { working: true, title: "Fix the flaky login test" }
-      liveSvc.setConfigValue("codex-live.avatar", root.avatarFixture)
       liveSvc.open()
-      liveBareSvc.open()
       // Talking, with no bridge: its state by hand.
       liveClosedSvc.moduleById("codex-live").conv = { status: "live", error: "", packages: [], warning: "",
         transcript: [], working: false, muted: false, level: -100 }
@@ -496,8 +488,7 @@ ShellRoot {
       id: liveScene
       padding: Theme.space(16)
       spacing: Theme.space(16)
-      MockScreen { svc: liveSvc; width: Theme.space(560); height: Theme.space(600); caption: "codex live, an avatar" }
-      MockScreen { svc: liveBareSvc; width: Theme.space(560); height: Theme.space(600); caption: "codex live, no avatar" }
+      MockScreen { svc: liveSvc; width: Theme.space(560); height: Theme.space(600); caption: "codex live, expanded" }
       MockScreen { svc: liveClosedSvc; width: Theme.space(360); height: Theme.space(120); caption: "closed, listening" }
     }
   }

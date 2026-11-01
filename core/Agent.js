@@ -56,16 +56,12 @@ function donePeek(s) {
 // it shows it; "new" starts a new session; "ask <text>" opens the notch and
 // types the text in, followed by Enter ("ask" alone only opens it).
 // { action: "toggle" | "new" | "ask" | "usage", text }. The text is one
-// line: a line break would send it early. "avatar <photo>" and "avatar
-// remove" reach its avatar (Avatar.request), whether the module is loaded
-// or not.
+// line: a line break would send it early.
 function parseCommand(raw) {
   var cmd = text(raw)
   if (cmd === "toggle") return { action: "toggle", text: "" }
   if (cmd === "new") return { action: "new", text: "" }
   if (cmd === "ask" || cmd.indexOf("ask ") === 0)
     return { action: "ask", text: cmd.slice(3).replace(/\s*[\r\n]+\s*/g, " ").trim() }
-  if (cmd === "avatar" || cmd.indexOf("avatar ") === 0)
-    return { action: "avatar", text: cmd.slice(6).trim() }
   return { action: "usage", text: "" }
 }

@@ -235,9 +235,7 @@ NotchModule {
     if (cmd.action === "toggle") return m.toggle()
     if (cmd.action === "new") { m.restart(); return "ok" }
     if (cmd.action === "ask") return m.ask(cmd.text)
-    // "avatar ..." is the service's (NotchService.avatarCommand): it works
-    // whether the module is loaded or not.
-    return "usage: " + m.ipcName + " " + m.moduleId + " toggle | new | \"ask <question>\" | \"avatar <photo>\" | \"avatar remove\""
+    return "usage: " + m.ipcName + " " + m.moduleId + " toggle | new | \"ask <question>\""
   }
 
   // Opens the notch that shows it, on its tab, or closes it while a view

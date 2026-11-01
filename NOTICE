@@ -12,13 +12,6 @@ distributed under the MIT License:
 
 Third-party assets
 
-Avatars (core/avatar/make-avatar.py) are made with models it downloads the
-first time, into ~/.cache/notchd/models; notchd doesn't ship them:
-  - Depth Anything V2 Small (onnx-community/depth-anything-v2-small),
-    Apache License 2.0. Its Base and Large models are not, and aren't used.
-  - MediaPipe's selfie_multiclass_256x256 and face_landmarker models,
-    Apache License 2.0, Copyright Google LLC.
-
 core/modules/claude.svg is the Claude logo, a trademark of Anthropic, shown
 to identify the claude module's integration with Claude Code. The file is
 the one Omarchy ships (shell/plugins/agents/assets/claude.svg).

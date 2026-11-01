@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { load, plain } from './load.mjs';
 
 const Live = load('core/Live.js');
-const Avatar = load('core/Avatar.js');
 
 function run(events) {
   return events.reduce((s, e) => Live.reduce(s, e), Live.initialState());
@@ -139,28 +138,18 @@ test('wanted: open, and not stopped since it opened', () => {
   assert.equal(Live.wanted(false, false), false);
 });
 
-test('parseCommand: the words, the avatar, the rest is usage', () => {
+test('parseCommand: the words; the rest is usage', () => {
   for (const w of ['start', 'stop', 'toggle', 'new', 'mute', 'unmute'])
     assert.deepEqual(plain(Live.parseCommand(' ' + w + ' ')), { action: w, text: '' });
-  assert.deepEqual(plain(Live.parseCommand('avatar ~/me.jpg')), { action: 'avatar', text: '~/me.jpg' });
-  assert.deepEqual(plain(Live.parseCommand('avatar remove')), { action: 'avatar', text: 'remove' });
-  assert.deepEqual(plain(Live.parseCommand('avatar')), { action: 'avatar', text: '' });
+  assert.equal(Live.parseCommand('avatar ~/me.jpg').action, 'usage');
   assert.equal(Live.parseCommand('start now').action, 'usage');
   assert.equal(Live.parseCommand('').action, 'usage');
 });
 
-test('voiceMouth: silence closes it; the level counts against the recent peak', () => {
-  assert.equal(Avatar.voiceMouth(-100, -20).open, 0);
-  const loud = Avatar.voiceMouth(-10, -20);
-  assert.equal(loud.peak, -10);
-  assert.ok(Math.abs(loud.open - 0.8) < 1e-9);
-  // 10 dB under the peak: half the way, opened (0.5)^2.2 of the most.
-  const half = Avatar.voiceMouth(-20, -10);
-  assert.ok(Math.abs(half.open - 0.8 * Math.pow((-20 - (-10.12) + 20) / 20, 2.2)) < 1e-9);
-  assert.ok(Math.abs(half.peak - (-10.12)) < 1e-9);
-  // A quiet voice opens it as a loud one does, once the peak has come down to it.
-  let peak = -10;
-  for (let i = 0; i < 300; i++) peak = Avatar.voiceMouth(-40, peak).peak;
-  assert.ok(Avatar.voiceMouth(-40, peak).open > 0.7);
-  assert.equal(Avatar.voiceMouth(NaN, undefined).open, 0);
+test('localPath: file and qs urls to a path; anything else is no path', () => {
+  assert.equal(Live.localPath('file:///p/core/live/codex-live.py', '/c'), '/p/core/live/codex-live.py');
+  assert.equal(Live.localPath('qs:@/qs/core/live/a%20b.py', '/cfg/'), '/cfg/core/live/a b.py');
+  assert.equal(Live.localPath('qs:///plug/core/live/x.py', ''), '/plug/core/live/x.py');
+  assert.equal(Live.localPath('qrc:/x.py', '/c'), '');
+  assert.equal(Live.localPath('qs:@/qs/x.py', ''), '');
 });

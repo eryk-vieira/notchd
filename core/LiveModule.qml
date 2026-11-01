@@ -8,15 +8,15 @@ import "Live.js" as Live
 // you talk, it answers aloud, and what it is asked to do it does in its
 // folder. The voice goes through a bridge (core/live/codex-live.py: the
 // agent's server, WebRTC, the microphone and the speakers); its lines are
-// the conversation's state (Live.reduce). The avatar, if it has one, says
-// the answers: its mouth follows the voice as it plays.
+// the conversation's state (Live.reduce). A disc swells with the voice as
+// it plays.
 //
 // A conversation runs while a notch is open on the module by a click or a
 // shortcut (pinned; a hover only shows it), from the moment it opens until
 // it closes, or until you stop it (the button, IPC). The microphone is on
 // only then; the closed notch shows a red dot while it is. Settings: its
 // JSON file says `"live": { "command": ... }` and gets command, directory,
-// voice, access and the avatar's (Settings.liveSettings). Over IPC (`live
+// voice and access (Settings.liveSettings). Over IPC (`live
 // <id> <command>`), command(): "start", "stop", "toggle", "new", "mute",
 // "unmute" (Live.parseCommand).
 NotchModule {
@@ -147,7 +147,7 @@ NotchModule {
       m.setMuted(cmd.action === "mute")
       return "ok"
     }
-    return "usage: live " + m.moduleId + " start | stop | toggle | new | mute | unmute | \"avatar <photo>\" | \"avatar remove\""
+    return "usage: live " + m.moduleId + " start | stop | toggle | new | mute | unmute"
   }
 
   // --------------------------------------------------------------- views
@@ -218,29 +218,12 @@ NotchModule {
         }
       }
 
-      // The face: the avatar saying the answers, or a disc that swells with
-      // the voice.
+      // A disc that swells with the voice.
       Item {
         Layout.fillWidth: true
         Layout.preferredHeight: Theme.space(220)
 
-        AvatarView {
-          id: avatarFace
-          anchors.fill: parent
-          visible: avatarFace.dir !== ""
-          dir: String(m.setting("avatar") || "")
-          version: m.notch && m.notch.avatarVersions ? (m.notch.avatarVersions[m.moduleId] || 0) : 0
-          name: m.title || m.appName
-          colors: String(m.setting("avatarColors") || "theme")
-          style: String(m.setting("avatarStyle") || "blocks")
-          cellWidth: Theme.space(Number(m.setting("avatarCell")) || 7)
-          voiceLevel: m.live ? m.conv.level : NaN
-          work: m.working ? 1 : 0
-          attn: m.running && !m.live ? .6 : 0
-        }
-
         Rectangle {
-          visible: !avatarFace.visible
           anchors.centerIn: parent
           readonly property real voice: m.speaking ? Math.min(1, Math.max(0, (m.conv.level + 55) / 40)) : 0
           width: Theme.space(96)

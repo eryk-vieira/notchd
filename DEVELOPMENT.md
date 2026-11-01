@@ -8,7 +8,6 @@ Working on notchd itself. For using it, see the [README](README.md); for the rul
 |---|---|---|
 | Quickshell | `quickshell` | running the notch, `make dev`, `make visual` |
 | Qt 6 `qmllint` | `qt6-declarative` | `make lint` |
-| Qt 6 `qsb` | `qt6-shadertools` | `make shaders`; `make lint` checks the committed `.qsb` with it |
 | Node.js 18+ | `nodejs` | `make test` (built-in `node:test`, no dependencies) |
 | ImageMagick, python-dbus, python-gobject | `imagemagick`, `python-dbus`, `python-gobject` | `make visual`, `make hero` (the demo media player) |
 | JetBrainsMono Nerd Font | `ttf-jetbrains-mono-nerd` | `make hero` |
@@ -16,7 +15,6 @@ Working on notchd itself. For using it, see the [README](README.md); for the rul
 | Omarchy 4 | | the Omarchy host, `make validate`, `make restart` |
 | `qmltermwidget` (optional) | `qmltermwidget` | the `claude` and `codex` modules' terminal (`make deps`); without it their QML tests only check the message that asks for it |
 | GStreamer's WebRTC, python-gobject, libpulse (optional) | `gst-plugins-bad`, `gst-plugins-good`, `libnice`, `python-gobject`, `libpulse` | Codex Live (`make live-deps`). The QML tests use a fake bridge; `tests/codex_live_test.py` checks the echo canceller's branch where they are |
-| Python, NumPy, Pillow, ONNX Runtime, MediaPipe (optional) | `python-numpy`, `python-pillow`, `python-onnxruntime-cpu`, `python-mediapipe` (Omarchy repo) | making avatars (`make avatar-deps`; MediaPipe brings TensorFlow, ~1.5 GB). The tests use a fake pipeline and never need them |
 
 ## Layout
 
@@ -41,9 +39,6 @@ core/                 the framework: no desktop-specific code
   Countdown.js        timer and pomodoro: durations, commands, the countdown (pure JS)
   TerminalModule.qml  base type for a module that runs a program's terminal UI (claude, codex)
   Agent.js            what Claude Code's and Codex's terminal titles say, when to peek, IPC commands (pure JS)
-  Avatar.js           an agent's avatar: its files, the face's points, framing, colors, blinks, speech (pure JS)
-  AvatarView.qml      draws an avatar (a ShaderEffect), the settings' preview
-  avatar/             make-avatar.py (photo -> the avatar's files), avatar.frag and its compiled .qsb
   Terminal.js         the terminal view: the command line, the folder, the color scheme (pure JS)
   terminal/           TerminalView.qml: a terminal (QMLTermWidget, optional package); lint skips it
   ReservedSpace.qml   how much of its edge windows leave to the closed notch
@@ -108,8 +103,8 @@ Run `make check` before every commit. It is everything below:
 
 | Target | What it does |
 |---|---|
-| `make test` | Node tests of `core/*.js` and `core/settings/*.js`; `tests/make_avatar_test.py`, the avatar pipeline with MediaPipe faked (skipped without NumPy and Pillow); `tests/codex_live_test.py`, the live bridge without Codex |
-| `make lint` | `qmllint` over `shell.qml` and the core; fails on any warning. Also checks that each committed `.qsb` matches its shader and that `make-avatar.py` and `codex-live.py` parse |
+| `make test` | Node tests of `core/*.js` and `core/settings/*.js`; `tests/codex_live_test.py`, the live bridge without Codex |
+| `make lint` | `qmllint` over `shell.qml` and the core; fails on any warning. Also checks that `codex-live.py` parses |
 | `make validate` | `omarchy plugin validate .` |
 | `make visual` | renders the settings window and the notch on each edge (the real modules, the media one playing the demo player's track) offscreen into `build/visual/`; fails on any QML warning, so it also proves the core loads |
 
@@ -148,14 +143,6 @@ Objects and arrays built inside the vm have their own prototypes; compare them t
 ### README image
 
 `make hero` renders `docs/images/hero.webp` from `tests/visual/hero.qml`: the real `NotchCard` in four states, each with its own `NotchService` and demo data, offscreen. It runs on a private D-Bus where the only media player is `tests/visual/demo-player.py`, so whatever you are playing never ends up in the image, and with `tests/visual/bin` first on PATH, so the agents are demo scripts that print a finished conversation, never your own `claude` or `codex`, and their usage is set by hand (offscreen nothing asks the network). The tiles use Omarchy's Gruvbox colors and its "The Backwater" wallpaper (`WALLPAPER=<image> make hero` for another; a gradient without one). The wallpaper stays out of the repo; only the rendered image is committed. Rerun it after a visual change to the notch and commit the result.
-
-### Shaders
-
-`core/avatar/avatar.frag` (GLSL 440) is what Qt runs as `avatar.frag.qsb`, compiled by `make shaders` with Qt's `qsb` and committed, since the plugin has no build step. Edit the `.frag`, run `make shaders`, commit both; `make lint` fails on a stale `.qsb`. Offscreen renders use Qt's software renderer, which runs no shaders: the avatar's visual scenario shows its fallback, the still cut-out. To see the shader, run it on your display (`make dev`, then the agent's settings page).
-
-### Avatars
-
-The QML tests and visual scenarios never run the real pipeline: `NOTCHD_AVATAR_PIPELINE` points at `tests/qml/fixtures/bin/make-avatar`, which prints the same lines and copies `tests/qml/fixtures/avatar/` (a drawn head, no one's face, made with ImageMagick). A photo whose name has `noface` or `missing` fails as the real one does without a face or a package. `tests/make_avatar_test.py` covers the script itself without models: MediaPipe faked, the order of its steps (the depth goes first: ONNX Runtime loaded after python-mediapipe's TensorFlow aborts the process). To try the real one: `make avatar-deps`, then `python3 core/avatar/make-avatar.py --photo <photo> --out /tmp/avatar --models ~/.cache/notchd/models`. Never commit a real person's photo or avatar.
 
 ### Codex Live
 

@@ -12,5 +12,4 @@ NotchWindow 1.0 NotchWindow.qml
 TerminalModule 1.0 TerminalModule.qml
 AgentUsage 1.0 AgentUsage.qml
 KeepShown 1.0 KeepShown.qml
-AvatarView 1.0 AvatarView.qml
 LiveModule 1.0 LiveModule.qml

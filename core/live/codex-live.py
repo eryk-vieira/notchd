@@ -85,7 +85,8 @@ ELEMENTS = [
 PLAYER = "pacat"
 PLAYER_PACKAGE = "libpulse"
 # How much the player buffers: room for the network's unevenness, and how
-# far the voice's level (the avatar's mouth) is held back to meet the sound.
+# far the voice's level (the disc that swells with it) is held back to meet
+# the sound.
 PLAYER_LATENCY_MS = 200
 # Codex's server sends its voice a little slower than it plays (about 47
 # packets of 20 ms a second, measured): played as it comes, the buffer ran

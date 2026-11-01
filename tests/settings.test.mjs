@@ -188,7 +188,7 @@ test('an agent\'s file brings the fields every agent has, its command the defaul
     settings: [{ key: 'font', type: 'string', label: 'Its font', default: 'Mono' }, { key: 'extra', type: 'boolean', default: true }]
   })));
   assert.equal(info.agent, true);
-  assert.deepEqual(info.settings.map((f) => f.key), ['directory', 'command', 'idleMinutes', 'width', 'height', 'avatar', 'avatarColors', 'avatarStyle', 'avatarCell', 'font', 'extra']);
+  assert.deepEqual(info.settings.map((f) => f.key), ['directory', 'command', 'idleMinutes', 'width', 'height', 'font', 'extra']);
   assert.equal(Settings.settingDefault(info.settings, 'command'), 'aider');
   // Empty: notchd's own folder.
   assert.equal(Settings.settingDefault(info.settings, 'directory'), '');
@@ -215,11 +215,11 @@ test('an agent without a command is an error, not an agent', () => {
   }
 });
 
-test('a live module\'s file brings the conversation\'s fields, then the avatar\'s', () => {
+test('a live module\'s file brings the conversation\'s fields', () => {
   const info = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'Codex Live', live: { command: ' codex ' } })));
   assert.equal(info.live, true);
   assert.equal(info.agent, undefined);
-  assert.deepEqual(info.settings.map((f) => f.key), ['command', 'directory', 'voice', 'access', 'avatar', 'avatarColors', 'avatarStyle', 'avatarCell']);
+  assert.deepEqual(info.settings.map((f) => f.key), ['command', 'directory', 'voice', 'access']);
   assert.equal(Settings.settingDefault(info.settings, 'command'), 'codex');
   assert.equal(Settings.settingDefault(info.settings, 'access'), 'read-only');
   // Codex's own voice by default, the others as chips.
@@ -341,8 +341,7 @@ test('a terminal of your own: its entry\'s title and command, then the fields of
   assert.equal(info.title, 'System');
   assert.equal(info.terminal, true);
   assert.deepEqual(info.settings.map((f) => f.key),
-    ['terminals.btop.title', 'terminals.btop.command', 'directory', 'idleMinutes', 'width', 'height', 'font',
-      'avatar', 'avatarColors', 'avatarStyle', 'avatarCell']);
+    ['terminals.btop.title', 'terminals.btop.command', 'directory', 'idleMinutes', 'width', 'height', 'font']);
   assert.ok(info.settings[0].absolute && info.settings[1].absolute && info.settings[1].required);
   assert.ok(info.settings[2].help.includes('Empty is your home'), info.settings[2].help);
   assert.equal(Settings.moduleKind({ terminal: true }), 'terminal');

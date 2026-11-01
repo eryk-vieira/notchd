@@ -5,7 +5,6 @@ import Quickshell.Io
 import "core"
 import "core/settings"
 import "core/Position.js" as Position
-import "core/Avatar.js" as Avatar
 import "core/Live.js" as Live
 
 // Behaviour tests that need the QML runtime: bindings, signals, animations.
@@ -126,8 +125,6 @@ ShellRoot {
       { name: "a notch open on the screen without focus keeps the keyboard", run: root.keyboardOnOtherScreen },
       { name: "navigation: x twice removes the selected notch, s opens its settings", run: root.navigationRemove },
       { name: "navigation: m moves the notch live; Enter keeps it, Escape or the shortcut puts it back", run: root.navigationMove },
-      { name: "avatar: a photo makes its files, sets the agent's avatar and the preview draws it; remove takes them away", run: root.avatarMakeAndRemove },
-      { name: "avatar: no face, missing packages or a relative path say why and leave the config alone", run: root.avatarFailures },
       { name: "live: a click opens the notch and starts talking, a hover doesn't; closing ends it", run: root.liveTalks },
       { name: "live: stop holds until the notch closes; mute goes to the bridge; IPC words and errors", run: root.liveStopAndCommands },
       { name: "live: without its packages it says what to install, and the config stays as it was", run: root.liveMissingPackages },
@@ -1799,83 +1796,6 @@ ShellRoot {
     stored: "btop"
   }
 
-  // ---------------------------------------------------------------- avatars
-  // The pipeline is tests/qml/fixtures/bin/make-avatar (NOTCHD_AVATAR_PIPELINE):
-  // it copies a drawn head, or fails as the real one does.
-  NotchService {
-    id: avatarSvc
-    ipcTarget: "notchd-qmltest-avatar"
-    configPath: root.dir + "/avatar.json"
-    compositor: workspace4
-    defaultModules: []
-  }
-  AvatarControl {
-    id: avatarControl
-    width: 520
-    svc: avatarSvc
-    field: ({ key: "claude.avatar", type: "avatar", "default": "" })
-    value: avatarSvc.configValue("claude.avatar") || ""
-  }
-  Process {
-    id: avatarProbe
-    property int code: -1
-    onExited: function(code) { avatarProbe.code = code }
-  }
-  readonly property string avatarRoot: Quickshell.env("XDG_DATA_HOME") + "/notchd/avatars"
-
-  function avatarMakeAndRemove() {
-    avatarSvc.replaceConfig({})
-    var dir = root.avatarRoot + "/claude"
-    root.check(avatarSvc.agentCommand("claude", "avatar /photos/me.jpg") === "ok", "the command was refused")
-    root.check(avatarSvc.avatarJobs.claude && avatarSvc.avatarJobs.claude.running, "no job running")
-    root.check(/^already making/.test(avatarSvc.agentCommand("claude", "avatar /photos/other.jpg")), "a second job started alongside")
-    root.steps([
-      [1200, function() {
-        root.check(avatarSvc.configValue("claude.avatar") === dir, "claude.avatar is " + avatarSvc.configValue("claude.avatar"))
-        root.check(avatarSvc.avatarVersions.claude === 1, "its version did not change")
-        root.check(avatarSvc.avatarJobs.claude === undefined, "the job stayed: " + JSON.stringify(avatarSvc.avatarJobs.claude))
-        root.check(avatarControl.view.ready, "the preview did not read the files")
-        root.check(avatarControl.view.face && avatarControl.view.face.chin > 0, "the preview has no face")
-        root.check(avatarControl.status === "", "the settings still say " + avatarControl.status)
-        root.check(avatarSvc.agentCommand("claude", "avatar remove") === "ok", "remove was refused")
-        root.check(avatarSvc.configValue("claude.avatar") === undefined, "removed, the key stayed")
-        root.check(JSON.stringify(avatarSvc.config) === "{}", "the config kept " + JSON.stringify(avatarSvc.config))
-      }],
-      [500, function() {
-        root.check(!avatarControl.view.ready, "removed, the preview still draws")
-        avatarProbe.code = -1
-        avatarProbe.command = ["test", "-e", dir]
-        avatarProbe.running = true
-      }],
-      [300, function() {}]
-    ], function() {
-      root.check(avatarProbe.code === 1, "the avatar's folder is still there (test -e: " + avatarProbe.code + ")")
-      root.done()
-    })
-  }
-
-  function avatarFailures() {
-    avatarSvc.replaceConfig({ terminals: { btop: { command: "btop" } } })
-    root.check(/full path/.test(avatarSvc.agentCommand("claude", "avatar me.jpg")), "a relative path went through")
-    root.check(/^usage: agent claude/.test(avatarSvc.agentCommand("claude", "avatar")), "no usage for a bare avatar")
-    root.check(/^no agent/.test(avatarSvc.agentCommand("nobody", "avatar /p.jpg")), "an unknown agent got an avatar")
-    avatarSvc.agentCommand("claude", "avatar /photos/noface.jpg")
-    avatarSvc.terminalCommand("btop", "avatar /photos/missing.jpg")
-    root.steps([
-      [1000, function() {
-        var claude = avatarSvc.avatarJobs.claude, btop = avatarSvc.avatarJobs.btop
-        root.check(claude && !claude.running && /^No face found/.test(claude.error), "claude's job: " + JSON.stringify(claude))
-        root.check(/^No face found/.test(avatarControl.status), "the settings say " + avatarControl.status)
-        root.check(btop && /^Needs python-mediapipe/.test(Avatar.statusText(btop)), "btop's job: " + JSON.stringify(btop))
-        root.check(JSON.stringify(avatarSvc.config) === JSON.stringify({ terminals: { btop: { command: "btop" } } }),
-                   "a failed avatar changed the config: " + JSON.stringify(avatarSvc.config))
-        avatarSvc.removeAvatar("claude")
-        avatarSvc.removeAvatar("btop")
-        root.check(Object.keys(avatarSvc.avatarJobs).length === 0, "remove kept the failed jobs")
-      }]
-    ], root.done)
-  }
-
   // A spoken conversation (LiveModule) with a fake bridge
   // (tests/qml/fixtures/bin/codex-live): it says it is live, hears a
   // question, answers, and closes on {"stop": true}.
@@ -1949,7 +1869,6 @@ ShellRoot {
     root.check(/^not in a conversation/.test(liveSvc.liveCommand("codex-live", "mute")), "mute without a conversation")
     root.check(/^usage: live codex-live/.test(liveSvc.liveCommand("codex-live", "sing")), "no usage")
     root.check(/^no live module codex; live modules: codex-live/.test(liveSvc.liveCommand("codex", "start")), "an agent took live")
-    root.check(/^usage: live codex-live/.test(liveSvc.liveCommand("codex-live", "avatar")), "no usage for a bare avatar")
     root.check(liveSvc.liveCommand("codex-live", "start") === "ok", "start was refused")
     root.steps([
       [600, function() {
