@@ -67,6 +67,11 @@ Item {
 
   // The config key for one of this notch's keys: "position" at the top
   // level, "notches.<index>.position" in a list.
+  // The position it takes without a key of its own: in `notches`, the
+  // top-level one (Config.notches merges it key by key); else the defaults.
+  readonly property var inheritedPosition: notch.spec && notch.spec.prefix !== "" && notch.svc
+    ? notch.svc.configValue("position") : undefined
+
   function configKey(key) { return (notch.spec ? notch.spec.prefix : "") + key }
   function setValue(key, value) { if (notch.svc) notch.svc.setConfigValue(notch.configKey(key), value) }
 
