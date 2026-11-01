@@ -1,0 +1,9 @@
+{
+ "size": [300, 320],
+ "points": {
+  "mouthL": [126, 205], "mouthR": [174, 205], "chin": [150, 258], "top": [150, 52],
+  "left": [68, 150], "right": [232, 150],
+  "eyeAOuter": [102, 140], "eyeAInner": [134, 141], "eyeAUpper": [118, 134], "eyeALower": [118, 146],
+  "eyeBOuter": [198, 140], "eyeBInner": [166, 141], "eyeBUpper": [182, 134], "eyeBLower": [182, 146]
+ }
+}

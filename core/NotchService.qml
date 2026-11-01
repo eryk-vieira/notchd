@@ -5,6 +5,8 @@ import "settings"
 import "Config.js" as Config
 import "State.js" as State
 import "Navigate.js" as Navigate
+import "Agent.js" as Agent
+import "Avatar.js" as Avatar
 import "settings/Settings.js" as Settings
 
 // The notches' source of truth: config, modules, the notches (Notch, one per
@@ -144,11 +146,14 @@ Item {
   // (TerminalModule), with the fields every agent has and the `agent` IPC.
   function isAgent(id) { return !!svc.moduleInfo[id] && !!svc.moduleInfo[id].agent }
   // An agent's IPC command (TerminalModule.command): "ok", or what was wrong.
+  // "avatar ..." is answered here, loaded or not.
   function agentCommand(id, command) {
     if (!svc.isAgent(id)) {
       var agents = svc.availableModuleIds.filter(function(a) { return svc.isAgent(a) })
       return "no agent " + id + (agents.length > 0 ? "; agents: " + agents.join(", ") : "")
     }
+    var cmd = Agent.parseCommand(command)
+    if (cmd.action === "avatar") return svc.avatarCommand(id, cmd.text, "agent")
     var m = svc.moduleById(id)
     return m ? m.command(command) : id + " module not loaded"
   }
@@ -158,8 +163,100 @@ Item {
       var ids = svc.terminalSpecs.map(function(t) { return t.id })
       return "no terminal " + id + (ids.length > 0 ? "; terminals: " + ids.join(", ") : "")
     }
+    var cmd = Agent.parseCommand(command)
+    if (cmd.action === "avatar") return svc.avatarCommand(id, cmd.text, "terminal")
     var m = svc.moduleById(id)
     return m ? m.command(command) : id + " module not loaded"
+  }
+
+  // ---------------------------------------------------------------- avatars
+  // An agent's (or terminal's) face, made from a photo: core/avatar/
+  // make-avatar.py writes $XDG_DATA_HOME/notchd/avatars/<id>, then
+  // "<id>.avatar" names that folder and AvatarView draws it. The rules are
+  // core/Avatar.js's. One job per id at a time; the settings show how it
+  // goes (avatarJobs), the log says how it ended.
+  readonly property string avatarDataHome: Avatar.dataHome(Quickshell.env("XDG_DATA_HOME"), Quickshell.env("HOME"))
+  readonly property string avatarModelsDir: Avatar.modelsDir(Quickshell.env("XDG_CACHE_HOME"), Quickshell.env("HOME"))
+  // The script; the QML tests put a fake in its place.
+  readonly property string avatarPipeline: Quickshell.env("NOTCHD_AVATAR_PIPELINE")
+    || Avatar.localPath(Qt.resolvedUrl("avatar/make-avatar.py"), Quickshell.shellDir)
+  // id -> { running, step, progress, error, packages, done }
+  property var avatarJobs: ({})
+  // id -> a number that changes whenever its files do, so views read them again.
+  property var avatarVersions: ({})
+
+  function avatarCommand(id, text, ipcName) {
+    var r = Avatar.request(text, Quickshell.env("HOME"))
+    if (r.action === "create") return svc.createAvatar(id, r.photo)
+    if (r.action === "remove") { svc.removeAvatar(id); return "ok" }
+    if (r.action === "relative") return "the photo's full path, please: " + r.path
+    return "usage: " + ipcName + " " + id + " \"avatar <photo>\" | \"avatar remove\""
+  }
+  // Starts making `id`'s avatar from `photo` (a path); "ok", or why not.
+  function createAvatar(id, photo) {
+    var job = svc.avatarJobs[id]
+    if (job && job.running) return "already making " + id + "'s avatar"
+    svc.setAvatarJob(id, { running: true, step: "", progress: -1 })
+    avatarProcess.createObject(svc, {
+      ownerId: id,
+      command: Avatar.pipelineArgs(svc.avatarPipeline, photo, Avatar.avatarDir(svc.avatarDataHome, id), svc.avatarModelsDir),
+      running: true
+    })
+    return "ok"
+  }
+  // Its folder goes (only ever one of ours, under the avatars root), then its key.
+  function removeAvatar(id) {
+    var dir = svc.configValue(id + ".avatar")
+    if (Avatar.removable(dir, svc.avatarDataHome)) avatarRemover.createObject(svc, { command: ["rm", "-rf", "--", dir], running: true })
+    svc.setConfigValue(id + ".avatar", undefined)
+    svc.setAvatarJob(id, undefined)
+  }
+  function setAvatarJob(id, job) {
+    var next = Object.assign({}, svc.avatarJobs)
+    if (job === undefined) delete next[id]
+    else next[id] = job
+    svc.avatarJobs = next
+  }
+  function avatarLine(id, line) {
+    var p = Avatar.parseProgress(line)
+    var job = svc.avatarJobs[id]
+    if (!p || !job) return
+    if (p.done) svc.setAvatarJob(id, Object.assign({}, job, { done: true }))
+    else if (p.error) svc.setAvatarJob(id, Object.assign({}, job, { error: p.error, packages: p.packages }))
+    else svc.setAvatarJob(id, Object.assign({}, job, { step: p.step, progress: p.progress }))
+  }
+  function avatarExited(id, code) {
+    var job = Object.assign({}, svc.avatarJobs[id] || {}, { running: false })
+    if (job.done && code === 0) {
+      svc.setConfigValue(id + ".avatar", Avatar.avatarDir(svc.avatarDataHome, id))
+      var v = Object.assign({}, svc.avatarVersions)
+      v[id] = (v[id] || 0) + 1
+      svc.avatarVersions = v
+      svc.setAvatarJob(id, undefined)
+      return
+    }
+    if (!job.error) job.error = "The avatar couldn't be made (the pipeline stopped with code " + code + ")."
+    // Not a fault of notchd's (a photo without a face, a missing package):
+    // the settings say it; the log keeps it for an IPC caller.
+    console.info(svc.logName + ": " + id + "'s avatar: " + Avatar.statusText(job))
+    svc.setAvatarJob(id, job)
+  }
+
+  Component {
+    id: avatarProcess
+    Process {
+      id: job
+      property string ownerId: ""
+      stdout: SplitParser { onRead: function(line) { svc.avatarLine(job.ownerId, line) } }
+      onExited: function(code) { svc.avatarExited(job.ownerId, code); job.destroy() }
+    }
+  }
+  Component {
+    id: avatarRemover
+    Process {
+      id: remover
+      onExited: remover.destroy()
+    }
   }
 
   // Standalone modules (`"standalone": true` in their file) have a place of

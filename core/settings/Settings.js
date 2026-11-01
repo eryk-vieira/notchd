@@ -137,6 +137,7 @@ function agentSettings(agent, title) {
       help: "How much of the plan's limits (5 hours, the week) is used, in the open notch, asked every few minutes with the login " + name + " keeps. notchd only reads that login; " + name + " renews it when it runs." },
     { key: "usageWarn", type: "integer", label: "Warn at", "default": 80, min: 50, max: 100, step: 5, unit: "%", section: "Usage",
       help: "The notch peeks once when a limit passes this, and again when it is reached. 100 warns only at the limit." })
+  fields = fields.concat(avatarFields(name))
   fields.forEach(function(f) {
     if (typeof extra[f.key] === "string" && extra[f.key] !== "") f.help = f.help ? f.help + " " + extra[f.key] : extra[f.key]
   })
@@ -163,6 +164,24 @@ function terminalFields(command, name, emptyDir, idle) {
   ]
 }
 
+// A face for an agent or terminal, made from a photo (core/Avatar.js):
+// the avatar's folder, set when one is made, and how it is drawn. Last on
+// its page, under Avatar.
+function avatarFields(name) {
+  return [
+    { key: "avatar", type: "avatar", label: "Avatar", "default": "", section: "Avatar",
+      help: "A face for " + name + ", made from a photo: cut out, its depth estimated, drawn in ASCII. "
+        + "The photo stays on this computer; the first one downloads the models, about 120 MB." },
+    { key: "avatarColors", type: "choice", label: "Colors", "default": "theme", section: "Avatar",
+      options: [{ value: "theme", label: "Theme" }, { value: "photo", label: "Photo" }],
+      help: "Lit by the theme's accent and its complement, or the photo's own colors." },
+    { key: "avatarStyle", type: "choice", label: "Style", "default": "blocks", section: "Avatar",
+      options: [{ value: "blocks", label: "Blocks" }, { value: "ascii", label: "ASCII" }] },
+    { key: "avatarCell", type: "integer", label: "Cell size", "default": 7, min: 3, max: 14, step: 1, unit: "px", section: "Avatar",
+      help: "A cell's width; its height is half again as much. Smaller cells draw a sharper face, larger ones a coarser, more ASCII one." }
+  ]
+}
+
 // The module info of a terminal of your own (Config.terminals' { id,
 // title, command }), as parseModuleInfo gives a module's file: its title
 // and the fields of a program in a terminal, `terminal` set. Its title and
@@ -182,7 +201,7 @@ function terminalInfo(t) {
     "Closed this long, " + name + " stops; the next time the notch opens, it starts again. 0 keeps it running.")
   return {
     title: t.title, terminal: true,
-    settings: own.concat(fields.filter(function(f) { return f.key !== "command" }))
+    settings: own.concat(fields.filter(function(f) { return f.key !== "command" }), avatarFields(name))
   }
 }
 

@@ -14,6 +14,7 @@ ShellRoot {
   id: root
 
   readonly property string outDir: Quickshell.env("NOTCHD_VISUAL_DIR")
+  readonly property string avatarFixture: Quickshell.env("NOTCHD_AVATAR_FIXTURE")
 
   readonly property var dark: ({ foreground: "#cacccc", background: "#101315", accent: "#7aa2f7" })
   readonly property var light: ({ foreground: "#2a2b30", background: "#f6f5f1", accent: "#3b6fd8" })
@@ -53,6 +54,10 @@ ShellRoot {
     { name: "module-terminal-light", page: "modules/btop", theme: root.light, bar: true, fields: root.omarchyFields,
       config: { terminals: { btop: { title: "System", command: "btop" } }, btop: { width: 900 } } },
     { name: "appearance-omarchy-dark", page: "appearance", theme: root.dark, bar: true, fields: root.omarchyFields },
+    // An agent's avatar (a drawn head, tests/qml/fixtures/avatar): offscreen
+    // there are no shaders, so the preview is the still cut-out.
+    { name: "module-avatar-dark", page: "modules/claude", theme: root.dark, bar: true, fields: root.omarchyFields,
+      config: { claude: { avatar: root.avatarFixture } }, scrollTo: "end" },
     { name: "notch-hanging-dark", page: "notch/0", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { position: { edge: "left", offset: 0.3 } }, scrollTo: "end" },
     { name: "notches-dark", page: "notch/1", theme: root.dark, bar: true, fields: root.omarchyFields,
@@ -497,6 +502,7 @@ ShellRoot {
     // terminals first: `modules` may list one.
     svc.setConfigValue("terminals", cfg.terminals)
     svc.setConfigValue("btop", cfg.btop)
+    svc.setConfigValue("claude", cfg.claude)
     svc.setConfigValue("position", cfg.position)
     svc.setConfigValue("notches", cfg.notches)
     svc.setConfigValue("modules", cfg.modules)

@@ -9,7 +9,7 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | Key | |
 |---|---|
 | `key` | config key; dotted for nested objects (`theme.accent`) |
-| `type` | `choice`, `integer`, `number`, `boolean`, `string`, `color`, `modules`, `workspaces`, `notches`, `moduleCatalog` or `note` (text only, no key) |
+| `type` | `choice`, `integer`, `number`, `boolean`, `string`, `color`, `modules`, `workspaces`, `notches`, `moduleCatalog`, `avatar` or `note` (text only, no key) |
 | `label`, `help` | title and description |
 | `page` | sidebar page id; `general` when absent |
 | `section` | heading the field sits under, within its page; sections keep the order their first field appears in |
@@ -30,6 +30,7 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | `workspaces` | `WorkspaceChips`: 1 to 10, the compositor's workspaces and the picked ones; none picked removes the key |
 | `notches` | `NotchCatalog`: a row per notch, where it is and what it shows (`Settings.notchSummary`), with a gear to its page, a trash can (with more than one) and Add, which opens the new notch's page; it edits the list through the service (`addNotch`, `removeNotch`) |
 | `moduleCatalog` | `ModuleCatalog`: one list of the modules the host can load, by `part` (`Settings.moduleKind`): `"notch"` the ones notches show, `"agent"` the agents, `"terminal"` the config's terminals, `"standalone"` the standalone ones (`Settings.catalogPart`); where each shows (`Settings.moduleStatus`) and a gear to its page; no key. The terminals' list adds Add terminal and a trash can per row, through the service (`addTerminal`, `removeTerminal`) |
+| `avatar` | `AvatarControl`: an agent's avatar (key `<id>.avatar`, its folder): a live preview the size of an open notch (`AvatarView`), Choose photo… (a file dialog), Test speech, Remove, and how making one goes. Making and removing go through the service (`createAvatar`, `removeAvatar`), which sets the key once the files are there, so it never emits `edited` |
 | `note` | none; just the title and help |
 
 ## Several notches
@@ -60,4 +61,5 @@ Every control takes `field` (the schema entry) and `value` (the config value, or
 | `Settings.js` | pages and sub-pages, sections, module files and pages, notch summaries, list edits and slider steps; pure, tested in `tests/settings.test.mjs` |
 | `SettingRow.qml` | one field: text and the control for its type |
 | `Label.qml`, `Icon.qml`, `Button.qml`, `IconButton.qml`, `NavItem.qml`, `ListRow.qml` | building blocks; `ListRow` is a row of the Notches and Modules lists |
+| `AvatarControl.qml` | the `avatar` field; the preview is `core/AvatarView.qml` |
 | `*Control.qml`, `CardChoice.qml`, `Toggle.qml`, `ModuleList.qml`, `ModuleCatalog.qml`, `NotchCatalog.qml`, `WorkspaceChips.qml` | the controls |

@@ -115,6 +115,23 @@ An agent with `usage` shows its plan's limits under its header: a bar per window
 
 Without a `directory`, an agent starts in notchd's own folder, `notchd` in your documents folder (`xdg-user-dir DOCUMENTS`, else `~/Documents`), made the first time (`Terminal.OWN_DIR`); `/resume` in Claude Code and Codex lists the sessions of the folder they start in, so it is always the same one. The terminal comes from the optional `qmltermwidget` package, probed before it loads, and keeps running while the notch is closed. It takes every key, Escape included, except Ctrl+Escape, which closes the notch and leaves the program running (`Terminal.isLeaveKey`); so does the header's button. Over IPC, `agent <id> <command>` reaches it by its id ([ipc.md](ipc.md#agents)), whatever notch shows it. `TerminalModule` without `"agent"` runs any program the same way, with `defaultCommand` and fields of its own.
 
+## Avatars
+
+An agent or a terminal of your own can have an avatar: a face made from a photo, drawn in ASCII. Its fields come with the agent's (`Settings.avatarFields`, last on its page, under Avatar): `avatar`, the avatar's folder, set once it is made; `avatarColors`, `"theme"` (the theme's accent from the left, its complement from the right) or `"photo"`; `avatarStyle`, `"blocks"` or `"ascii"`; `avatarCell`, a cell's width in px (3 to 14, 7 by default: smaller is sharper).
+
+Making one, `NotchService.createAvatar(id, photo)` (Choose photo… in its settings, or `avatar <photo>` over [IPC](ipc.md#avatars)), runs `core/avatar/make-avatar.py`, one job per id. It writes `$XDG_DATA_HOME/notchd/avatars/<id>/`, replaced as a whole when ready:
+
+| File | |
+|---|---|
+| `color.png` | the photo, upright and at most 768 px, the person's mask (hair included) in its alpha |
+| `depth.png` | how near each point is, 0 far .. 255 near, 0 outside the person |
+| `face.json` | `{ "size": [w, h], "points": { name: [x, y] } }`: the lips' corners, the chin, the forehead, the face's sides, each eye's corners and lids |
+| `source.jpg` | the photo as used, to make it again |
+
+then sets `<id>.avatar` to the folder. Its progress goes to `avatarJobs` (one JSON object a line: `{"step", "progress"}`, then `{"done": true}` or `{"error", "packages"}`; `Avatar.parseProgress`, `Avatar.statusText`); `avatarVersions` changes so views read the new files. `removeAvatar(id)` deletes the folder, only ever one right under the avatars root (`Avatar.removable`), and the key. The pipeline: MediaPipe's `selfie_multiclass_256x256` cuts the person out and its `face_landmarker` finds the face (the biggest one); Depth Anything V2 Small, in ONNX, estimates the depth. The models download the first time into `$XDG_CACHE_HOME/notchd/models`, each checked by sha256. It needs `python-numpy`, `python-pillow`, `python-onnxruntime-cpu` and `python-mediapipe` (`make avatar-deps`); without one, it says which.
+
+`core/AvatarView.qml` draws it: a `ShaderEffect` (`core/avatar/avatar.frag`, compiled to the committed `.qsb` by `make shaders`) over the two images and an atlas of the name's letters. The rules are `core/Avatar.js`'s: what `face.json`'s points mean for the mouth and eyes (`faceFromLandmarks`), where the photo sits (`framing`), the colors (`palette`), the blinks (`nextBlink`, `blinkLevel`) and the speech (`speechPlan`, `speechLevel`). It follows the pointer, a click sends a wave, `speaking` moves the mouth, and `work` and `attn` make it busy or waiting. One 60 fps `Timer` drives it, stopped while it isn't visible; without shaders (offscreen, software rendering) it shows the cut-out photo, still. For now only the settings show it.
+
 ## The scope rule
 
 A module **shows** state, it does not **own** it. A notifications module mirrors toasts; it does not register as the notification server. The one exception today is the Omarchy `osd` module, which takes the `osd` IPC target from the stock OSD plugin (and says so in its README).

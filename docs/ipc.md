@@ -126,6 +126,17 @@ omarchy-shell eryk.notchd agent codex "ask explain: $(wl-paste --primary)"   # t
 
 It answers `ok`, `no notch shows <id>`, `the terminal needs the qmltermwidget package`, the usage, `<id> module not loaded` when no notch lists it, or `no agent <id>` with the agents there are.
 
+## Avatars
+
+An agent or a terminal of your own gets a face made from a photo ([modules.md](modules.md#avatars)): `avatar <photo>` makes it, `avatar remove` removes it, by the agent's or terminal's id, loaded or not. The path is the photo's, absolute or under `~`.
+
+```sh
+omarchy-shell eryk.notchd agent claude "avatar ~/Pictures/me.jpg"
+omarchy-shell eryk.notchd terminal btop "avatar remove"
+```
+
+It answers `ok` once it starts; making it takes a few seconds, more the first time (the models download), and the settings show how it goes. It ends in the log: why it failed (`No face found in the photo...`, a package missing). Or `already making <id>'s avatar`, `the photo's full path, please: <path>`, the usage.
+
 ## Terminals
 
 A terminal of your own (an entry of the config's `terminals`) takes the same commands by its id: `terminal <id> toggle`, `terminal <id> new` (its command starts again), `terminal <id> "ask <text>"` (the text typed in, then Enter: a command for a shell, say).

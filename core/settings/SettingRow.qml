@@ -20,7 +20,7 @@ ColumnLayout {
   readonly property var value: row.stored === undefined ? row.field["default"] : row.stored
   readonly property bool wide: row.field.type === "modules" || row.field.type === "workspaces"
     || row.field.type === "notches" || row.field.type === "moduleCatalog"
-    || (row.field.type === "choice" && row.field.display === "cards")
+    || (row.field.type === "choice" && row.field.display === "cards") || row.field.type === "avatar"
 
   readonly property Component control: {
     switch (row.field.type) {
@@ -34,6 +34,7 @@ ColumnLayout {
       case "workspaces": return workspacesControl
       case "notches": return notchesControl
       case "moduleCatalog": return moduleCatalogControl
+      case "avatar": return avatarControl
       case "note": return null
       default: return unknownControl
     }
@@ -124,6 +125,13 @@ ColumnLayout {
   Component {
     id: moduleCatalogControl
     ModuleCatalog { field: row.field; value: row.value; svc: row.svc }
+  }
+  Component {
+    id: avatarControl
+    AvatarControl {
+      field: row.field; value: row.value; svc: row.svc
+      onEdited: function(v) { row.edit(v) }
+    }
   }
   Component {
     id: unknownControl
