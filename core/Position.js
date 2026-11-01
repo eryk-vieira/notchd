@@ -305,6 +305,20 @@ function rowDepths(packing, depths) {
 //   on top or bottom how far along its far side, from each end (left,
 //                    right), the side notch below it reaches: where it
 //                    draws no hairline
+// One window's item for corners(), for one half of the work: its full
+// cornerItem if it is on the `sides` kind of edge (left/right when true,
+// top/bottom when false), else only where it is. `w` has edge,
+// windowScreenName and cornerItem. The edge is checked before cornerItem
+// is read: a QML binding that reads a property depends on it even if the
+// value is thrown away, and a side notch's cornerItem comes from its place,
+// which comes from the corners the top and bottom ones give it. Reading it
+// for every window looped (~1300 warnings at start, notches on a top and a
+// side edge of one screen).
+function cornerInput(w, sides) {
+  var side = w.edge === "left" || w.edge === "right"
+  return side === sides ? w.cornerItem : { screen: w.windowScreenName, edge: w.edge }
+}
+
 function corners(items) {
   items = items || []
   function deepest(screen, edge, end) {

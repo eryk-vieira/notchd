@@ -71,13 +71,8 @@ Item {
   // back into itself: where side notches start, from the top and bottom
   // ones flush in the corners; and where those meet the side notches, from
   // the side ones.
-  function cornerInfo(w, sides) {
-    var it = w.cornerItem
-    var side = it.edge === "left" || it.edge === "right"
-    return side === sides ? it : { screen: it.screen, edge: it.edge }
-  }
-  readonly property var cornerInsets: Position.corners(root.windows.map(function(w) { return root.cornerInfo(w, false) }))
-  readonly property var cornerSpans: Position.corners(root.windows.map(function(w) { return root.cornerInfo(w, true) }))
+  readonly property var cornerInsets: Position.corners(root.windows.map(function(w) { return Position.cornerInput(w, false) }))
+  readonly property var cornerSpans: Position.corners(root.windows.map(function(w) { return Position.cornerInput(w, true) }))
   function cornerOf(copy, list) {
     var ws = root.windows
     for (var i = 0; i < ws.length; i++) if (ws[i].copy === copy) return list[i] || { start: 0, end: 0 }
