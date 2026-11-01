@@ -67,10 +67,13 @@ function canPeek(module, s) {
 // closed: the pointer is on it, but it is moving it, not opening it. A
 // `guest` (a copy of the visitor) is hidden while closed, so it rests
 // instead of holding a compact view nobody sees: a live view there kept its
-// window drawing frames.
+// window drawing frames. While `navigating` (Navigate.js), only the notch
+// selected (`preview`) is open, over any peek; the others show closed, even
+// pinned, and open again as navigation ends on Escape.
 function mode(s) {
   var compact = s.compactModule && !s.guest ? "compact" : "rest"
   if (s.dragging) return compact
+  if (s.navigating) return s.preview ? "expanded" : compact
   if (s.peekModule && !s.pinned) return "peek"
   if (s.pinned || s.hovered) return "expanded"
   return compact
@@ -98,16 +101,13 @@ function shownModules(modules, tabs, picked) {
   return { modules: modules.slice(0, 1), tabs: modules.slice() }
 }
 
-// Whether a copy wants the keyboard: pinned open (a click, a shortcut) on a
-// module you type into (`wantsKeyboard`, among the ones it shows in
-// `modules`). Never on hover alone: the pointer passing over the notch must
-// not take the keyboard from the window you are typing in.
+// Whether a copy wants the keyboard: pinned open (a click, a shortcut,
+// navigation), whatever it shows, so Escape and Ctrl+Escape close any
+// notch and a module you type into gets the keys. Never on hover alone:
+// the pointer passing over the notch must not take the keyboard from the
+// window you are typing in.
 function wantsKeyboard(s) {
-  if (!s.pinned || s.mode !== "expanded") return false
-  var modules = s.modules || []
-  for (var i = 0; i < modules.length; i++)
-    if (modules[i] && modules[i].wantsKeyboard) return true
-  return false
+  return !!s.pinned && s.mode === "expanded"
 }
 
 // The keyboard a copy's window takes while it wants it: "exclusive" until
@@ -115,20 +115,28 @@ function wantsKeyboard(s) {
 // gets the keyboard on its own when it asks for it exclusively (a notch
 // opened by a shortcut has no click to give it focus); kept exclusive, the
 // compositor never lets it go, so moving to a window by the keyboard (a
-// focus or workspace shortcut) did nothing. On demand, it can.
+// focus or workspace shortcut) did nothing. On demand, it can. But on a
+// screen without focus (`elsewhere`), Hyprland hands an on-demand layer's
+// keyboard back to the focused screen's window at once, which closed the
+// notch: there it stays exclusive, and Escape closes it. While
+// `navigating`, the navigation has the keyboard and no notch asks for it.
 function keyboardFocus(s) {
-  if (!wantsKeyboard(s)) return "none"
-  return s.held ? "ondemand" : "exclusive"
+  if (s.navigating || !wantsKeyboard(s)) return "none"
+  return s.held && !s.elsewhere ? "ondemand" : "exclusive"
 }
 
 // What a copy does as its window gains or loses the keyboard (`active`),
 // with `held` whether it had it: "hold" (it has it), "close" (a window took
 // it while the notch wanted it: the notch closes, as a click away does) or
-// "none" (it doesn't want the keyboard, or never had it).
+// "none" (it doesn't want the keyboard, or never had it). Losing it to the
+// navigation (`navigating`) closes nothing: Escape gives it back. Lost
+// just after navigation ended (`settling`), it is the compositor handing
+// focus back to a window as navigation's own goes: "retake" (ask again).
 function keyboardChange(s) {
-  if (!wantsKeyboard(s)) return "none"
+  if (s.navigating || !wantsKeyboard(s)) return "none"
   if (s.active) return "hold"
-  return s.held ? "close" : "none"
+  if (!s.held) return "none"
+  return s.settling ? "retake" : "close"
 }
 
 // How far windows are kept from the notch's edge (the layer-shell exclusive

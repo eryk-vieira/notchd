@@ -61,6 +61,22 @@ test('mode: a guest copy rests while closed, and only peeks or opens', () => {
   assert.equal(State.mode({ guest: true, compactModule: m, hovered: true }), 'expanded');
 });
 
+test('mode: navigating, only the notch selected is open, over a peek, not while dragged', () => {
+  const m = mod('media', 50);
+  assert.equal(State.mode({ navigating: true, preview: true }), 'expanded');
+  assert.equal(State.mode({ navigating: true, preview: true, compactModule: m, peekModule: m }), 'expanded');
+  assert.equal(State.mode({ navigating: true, preview: true, compactModule: m, dragging: true }), 'compact');
+});
+
+// Bug: an agent pinned open stayed open as navigation moved to another
+// notch, two notches open at once.
+test('mode: navigating, a notch not selected shows closed, even pinned or hovered', () => {
+  const m = mod('claude', 50);
+  assert.equal(State.mode({ navigating: true, pinned: true, compactModule: m }), 'compact');
+  assert.equal(State.mode({ navigating: true, hovered: true }), 'rest');
+  assert.equal(State.mode({ navigating: true, compactModule: m, peekModule: m }), 'compact');
+});
+
 // The visitor's copies are a fullscreen window per screen, hidden while
 // closed: each held its buffers (~25 MB) for nothing on screen.
 test('needsWindow: a guest only while open or lingering after; a notch always', () => {
@@ -122,34 +138,60 @@ test('attentionPeek: the first module with something unseen and a peek', () => {
   assert.equal(State.attentionPeek(null), null);
 });
 
-test('keyboardFocus: only pinned open on a module that types', () => {
-  const typing = mod('claude', 50, { wantsKeyboard: true });
-  const open = { pinned: true, mode: 'expanded', modules: [mod('media', 60), typing] };
+// Ctrl+Escape closed only an agent's notch: any other kept no keyboard,
+// so the keys went to the window under it.
+test('keyboardFocus: pinned open, whatever it shows; never on hover alone', () => {
+  const open = { pinned: true, mode: 'expanded', modules: [mod('media', 60)] };
   assert.equal(State.keyboardFocus(open), 'exclusive');
+  assert.equal(State.keyboardFocus({ pinned: true, mode: 'expanded' }), 'exclusive');
   assert.equal(State.keyboardFocus({ ...open, pinned: false }), 'none');   // hover alone
   assert.equal(State.keyboardFocus({ ...open, mode: 'compact' }), 'none');
-  assert.equal(State.keyboardFocus({ ...open, modules: [mod('media', 60)] }), 'none');
-  assert.equal(State.keyboardFocus({ pinned: true, mode: 'expanded' }), 'none');
 });
 
 // The notch held the keyboard exclusively until it closed: no shortcut
 // could move focus to a window, only a click away.
 test('keyboardFocus: exclusive until the window has the keyboard, then on demand', () => {
-  const open = { pinned: true, mode: 'expanded', modules: [mod('claude', 50, { wantsKeyboard: true })] };
+  const open = { pinned: true, mode: 'expanded', modules: [mod('claude', 50)] };
   assert.equal(State.keyboardFocus({ ...open, held: false }), 'exclusive');
   assert.equal(State.keyboardFocus({ ...open, held: true }), 'ondemand');
   assert.equal(State.keyboardFocus({ ...open, pinned: false, held: true }), 'none');
 });
 
+// Bug: a notch opened from the keyboard on the screen without focus (the
+// laptop's, with focus on the external monitor) closed at once: on demand,
+// Hyprland gave its keyboard back to the focused screen's window.
+test('keyboardFocus: on a screen without focus, it stays exclusive', () => {
+  const open = { pinned: true, mode: 'expanded', held: true, elsewhere: true };
+  assert.equal(State.keyboardFocus(open), 'exclusive');
+  assert.equal(State.keyboardFocus({ ...open, elsewhere: false }), 'ondemand');
+});
+
 test('keyboardChange: losing the keyboard it held closes the notch', () => {
-  const open = { pinned: true, mode: 'expanded', modules: [mod('claude', 50, { wantsKeyboard: true })] };
+  const open = { pinned: true, mode: 'expanded', modules: [mod('claude', 50)] };
   assert.equal(State.keyboardChange({ ...open, active: true, held: false }), 'hold');
   assert.equal(State.keyboardChange({ ...open, active: false, held: true }), 'close');
   // Not had yet (the compositor hasn't given it): nothing to give back.
   assert.equal(State.keyboardChange({ ...open, active: false, held: false }), 'none');
-  // Another tab, or closed: the keyboard goes back by itself, no close.
-  assert.equal(State.keyboardChange({ ...open, modules: [mod('media', 60)], active: false, held: true }), 'none');
+  // Closed: the keyboard goes back by itself, no close.
   assert.equal(State.keyboardChange({ ...open, pinned: false, active: false, held: true }), 'none');
+});
+
+// Navigation takes the keyboard from an agent pinned open: losing it that
+// way closed the agent's notch, as a click away does.
+test('keyboard: while navigating no notch asks for it, and losing it to navigation closes nothing', () => {
+  const open = { pinned: true, mode: 'expanded', modules: [mod('claude', 50)] };
+  assert.equal(State.keyboardFocus({ ...open, navigating: true }), 'none');
+  assert.equal(State.keyboardChange({ ...open, navigating: true, active: false, held: true }), 'none');
+});
+
+// Bug: Enter on an agent's notch opened it and closed it at once. As
+// navigation's window went, Hyprland gave focus back to the window you
+// were in, taking it from the agent, which closed as on a click away.
+test('keyboardChange: lost just after navigation ended, it asks again instead of closing', () => {
+  const open = { pinned: true, mode: 'expanded', modules: [mod('claude', 50)] };
+  assert.equal(State.keyboardChange({ ...open, settling: true, active: false, held: true }), 'retake');
+  assert.equal(State.keyboardChange({ ...open, settling: true, active: false, held: false }), 'none');
+  assert.equal(State.keyboardChange({ ...open, settling: true, active: true, held: false }), 'hold');
 });
 
 test('reservedSpace: only when enabled; compact never below the baseline', () => {

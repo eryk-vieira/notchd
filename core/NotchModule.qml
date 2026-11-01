@@ -55,12 +55,6 @@ Item {
   // shows a dot meanwhile. The module clears it once you have seen it.
   property bool attention: false
 
-  // Takes typing (a text field in its expanded view): the notch's window
-  // takes the keyboard while it is pinned open on it (State.keyboardFocus),
-  // and Escape closes it. Hover alone never takes the keyboard; a view
-  // calls requestKeyboard() (a press on its field) to pin the notch.
-  property bool wantsKeyboard: false
-
   // Width of its expanded view, in unscaled px (Theme.space applies); the
   // default suits a list of rows.
   property int expandedWidth: 400
@@ -110,7 +104,8 @@ Item {
   }
 
   // Pins every notch open on this module, so its window takes the keyboard
-  // (wantsKeyboard) and leaving it with the pointer doesn't close it.
+  // (State.wantsKeyboard) and leaving it with the pointer doesn't close it:
+  // a view calls it on a press on its field, as hover takes no keyboard.
   function requestKeyboard() {
     if (notch) notch.requestKeyboard(module)
   }

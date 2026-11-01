@@ -17,10 +17,11 @@ Every host exposes the same methods on its `ipcTarget`. The CLI depends on the h
 | `agent <id> <command>` | an agent (`claude`, `codex`) by its id: `toggle` opens or closes its notch, `new` starts a new session, `"ask <question>"` opens it and types the question in ([below](#agents)) |
 | `claude <command>`, `codex <command>` | the same as `agent claude <command>`, `agent codex <command>` |
 | `timer <command>` | the `timer` module: start, pause or stop a countdown or a pomodoro (below) |
+| `navigate` | start or leave navigation: every notch highlighted and numbered, the keyboard picks one ([below](#navigation)) |
 | `settings` | open or close the settings window |
 | `recenter` | put every notch back in the middle of the top edge, following focus (removes each `position`) |
 | `set <key> <json>` | change one config key, as the settings window does; an empty value resets it |
-| `state` | as JSON: `notches`, each with its id, reserved space, workspaces, position (where it is), whether it can be dragged, its modules and its `copies` (screen, mode and current peek of each); each `standalone` module's place and the copies that show it; and every loaded module, with an agent's plan `usage` (its limits, whether they are stale and why) |
+| `state` | as JSON: `navigation` (the notch selected while navigating, else null), `notches`, each with its id, reserved space, workspaces, position (where it is), whether it can be dragged, its modules and its `copies` (screen, mode and current peek of each); each `standalone` module's place and the copies that show it; and every loaded module, with an agent's plan `usage` (its limits, whether they are stale and why) |
 
 ```sh
 omarchy-shell eryk.notchd set hoverOpenDelay 200
@@ -32,6 +33,30 @@ omarchy-shell eryk.notchd toggleNotch jobs
 ```
 
 For an array, put a space before the bracket: `set modules ' ["media","activities"]'`. Quickshell's CLI reads an argument that starts with `[` as a comma-separated list.
+
+## Navigation
+
+`navigate` highlights every notch of the config, hidden ones included, each with a small label at its top right, outside it: its number (its place in `notches`, 1 to 9) and its name. It takes the keyboard until you leave. The selected notch opens as a preview on the focused monitor (not pinned), the keys listed in its label; the others show closed meanwhile, even one pinned open, which opens again on Escape. It starts on the open notch, else the first on the focused monitor.
+
+| Key | |
+|---|---|
+| `1`–`9` | select that notch |
+| `←` `→`, `h` `l` | the notch before or after, wrapping |
+| `Tab`, `Shift+Tab` | the selected notch's next or previous tab |
+| `Enter` | pin it open on that tab and leave; the other notches close. It takes the keyboard, so `Esc` or `Ctrl+Esc` closes it later |
+| `Esc`, `Ctrl+Esc` | leave, each notch on the tab it had |
+
+`navigate` again leaves too, as Escape does, and a click that pins a notch leaves on that one. An agent open when it starts keeps running and gets the keyboard back on Escape. Bind it to a key:
+
+```lua
+o.bind("SUPER + N", "Navigate notches", "omarchy-shell eryk.notchd navigate")   -- Omarchy, ~/.config/hypr/bindings.lua
+```
+
+```sh
+bind = SUPER, N, exec, qs -p <checkout> ipc call notchd navigate   # standalone, hyprland.conf
+```
+
+The rules are `core/Navigate.js`, tested in `tests/navigate.test.mjs`.
 
 ## Activities
 

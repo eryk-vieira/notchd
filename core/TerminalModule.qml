@@ -10,8 +10,8 @@ import "Usage.js" as Usage
 // terminal (terminal/TerminalView.qml) comes from the optional
 // qmltermwidget package; without it, the open notch says what to install.
 // Meant for a notch of its own: closed, it shows the session's title and a
-// dot while the program works; open, the terminal takes the keyboard
-// (wantsKeyboard), Escape included; Ctrl+Escape, its button, a shortcut or
+// dot while the program works; open and pinned, the terminal takes the
+// keyboard, Escape included; Ctrl+Escape, its button, a shortcut or
 // IPC close the notch.
 //
 // The program starts the first time the notch opens and keeps running while
@@ -27,7 +27,6 @@ NotchModule {
   id: m
   priority: 40
   active: true
-  wantsKeyboard: true
   expandedWidth: Math.max(320, Number(m.setting("width")) || 760)
   readonly property int terminalHeight: Math.max(120, Number(m.setting("height")) || 420)
 

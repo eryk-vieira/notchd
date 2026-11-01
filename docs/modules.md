@@ -13,7 +13,6 @@ NotchModule {
   active: true          // show in compact/expanded while true
   // urgentPeek: true   // peek even while expanded by hover
   // peekOnFocusedScreen: true  // peek once, on the focused screen only (feedback on what you just did there)
-  // wantsKeyboard: true        // you type into its expanded view (see Typing)
   // expandedWidth: 520         // its expanded view's width, unscaled px (default 400)
   // icon: String.fromCodePoint(0xF051B)  // shown closed while active with no compact view
   // attention: true           // news you haven't seen: a dot on its tab, its peek as the notch closes
@@ -71,7 +70,7 @@ Give it a `peek` view (and a `verticalPeek` for a side edge); it has no closed o
 
 ## Typing
 
-A module with a text field in its expanded view sets `wantsKeyboard: true`. The notch's window takes the keyboard while it is pinned open on the module: a click on the notch, `toggleNotch <id>` from a shortcut, or the module calling `requestKeyboard()`, which pins every notch open on it. Call it when the field is pressed, since a notch opened by hover has no keyboard. Hover alone never takes the keyboard from the window you are typing in. The window asks for it exclusively, the only way a layer gets it without a click, and on demand once it has it, so a focus or workspace shortcut can still move to a window; the notch then closes, as a click away does. Escape closes the notch: a field leaves it alone and it goes up to the card. The rules are `State.keyboardFocus` and `State.keyboardChange`.
+The notch's window takes the keyboard while it is pinned open, whatever it shows: a click on the notch, `toggleNotch <id>` from a shortcut, navigation, or a module calling `requestKeyboard()`, which pins every notch open on it. A module with a text field calls it when the field is pressed, since a notch opened by hover has no keyboard. Hover alone never takes the keyboard from the window you are typing in. The window asks for it exclusively, the only way a layer gets it without a click, and on demand once it has it, so a focus or workspace shortcut can still move to a window; the notch then closes, as a click away does. On a monitor without focus it stays exclusive, since Hyprland gives an on-demand layer's keyboard there straight back to the focused monitor; Escape closes it. Escape and Ctrl+Escape close the notch: a field leaves Escape alone and it goes up to the card; a terminal keeps Escape and lets Ctrl+Escape out. The rules are `State.keyboardFocus` and `State.keyboardChange`.
 
 ```qml
 expanded: Component {

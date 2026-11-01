@@ -136,8 +136,14 @@ ShellRoot {
   // Closed, with tabs: both side by side, claude working, codex done unseen.
   DemoService { id: agentsClosedSvc; tag: "agents-closed"; defaultModules: ["timer", "claude", "codex"] }
   DemoService { id: agentsSideSvc; tag: "agents-side"; defaultModules: ["timer", "claude", "codex"] }
+  // Navigation (IPC `navigate`): two notches, numbered, the first selected
+  // and open as a preview.
+  DemoService {
+    id: navSvc; tag: "navigate"; defaultModules: ["media"]
+    function navNotch(i) { return navSvc.notches.length > i ? navSvc.notches[i].copies[0] : null }
+  }
   readonly property var demoServices: [mediaSvc, activitySvc, osdSvc, openSvc, resourcesSvc, resourcesOpenSvc,
-                                       timerSvc, pomodoroSvc, timerIdleSvc, timerDoneSvc, restSvc]
+                                       timerSvc, pomodoroSvc, timerIdleSvc, timerDoneSvc, restSvc, navSvc]
 
   // Demo values instead of this machine's: memory short, the rest fine.
   function demoResources(m) {
@@ -199,6 +205,17 @@ ShellRoot {
       agentsSideSvc.moduleById("codex").attention = true
       agentsTabsSvc.open()
       agentsStackSvc.open()
+      navSvc.setConfigValue("notches", [{ id: "Main", modules: ["media"] }, { id: "Computer", modules: ["resources"] }])
+      navTimer.start()
+    }
+  }
+  // Once navSvc's notches and modules are up.
+  Timer {
+    id: navTimer
+    interval: 300
+    onTriggered: {
+      root.demoResources(navSvc.moduleById("resources"))
+      navSvc.navigate()
     }
   }
 
@@ -409,6 +426,8 @@ ShellRoot {
       JoinedScreen { caption: "timer, an empty notch and resources, joined" }
       JoinedScreen { services: [timerSvc, timerDoneSvc, resourcesSvc]; caption: "the middle one peeking pushes its row aside" }
       CornerScreen { caption: "a corner shared by two edges" }
+      MockScreen { svc: navSvc; copy: navSvc.navNotch(0); caption: "navigating, the notch selected" }
+      MockScreen { svc: navSvc; copy: navSvc.navNotch(1); caption: "navigating, another notch" }
     }
   }
 

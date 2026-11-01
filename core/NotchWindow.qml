@@ -63,9 +63,9 @@ Scope {
                                                 root.barHeight, root.barVisible)
 
   // Over a fullscreen app, or with no screen on an allowed workspace, only
-  // peeks and the open notch show.
+  // peeks and the open notch show; while navigating, every notch does.
   readonly property bool hidden: (root.fullscreenOnScreen || root.offWorkspace)
-    && (root.mode === "rest" || root.mode === "compact")
+    && (root.mode === "rest" || root.mode === "compact") && !(root.copy && root.copy.navShown)
   // Also hidden while another notch on its edge is open over it, or a
   // standalone card shows over it (`covered`).
   readonly property bool concealed: root.hidden || (root.covered && !root.cardOpen)

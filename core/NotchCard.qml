@@ -35,10 +35,10 @@ Item {
   readonly property bool hovered: hover.hovered
   HoverHandler { id: hover }
 
-  // Escape closes it. Keys reach it while its window has the keyboard
-  // (pinned open on a module you type into): from a field inside a view,
-  // which leaves Escape alone, or the card itself, which holds the focus
-  // otherwise.
+  // Escape and Ctrl+Escape close it. Keys reach it while its window has the
+  // keyboard (pinned open): from a field inside a view, which leaves Escape
+  // alone, or the card itself, which holds the focus otherwise. A terminal
+  // keeps Escape and lets Ctrl+Escape out (Terminal.isLeaveKey).
   focus: true
   Keys.onEscapePressed: if (card.notch) card.notch.close()
   // How each end of the card along the edge meets what is beside it
@@ -487,11 +487,85 @@ Item {
     // Hairline on the open sides only, so the notch reads against dark
     // windows without drawing a seam where it meets the edge, the screen's
     // side or a neighbor.
+    // While navigating, in the accent, the selected notch's thicker.
     ShapePath {
       fillColor: "transparent"
-      strokeColor: card.roomy || card.stretched ? Theme.line : "transparent"
-      strokeWidth: 1
+      strokeColor: card.navShown ? Theme.accent : card.roomy || card.stretched ? Theme.line : "transparent"
+      strokeWidth: card.navSelected ? 2 : 1
       PathSvg { path: outline.paths.stroke }
+    }
+  }
+
+  // ------------------------------------------------------------ navigation
+  // While navigating (NotchService.navigating), a small label at the
+  // notch's top right, outside it: its number and name, the selected one's
+  // in the accent with the keys under it. Kept on screen.
+  readonly property bool navShown: !!card.notch && !!card.notch.navShown
+  readonly property bool navSelected: card.navShown && !!card.notch.navSelected
+  readonly property int navNumber: card.navShown ? Number(card.notch.navNumber) || 0 : 0
+  readonly property string navName: card.navShown ? String(card.notch.navName || "") : ""
+  readonly property bool navTabs: card.navSelected && (card.notch.tabModules || []).length > 1
+  readonly property int navCount: card.navSelected ? Number(card.notch.navCount) || 0 : 0
+  readonly property string navKeysHint: [
+    card.navCount > 1 ? "1-" + Math.min(9, card.navCount) + " ←→" : "",
+    card.navTabs ? "Tab" : "", "Enter", "Esc"
+  ].filter(function(s) { return s !== "" }).join("  ")
+  Rectangle {
+    id: navLabel
+    visible: card.navShown
+    readonly property real gap: Theme.space(6)
+    width: navText.implicitWidth + Theme.space(12)
+    height: navText.implicitHeight + Theme.space(6)
+    radius: Theme.radiusSmall
+    color: Theme.background
+    border.color: card.navSelected ? Theme.accent : Theme.line
+    border.width: 1
+    // Right of the card past its shoulder, at its top, or left of it where
+    // the right has no room; on the right edge, left of it, the open side.
+    // Over the card's content if neither fits.
+    z: 1
+    readonly property real roomX: card.parent ? card.parent.width : 0
+    readonly property real roomY: card.parent ? card.parent.height : 0
+    readonly property real past: navLabel.gap + (card.vertical ? 0 : card.shoulder)
+    readonly property real rightX: card.width + navLabel.past
+    readonly property real leftX: -navLabel.past - navLabel.width
+    readonly property real wishX: card.edge === "right" ? navLabel.leftX
+      : card.edge === "left" || navLabel.roomX <= 0 || card.x + navLabel.rightX + navLabel.width <= navLabel.roomX
+        ? navLabel.rightX : card.x + navLabel.leftX >= 0 ? navLabel.leftX : navLabel.rightX
+    readonly property real wishY: card.edge === "top" ? navLabel.gap : 0
+    x: navLabel.roomX > 0 ? Math.max(-card.x, Math.min(navLabel.wishX, navLabel.roomX - card.x - navLabel.width)) : navLabel.wishX
+    y: navLabel.roomY > 0 ? Math.max(-card.y, Math.min(navLabel.wishY, navLabel.roomY - card.y - navLabel.height)) : navLabel.wishY
+    Column {
+      id: navText
+      anchors.centerIn: parent
+      spacing: Theme.space(1)
+      Row {
+        spacing: Theme.space(5)
+        Text {
+          visible: card.navNumber > 0
+          textFormat: Text.PlainText
+          text: String(card.navNumber)
+          color: Theme.accent
+          font.family: Theme.font.family
+          font.pixelSize: Theme.font.caption
+          font.bold: true
+        }
+        Text {
+          textFormat: Text.PlainText
+          text: card.navName
+          color: card.navSelected ? Theme.foreground : Theme.muted
+          font.family: Theme.font.family
+          font.pixelSize: Theme.font.caption
+        }
+      }
+      Text {
+        visible: card.navSelected
+        textFormat: Text.PlainText
+        text: card.navKeysHint
+        color: Theme.faint
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.caption - 1
+      }
     }
   }
 

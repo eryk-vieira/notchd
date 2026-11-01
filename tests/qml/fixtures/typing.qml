@@ -7,7 +7,6 @@ NotchModule {
   id: m
   title: "Typing"
   active: true
-  wantsKeyboard: true
   expandedWidth: 520
   expanded: Component {
     TextInput {

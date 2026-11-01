@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import "State.js" as State
 import "Position.js" as Position
+import "Navigate.js" as Navigate
 
 // One notch of the config's `notches` (or the top-level one): its modules,
 // where it hangs and how. NotchService makes one per notch; it shows as
@@ -174,6 +175,15 @@ Item {
   function dismissPeek(module) {
     for (var i = 0; i < notch.copies.length; i++) notch.copies[i].dismissPeek(module)
   }
+
+  // ------------------------------------------------------------ navigation
+  // Its place among the config's notches (-1 for the visitor and standalone
+  // notches), the number it shows while navigating (1 to 9, else 0) and
+  // whether it is the one selected (NotchService.navSelected).
+  readonly property int navIndex: notch.svc && !notch.guest ? notch.svc.notches.indexOf(notch) : -1
+  readonly property int navNumber: Navigate.number(notch.navIndex)
+  readonly property bool navSelected: !!notch.svc && notch.svc.navigating && notch.navIndex >= 0
+    && notch.svc.navSelected === notch.navIndex
 
   // ------------------------------------------------------------------ open
   // Opened for a module (`module`, optional), on that module's tab.

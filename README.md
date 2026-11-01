@@ -72,6 +72,24 @@ To write your own, see [docs/modules.md](docs/modules.md).
 - Notches that share an edge reserve the deepest of them (`reserveSpace`), not the sum.
 - `id` names a notch for IPC (`openNotch jobs`); without one the first is `main` and the others `notch-2`, `notch-3`...
 
+### Navigating from the keyboard
+
+`navigate` over [IPC](docs/ipc.md#navigation), bound to a key, highlights every notch, hidden ones included, with a small label at its top right: its number (config order) and name. The selected one opens as a preview, the keys listed in its label, and the others show closed, even one pinned open:
+
+| Key | |
+|---|---|
+| `1`–`9` | select that notch |
+| `←` `→`, `h` `l` | the notch before or after |
+| `Tab`, `Shift+Tab` | the selected notch's next or previous tab |
+| `Enter` | open it, pinned, on that tab (an agent gets the keyboard); the other notches close |
+| `Esc`, `Ctrl+Esc`, or the shortcut again | leave, everything as it was |
+
+A notch pinned open, this way, by a click or a shortcut, takes the keyboard: `Esc` or `Ctrl+Esc` closes it (in an agent's terminal, `Ctrl+Esc`).
+
+```lua
+o.bind("SUPER + N", "Navigate notches", "omarchy-shell eryk.notchd navigate")   -- ~/.config/hypr/bindings.lua
+```
+
 In the settings window, pick the notch to set up at the top of the Notches page, which has everything that notch has of its own (modules, position, workspaces); Add notch puts a new one on a free edge, and removing all but one puts its keys back at the top level.
 
 ## Config

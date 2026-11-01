@@ -4,6 +4,7 @@ import Quickshell.Io
 import "settings"
 import "Config.js" as Config
 import "State.js" as State
+import "Navigate.js" as Navigate
 import "settings/Settings.js" as Settings
 
 // The notches' source of truth: config, modules, the notches (Notch, one per
@@ -580,6 +581,80 @@ Item {
   function close() { for (var i = 0; i < svc.notches.length; i++) svc.notches[i].close() }
   function toggle() { if (svc.notches.length > 0) svc.notches[0].toggle() }
 
+  // ------------------------------------------------------------ navigation
+  // A shortcut (IPC `navigate`) highlights every notch with its number and
+  // the keyboard picks one (Navigate.js): its copy on the focused screen
+  // opens as a preview, Tab walks its tabs, Enter pins it open (the others
+  // close) and Escape leaves everything as it was. NotchSurface's
+  // navigation window holds the keyboard meanwhile and hands keys to
+  // navKey().
+  property bool navigating: false
+  // The selected notch, by index in `notches`.
+  property int navSelected: -1
+  // Each copy's tab as navigation started, given back on Escape.
+  property var navTabs: []
+  readonly property var navNotch: svc.navigating && svc.navSelected >= 0 && svc.navSelected < svc.notches.length
+    ? svc.notches[svc.navSelected] : null
+
+  function startNavigation() {
+    if (svc.notches.length === 0) return "no notches"
+    var focused = svc.compositor ? svc.compositor.focusedScreenName : ""
+    svc.navSelected = Navigate.start(svc.notches.map(function(n) {
+      return {
+        open: n.copies.some(function(c) { return c.isOpen }),
+        screens: n.copies.map(function(c) { return c.screenName })
+      }
+    }), focused)
+    var tabs = []
+    for (var i = 0; i < svc.notches.length; i++)
+      for (var j = 0; j < svc.notches[i].copies.length; j++)
+        tabs.push({ copy: svc.notches[i].copies[j], tab: svc.notches[i].copies[j].tab })
+    svc.navTabs = tabs
+    svc.navigating = true
+    return "ok"
+  }
+  // Just after navigation ends: as its window goes, the compositor hands
+  // focus back to the window you were in, taking it from an agent Enter
+  // just opened; that agent asks again instead of closing
+  // (State.keyboardChange).
+  property bool navSettling: false
+  Timer { id: navSettleTimer; interval: 600; onTriggered: svc.navSettling = false }
+  // `restore`: give each copy back the tab it had (Escape).
+  function endNavigation(restore) {
+    if (!svc.navigating) return
+    svc.navSettling = true
+    navSettleTimer.restart()
+    svc.navigating = false
+    if (restore)
+      for (var i = 0; i < svc.navTabs.length; i++)
+        if (svc.navTabs[i].copy) svc.navTabs[i].copy.showTab(svc.navTabs[i].tab)
+    svc.navTabs = []
+  }
+  function navigate() {
+    if (svc.navigating) { svc.endNavigation(true); return "ok" }
+    return svc.startNavigation()
+  }
+  // The selected notch's copy that previews.
+  function navCopy() { return svc.navNotch ? svc.navNotch.focusedCopy() : null }
+  // A key (Navigate.keyName) while navigating.
+  function navKey(key) {
+    if (!svc.navigating) return
+    var copy = svc.navCopy()
+    var tabs = copy ? copy.tabModules.map(function(m) { return m.moduleId }) : []
+    var shown = copy && copy.shownModules.length > 0 ? copy.shownModules[0].moduleId : ""
+    var next = Navigate.step({ selected: svc.navSelected, count: svc.notches.length, tabs: tabs, tab: shown }, key)
+    if (next.action === "leave") { svc.endNavigation(true); return }
+    if (next.action === "open") {
+      var notch = svc.navNotch
+      svc.endNavigation(false)
+      for (var i = 0; i < svc.notches.length; i++) if (svc.notches[i] !== notch) svc.notches[i].close()
+      if (notch) notch.open()
+      return
+    }
+    svc.navSelected = next.selected
+    if (next.tab !== "" && next.tab !== shown && copy) copy.showTab(next.tab)
+  }
+
   // --------------------------------------------------------------- modules
   property var modules: []
   // Modules load once the config is read (or known to be missing), so they
@@ -636,6 +711,9 @@ Item {
     function openNotch(id: string): string { var n = svc.ipcNotch(id); if (!n) return "no notch " + id; n.open(); return "ok" }
     function closeNotch(id: string): string { var n = svc.ipcNotch(id); if (!n) return "no notch " + id; n.close(); return "ok" }
     function settings(): void { svc.settingsOpen = !svc.settingsOpen }
+    // Navigation: every notch highlighted and numbered, the keyboard picks
+    // one; again leaves it.
+    function navigate(): string { return svc.navigate() }
     // Every notch back to the middle of the top edge, following focus, after
     // a drag that went astray.
     function recenter(): void {
@@ -675,6 +753,8 @@ Item {
     function codex(command: string): string { return svc.agentCommand("codex", command) }
     function state(): string {
       return JSON.stringify({
+        // The selected notch while navigating, else null.
+        navigation: svc.navNotch ? { notch: svc.navNotch.notchId } : null,
         notches: svc.notches.map(function(n) {
           return {
             id: n.notchId,

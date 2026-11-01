@@ -94,7 +94,7 @@ ShellRoot {
       { name: "a timer counts down closed, peeks when it ends and goes back to rest", run: root.timerRunsAndEnds },
       { name: "timer commands: pomodoro phases, pause, errors and its settings", run: root.timerCommands },
       { name: "a module you type into takes the keyboard only while pinned open", run: root.keyboardOnlyWhilePinned },
-      { name: "Escape in a field inside the notch closes it", run: root.escapeCloses },
+      { name: "Escape in a field inside the notch closes it, and Ctrl+Escape on the notch", run: root.escapeCloses },
       { name: "a module sets the width of its expanded view", run: root.expandedWidthFromModule },
       { name: "a notch in the list dropped on the top edge stays there", run: root.dropOnTopStays },
       { name: "corners: a side notch's place never feeds back into the insets it takes", run: root.cornersNoLoop },
@@ -112,7 +112,12 @@ ShellRoot {
       { name: "with tabs the open notch shows one module, and opening for a module picks its tab", run: root.tabsShowOne },
       { name: "with tabs the closed notch shows every module side by side", run: root.tabsCompactAll },
       { name: "news missed while the notch was open peeks once as it closes", run: root.missedPeekOnClose },
-      { name: "a timer that isn't running shows its icon in the closed notch, unless idleIcons is off", run: root.idleTimerIcon }
+      { name: "a timer that isn't running shows its icon in the closed notch, unless idleIcons is off", run: root.idleTimerIcon },
+      { name: "navigation numbers every notch, previews the selected one and Escape leaves it as it was", run: root.navigationPreview },
+      { name: "navigation: Enter pins the selected notch and closes the others; a click ends it too", run: root.navigationOpen },
+      { name: "navigation: Tab walks the selected notch's tabs, Escape gives its tab back", run: root.navigationTabs },
+      { name: "navigation takes the keyboard from an open agent without closing it, and gives it back", run: root.navigationKeepsAgent },
+      { name: "a notch open on the screen without focus keeps the keyboard", run: root.keyboardOnOtherScreen }
     ]
     Qt.callLater(root.next)
   }
@@ -1020,6 +1025,149 @@ ShellRoot {
     root.done()
   }
 
+  // ---------------------------------------------------------- navigation
+  // Navigation (IPC `navigate`, Navigate.js): every notch of the config
+  // numbered, the selected one's copy on the focused screen open as a
+  // preview, the keys driving it through navKey().
+  function navigationPreview() {
+    var main = null, side = null
+    root.steps([
+      [0, function() { twoScreens.focusedScreenName = "B"; multi.replaceConfig(root.twoNotches) }],
+      [300, function() {
+        main = multi.notchById("main")
+        side = multi.notchById("side")
+        if (!root.check(!!main && !!side, "the two notches did not load")) return
+        root.check(multi.navigate() === "ok" && multi.navigating, "navigate did not start navigation")
+        root.check(main.copyOn("B").preview && main.copyOn("B").mode === "expanded",
+                   "the first notch on the focused screen does not preview: " + main.copyOn("B").mode)
+        root.check(!main.copyOn("B").pinned, "the preview pinned the notch")
+        root.check(main.copyOn("A").mode !== "expanded", "the copy on the other screen opened too")
+        root.check(main.copyOn("A").navShown && main.copyOn("A").navNumber === 1, "main is not numbered 1")
+        root.check(side.copies[0].navShown && side.copies[0].navNumber === 2, "side is not numbered 2")
+        root.check(!multi.visitor.copies.some(function(c) { return c.navShown }), "the visitor takes part in navigation")
+        multi.navKey("next")
+        root.check(multi.navSelected === 1 && side.copies[0].mode === "expanded", "next did not move to the second notch")
+        root.check(main.copyOn("B").mode !== "expanded", "the first notch stayed open after moving on")
+        multi.navKey("next")
+        root.check(multi.navSelected === 0, "next did not wrap around")
+        multi.navKey("2")
+        root.check(multi.navSelected === 1, "2 did not select the second notch")
+        multi.navKey("leave")
+        root.check(!multi.navigating, "Escape did not end navigation")
+        root.check(!side.copies[0].isOpen && !main.copyOn("B").isOpen, "Escape left a notch open")
+        root.check(!side.copies[0].navShown, "the highlight stayed after Escape")
+        multi.navigate()
+        multi.navigate()
+        root.check(!multi.navigating, "navigate again did not end navigation")
+      }]
+    ], function() { root.done() })
+  }
+
+  function navigationOpen() {
+    var main = multi.notchById("main")
+    var side = multi.notchById("side")
+    if (!root.check(!!main && !!side, "the two notches did not load")) { root.done(); return }
+    main.open()
+    root.check(main.copyOn("B").pinned, "main did not open (test setup)")
+    multi.navigate()
+    root.check(multi.navSelected === 0, "navigation did not start on the open notch")
+    multi.navKey("next")
+    root.check(main.copyOn("B").mode !== "expanded", "the pinned notch stayed open with another one selected")
+    multi.navKey("previous")
+    multi.navKey("leave")
+    root.check(main.copyOn("B").pinned && main.copyOn("B").mode === "expanded", "Escape did not open the pinned notch again")
+    multi.navigate()
+    multi.navKey("next")
+    multi.navKey("open")
+    root.check(!multi.navigating, "Enter did not end navigation")
+    root.check(side.copies[0].pinned, "Enter did not pin the selected notch")
+    root.check(!main.copyOn("B").pinned, "Enter left the other notch open")
+    side.close()
+    multi.navigate()
+    main.copyOn("B").togglePinned("")
+    root.check(!multi.navigating, "a click that pinned a notch left navigation on")
+    main.close()
+    root.done()
+  }
+
+  function navigationTabs() {
+    var copy = tabsSvc.notches.length > 0 ? tabsSvc.notches[0].copies[0] : null
+    if (!root.check(!!copy && copy.tabModules.length === 2, "the notch with two tabs did not load")) { root.done(); return }
+    var first = copy.shownModules[0].moduleId
+    tabsSvc.navigate()
+    tabsSvc.navKey("nextTab")
+    root.check(copy.shownModules[0].moduleId !== first, "Tab did not show the next tab")
+    tabsSvc.navKey("previousTab")
+    root.check(copy.shownModules[0].moduleId === first, "Shift+Tab did not go back")
+    tabsSvc.navKey("nextTab")
+    tabsSvc.navKey("leave")
+    root.check(copy.shownModules[0].moduleId === first, "Escape did not give the notch its tab back")
+    tabsSvc.navigate()
+    tabsSvc.navKey("nextTab")
+    tabsSvc.navKey("open")
+    root.check(copy.pinned && copy.shownModules[0].moduleId !== first, "Enter did not open on the tab picked")
+    copy.close()
+    copy.showTab("")
+    root.done()
+  }
+
+  // Bug guarded: navigation takes the keyboard from an agent pinned open;
+  // losing it that way closed the agent's notch, as a click away does.
+  // Bug: a notch pinned open on the screen without focus closed at once:
+  // on demand, Hyprland gave its keyboard back to the focused screen. It
+  // stays exclusive there, on demand once its screen has focus.
+  function keyboardOnOtherScreen() {
+    var side = multi.notchById("side")
+    if (!root.check(!!side, "the side notch did not load")) { root.done(); return }
+    var copy = side.copies[0]
+    multi.setConfigValue("notches.1.position.screen", "A")
+    twoScreens.focusedScreenName = "B"
+    root.steps([[200, function() {
+      root.check(copy.screenName === "A", "the side notch is on " + copy.screenName + ", not A (test setup)")
+      side.open()
+      copy.windowKeyboard(true)
+      root.check(copy.pinned && copy.keyboardFocus === "exclusive", "held on the screen without focus, it asks for " + copy.keyboardFocus)
+      twoScreens.focusedScreenName = "A"
+      root.check(copy.keyboardFocus === "ondemand", "its screen focused, it asks for " + copy.keyboardFocus)
+    }]], function() {
+      side.close()
+      twoScreens.focusedScreenName = "B"
+      multi.setConfigValue("notches.1.position.screen", undefined)
+      root.done()
+    })
+  }
+
+  function navigationKeepsAgent() {
+    var copy = typer.notches.length > 0 ? typer.notches[0].copies[0] : null
+    if (!root.check(!!copy, "the typing notch did not load")) { root.done(); return }
+    copy.open()
+    copy.windowKeyboard(true)
+    root.check(copy.keyboardFocus === "ondemand", "pinned, holding the keyboard, it asks for " + copy.keyboardFocus)
+    typer.navigate()
+    root.check(copy.keyboardFocus === "none", "while navigating, the notch asks for " + copy.keyboardFocus)
+    root.check(copy.mode === "expanded", "selected, the open agent shows " + copy.mode)
+    copy.windowKeyboard(false)
+    root.check(copy.pinned, "losing the keyboard to navigation closed the notch")
+    typer.navKey("leave")
+    root.check(copy.pinned && copy.keyboardFocus === "exclusive", "after Escape it asks for " + copy.keyboardFocus)
+    copy.close()
+    // Enter: it takes the keyboard, then the window you were in takes it
+    // back as navigation's window goes. It asks again, still open.
+    typer.navigate()
+    typer.navKey("open")
+    copy.windowKeyboard(true)
+    copy.windowKeyboard(false)
+    root.check(copy.pinned, "losing the keyboard as navigation ended closed the agent")
+    root.check(copy.keyboardFocus === "exclusive", "it did not ask for the keyboard again: " + copy.keyboardFocus)
+    root.steps([[800, function() {}]], function() {
+      // Later on, a window taking it closes the notch, as before.
+      copy.windowKeyboard(true)
+      copy.windowKeyboard(false)
+      root.check(!copy.pinned, "settled, losing the keyboard to a window left the notch open")
+      root.done()
+    })
+  }
+
   // ------------------------------------------------------------ keyboard
   // A notch window takes the keyboard (layer-shell Exclusive) only while
   // pinned open on a module you type into: hover alone must never take it
@@ -1107,14 +1255,19 @@ ShellRoot {
     TestCase { id: keys; when: false }
   }
 
+  // Ctrl+Escape closes it too, as on any notch (a pinned one has the
+  // keyboard: State.wantsKeyboard).
   function escapeCloses() {
     root.steps([[500, function() {
       if (!root.check(!!escapeModule.field, "the field did not load")) return
       escapeModule.field.forceActiveFocus()
       root.check(escapeModule.field.activeFocus, "the field did not take focus (test setup)")
       keys.keyClick(Qt.Key_Escape)
+    }], [50, function() {
+      escapeCard.forceActiveFocus()
+      keys.keyClick(Qt.Key_Escape, Qt.ControlModifier)
     }], [50, function() {}]], function() {
-      root.check(escapeSvc.closes === 1, "Escape closed it " + escapeSvc.closes + " times")
+      root.check(escapeSvc.closes === 2, "Escape and Ctrl+Escape closed it " + escapeSvc.closes + " times, not twice")
       root.done()
     })
   }
@@ -1652,8 +1805,8 @@ ShellRoot {
 
   // With the notch's `tabs`, the open notch shows one module at a time:
   // the first, or the one whose tab is picked; a module that opens the notch
-  // (a shortcut, IPC: openNotch) picks its own. The keyboard follows what
-  // shows: the typing module's tab not shown, the window doesn't take it.
+  // (a shortcut, IPC: openNotch) picks its own. Pinned, the window takes
+  // the keyboard whichever tab shows.
   function tabsShowOne() {
     var copy = tallSvc.notches.length > 0 ? tallSvc.notches[0].copies[0] : null
     var typing = tallSvc.moduleById("typing")
@@ -1669,7 +1822,7 @@ ShellRoot {
     tall.openNotch()
     root.check(copy.pinned, "opening for a module did not open the notch")
     root.check(copy.shownModules.length === 1 && copy.shownModules[0] === tall, "opening for a module did not pick its tab")
-    root.check(copy.keyboardFocus === "none", "the typing module's tab hidden, it takes " + copy.keyboardFocus)
+    root.check(copy.keyboardFocus === "exclusive", "pinned on another tab, it takes " + copy.keyboardFocus)
     copy.showTab("typing")
     root.check(copy.keyboardFocus === "exclusive", "on the typing module's tab, pinned, it takes " + copy.keyboardFocus)
     copy.close()

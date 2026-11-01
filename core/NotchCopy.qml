@@ -107,7 +107,10 @@ Item {
     }
   }
   onHoveredChanged: if (hovered && copy.peekModule && !copy.peekModule.urgentPeek) copy.dismissPeek()
-  onPinnedChanged: if (pinned) copy.dismissPeek()
+  onPinnedChanged: if (pinned) {
+    copy.dismissPeek()
+    if (copy.navigating && copy.svc) copy.svc.endNavigation(false)
+  }
   onModeChanged: if (!copy.isOpen) copy.openScreen = ""
 
   Timer { id: openTimer; interval: copy.svc ? copy.svc.hoverOpenDelay : 0; onTriggered: if (!copy.dragging) copy.hovered = true }
@@ -123,6 +126,22 @@ Item {
     copy.hovered = false
   }
 
+  // ------------------------------------------------------------ navigation
+  // Navigation (NotchService.navigating, Navigate.js) highlights every
+  // notch of the config with its number; the selected one's copy on the
+  // focused screen opens as a preview (`preview`), not pinned. Guests (the
+  // visitor, standalone notches) take no part.
+  readonly property bool navigating: !!copy.svc && copy.svc.navigating
+  readonly property bool navShown: copy.navigating && !copy.guest
+  readonly property bool navSelected: copy.navShown && !!copy.owner && copy.owner.navSelected
+  readonly property int navNumber: copy.owner ? copy.owner.navNumber : 0
+  readonly property string navName: copy.owner ? copy.owner.notchId : ""
+  readonly property int navCount: copy.svc ? copy.svc.notches.length : 0
+  readonly property bool preview: copy.navSelected && copy.owner.focusedCopy() === copy
+  // Pinned some other way while navigating (a click, a shortcut), it is the
+  // notch you went to, so navigation ends (onPinnedChanged); Enter ends it
+  // first.
+
   function open() { copy.pinned = true }
   function close() { copy.pinned = false; copy.hovered = false }
   function togglePinned(screenName) {
@@ -133,22 +152,29 @@ Item {
   // ------------------------------------------------------------------ mode
   readonly property string mode: State.mode({ peekModule: copy.peekModule, pinned: copy.pinned, dragging: copy.dragging,
                                              hovered: copy.hovered, compactModule: copy.compactModules.length > 0 ? copy.compactModules[0] : null,
-                                             guest: copy.guest })
+                                             guest: copy.guest, navigating: copy.navShown, preview: copy.preview })
   readonly property bool isOpen: copy.mode === "peek" || copy.mode === "expanded"
-  // The keyboard its window takes (State.keyboardFocus), while pinned open
-  // on a module you type into: "exclusive" until the window has it, then
-  // "ondemand", so a focus shortcut can move to a window; else "none".
-  readonly property var keyboardState: ({ pinned: copy.pinned, mode: copy.mode, modules: copy.shownModules })
+  // The keyboard its window takes (State.keyboardFocus), while pinned open:
+  // "exclusive" until the window has it, then "ondemand", so a focus
+  // shortcut can move to a window; else "none".
+  // While navigating, the navigation has the keyboard; leaving it, a
+  // pinned copy asks for it again, exclusively (`keyboardHeld` cleared).
+  readonly property var keyboardState: ({ pinned: copy.pinned, mode: copy.mode, modules: copy.shownModules,
+                                          navigating: copy.navigating, settling: !!copy.svc && copy.svc.navSettling,
+                                          elsewhere: copy.focusedScreenName !== "" && copy.screenName !== copy.focusedScreenName })
   readonly property bool wantsKeyboard: State.wantsKeyboard(copy.keyboardState)
   // Its window got the keyboard since the copy last wanted it.
   property bool keyboardHeld: false
   onWantsKeyboardChanged: if (!copy.wantsKeyboard) copy.keyboardHeld = false
+  onNavigatingChanged: copy.keyboardHeld = false
   readonly property string keyboardFocus: State.keyboardFocus(Object.assign({ held: copy.keyboardHeld }, copy.keyboardState))
   // Its window gained or lost the keyboard (State.keyboardChange): lost to
-  // a window while it wanted it, the notch closes, as a click away does.
+  // a window while it wanted it, the notch closes, as a click away does;
+  // lost as navigation's window goes, it asks again.
   function windowKeyboard(active) {
     var change = State.keyboardChange(Object.assign({ active: active, held: copy.keyboardHeld }, copy.keyboardState))
     if (change === "hold") copy.keyboardHeld = true
+    else if (change === "retake") copy.keyboardHeld = false
     else if (change === "close") copy.close()
   }
 

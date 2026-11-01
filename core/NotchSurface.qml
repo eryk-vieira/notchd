@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Wayland
 import "State.js" as State
 import "Position.js" as Position
+import "Navigate.js" as Navigate
 
 // Puts the notches on screen: a NotchWindow for every copy of every notch
 // (NotchService.copies), which places it and routes its pointer, plus the
@@ -142,6 +143,57 @@ Item {
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
       // Draws nothing and takes no input.
       mask: Region {}
+    }
+  }
+
+  // ------------------------------------------------------------ navigation
+  // While navigating (NotchService.navigating), a window on the focused
+  // screen holds the keyboard, exclusively, and hands each key to the
+  // service (Navigate.keyName, NotchService.navKey). It draws nothing and
+  // takes no pointer: the notches show the highlight. A window taking the
+  // keyboard from it ends navigation, as Escape does.
+  LazyLoader {
+    id: navLoader
+    readonly property var owner: root.svc
+    active: !!root.svc && root.svc.navigating
+    PanelWindow {
+      id: navWindow
+      readonly property string focusedName: navLoader.owner && navLoader.owner.compositor
+        ? navLoader.owner.compositor.focusedScreenName : ""
+      screen: {
+        var screens = Quickshell.screens || []
+        for (var i = 0; i < screens.length; i++) if (screens[i].name === navWindow.focusedName) return screens[i]
+        return screens.length > 0 ? screens[0] : null
+      }
+      anchors { top: true; left: true }
+      implicitWidth: 1
+      implicitHeight: 1
+      color: "transparent"
+      exclusionMode: ExclusionMode.Ignore
+      WlrLayershell.namespace: root.layerNamespace + "-navigate"
+      WlrLayershell.layer: WlrLayer.Overlay
+      WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+      mask: Region {}
+
+      property bool held: false
+      Item {
+        anchors.fill: parent
+        focus: true
+        readonly property bool active: Window.active
+        onActiveChanged: {
+          if (active) navWindow.held = true
+          else if (navWindow.held && navLoader.owner) navLoader.owner.endNavigation(true)
+        }
+        Keys.onPressed: function(event) {
+          var key = Navigate.keyName(event.key, event.modifiers)
+          var service = navLoader.owner
+          if (key === "" || !service) return
+          event.accepted = true
+          // Later: Enter and Escape end navigation, which takes this window
+          // away under its own key handler.
+          Qt.callLater(function() { service.navKey(key) })
+        }
+      }
     }
   }
 }
