@@ -147,6 +147,17 @@ test('resolve keeps the home screen by name', () => {
   assert.equal(Position.resolve({ screen: 'all' }).screen, 'all');
 });
 
+// Bug: a notch in `notches` dropped on the top edge was saved without
+// `edge` (top is the default), took the top-level position's "left" key by
+// key, and jumped back to the left side.
+test('configValue writes what differs from the inherited position, defaults included', () => {
+  const top = { edge: 'left', offset: 0.957, screen: 'DP-1' };
+  assert.deepEqual(plain(Position.configValue({ edge: 'top', offset: 0.508, screen: 'DP-1' }, top)), { edge: 'top', offset: 0.508 });
+  assert.deepEqual(plain(Position.configValue({ edge: 'top', offset: 0.5, screen: '' }, top)), { edge: 'top', offset: 0.5, screen: '' });
+  assert.equal(Position.configValue({ edge: 'left', offset: 0.957, screen: 'DP-1' }, top), undefined);
+  assert.deepEqual(plain(Position.configValue({ edge: 'right', offset: 0.957, screen: 'DP-1' }, top)), { edge: 'right' });
+});
+
 test('configValue keeps the home screen, even at top-center', () => {
   assert.deepEqual(plain(Position.configValue({ edge: 'top', offset: 0.5, screen: 'eDP-1' })), { screen: 'eDP-1' });
   assert.deepEqual(plain(Position.configValue({ edge: 'left', screen: 'DP-1' })), { edge: 'left', screen: 'DP-1' });

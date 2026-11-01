@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import "core"
 import "core/settings"
+import "core/Position.js" as Position
 
 // Behaviour tests that need the QML runtime: bindings, signals, animations.
 // Rules that are plain JS belong in the Node tests instead. Most cases here
@@ -95,7 +96,8 @@ ShellRoot {
       { name: "a module you type into takes the keyboard only while pinned open", run: root.keyboardOnlyWhilePinned },
       { name: "Escape in a field inside the notch closes it", run: root.escapeCloses },
       { name: "a module sets the width of its expanded view", run: root.expandedWidthFromModule },
-      { name: "claude: a question gets its answer from the process, and a new chat starts over", run: root.claudeChat }
+      { name: "claude: a question gets its answer from the process, and a new chat starts over", run: root.claudeChat },
+      { name: "a notch in the list dropped on the top edge stays there", run: root.dropOnTopStays }
     ]
     Qt.callLater(root.next)
   }
@@ -1138,5 +1140,33 @@ ShellRoot {
         m.newChat()
       }]
     ], function() { root.done() })
+  }
+
+  // ------------------------------------------------------------------ drop
+  // Bug: with the top-level position on the left, a notch in `notches`
+  // dropped on the top edge was saved without `edge` (top is the default),
+  // took "left" from the top level and jumped back. The drop saves what
+  // NotchWindow saves: Position.configValue(drop, notch.inheritedPosition).
+  NotchService {
+    id: dropSvc
+    ipcTarget: "notchd-qmltest-drop"
+    configPath: root.dir + "/drop.json"
+    compositor: workspace4
+    defaultModules: ["activities"]
+  }
+
+  function dropOnTopStays() {
+    dropSvc.replaceConfig({ position: { edge: "left", offset: 0.9, screen: "DP-1" },
+                            notches: [{}, { id: "side", modules: ["activities"] }] })
+    var side = dropSvc.notchById("side")
+    if (!root.check(!!side && side.edge === "left", "the second notch should start on the left")) { root.done(); return }
+    var drop = { edge: "top", offset: 0.5, screen: "DP-1" }
+    side.setValue("position", Position.configValue(drop, side.inheritedPosition))
+    root.check(side.edge === "top", "dropped on the top edge, it went to " + side.edge)
+    root.check(side.placement.offset === 0.5, "dropped in the middle, it is at " + side.placement.offset)
+    var main = dropSvc.notchById("main")
+    main.setValue("position", Position.configValue({ edge: "top", offset: 0.5, screen: "" }, main.inheritedPosition))
+    root.check(main.edge === "top" && main.placement.screen === "", "the first notch went to " + JSON.stringify(main.placement))
+    root.done()
   }
 }

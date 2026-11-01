@@ -294,7 +294,7 @@ Scope {
           var home = drop.screen && !notch.everyScreen ? root.screenNamed(drop.screen) : null
           if (home && root.compositor && notch.workspaces && !notch.showsOn(home))
             notch.setValue("workspaces", Config.withWorkspace(notch.workspaces, root.compositor.activeWorkspace(home)))
-          notch.setValue("position", Position.configValue(drop))
+          notch.setValue("position", Position.configValue(drop, notch.inheritedPosition))
         }
         root.dragPlacement = null
         root.dragScreen = ""

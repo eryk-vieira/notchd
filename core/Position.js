@@ -114,14 +114,19 @@ function dragTarget(s) {
   return { edge: edge, offset: Math.round(offset * 1000) / 1000 }
 }
 
-// A position as the config stores it: defaults left out, and undefined
-// (no key) for top-center on the focused screen.
-function configValue(position) {
+// A position as the config stores it: what it would get anyway left out,
+// and undefined (no key) when that is all of it. `inherited` is the
+// position it gets without a key of its own: a notch in `notches` takes the
+// top-level `position` key by key (Config.notches), so a key equal to the
+// default but not to that one must be written, or the notch goes back
+// there. Without `inherited`, the defaults: top-center on the focused screen.
+function configValue(position, inherited) {
   var p = resolve(position)
+  var base = resolve(inherited)
   var out = {}
-  if (p.edge !== DEFAULT_EDGE) out.edge = p.edge
-  if (p.offset !== DEFAULT_OFFSET) out.offset = p.offset
-  if (p.screen !== "") out.screen = p.screen
+  if (p.edge !== base.edge) out.edge = p.edge
+  if (p.offset !== base.offset) out.offset = p.offset
+  if (p.screen !== base.screen) out.screen = p.screen
   return Object.keys(out).length > 0 ? out : undefined
 }
 
