@@ -89,10 +89,12 @@ function modulePageId(moduleId) { return "modules/" + moduleId }
 
 // A module's JSON file (media.json next to media.qml): its `title`,
 // `settings` fields, whether it is `standalone` (no notch shows it; it has
-// a place of its own) and whether it is an `agent` (a coding agent in a
+// a place of its own), whether it is an `agent` (a coding agent in a
 // terminal: `"agent": { "command": ... }`, which brings the fields every
 // agent has, agentSettings; `"usage"` there names where its plan usage
-// comes from, core/Usage.js, as `usage`). Anything malformed is dropped, so a bad file
+// comes from, core/Usage.js, as `usage`) and whether it is `live` (a spoken
+// conversation with an agent: `"live": { "command": ... }`, which brings
+// liveSettings). Anything malformed is dropped, so a bad file
 // costs the module its page and nothing else; `error` says why.
 function parseModuleInfo(text) {
   var info = { title: "", settings: [] }
@@ -113,6 +115,15 @@ function parseModuleInfo(text) {
       inherited = agentSettings(agent, info.title)
     } else {
       info.error = "agent: needs a command"
+    }
+  }
+  var live = data.live
+  if (live !== undefined) {
+    if (live && typeof live === "object" && !Array.isArray(live) && typeof live.command === "string" && live.command.trim() !== "") {
+      info.live = true
+      inherited = liveSettings(live, info.title)
+    } else {
+      info.error = "live: needs a command"
     }
   }
   // A field of its own replaces an inherited one with the same key.
@@ -142,6 +153,33 @@ function agentSettings(agent, title) {
     if (typeof extra[f.key] === "string" && extra[f.key] !== "") f.help = f.help ? f.help + " " + extra[f.key] : extra[f.key]
   })
   return fields
+}
+
+// The voices a Codex realtime (v3) conversation speaks in; "" is Codex's choice.
+var LIVE_VOICES = ["juniper", "maple", "spruce", "ember", "vale", "breeze", "arbor", "sol", "cove",
+  "aube", "bubbie", "haetsal", "hanul", "himari", "leher", "miko", "neer", "porto", "rindo", "rio",
+  "rivage", "selva", "sonna", "tinta", "viola"]
+
+// The fields of a spoken conversation (LiveModule), from its file's
+// `live`: the agent's command (`live.command` its default), its folder,
+// the voice, what it may do there, then the avatar's. `title` names it.
+function liveSettings(live, title) {
+  var name = title || "the agent"
+  var next = "Applies to the next conversation."
+  return [
+    { key: "command", type: "string", label: "Command", "default": live.command.trim(),
+      help: "The command that runs Codex; notchd starts its server (app-server) with it. " + next },
+    { key: "directory", type: "string", label: "Folder", "default": "",
+      help: "Where " + name + " works when you ask it something; ~ is your home. Empty is notchd's own folder, notchd in your Documents folder. " + next },
+    { key: "voice", type: "choice", label: "Voice", "default": "", display: "chips",
+      options: [{ value: "", label: "Codex's" }].concat(LIVE_VOICES.map(function(v) {
+        return { value: v, label: v.charAt(0).toUpperCase() + v.slice(1) }
+      })),
+      help: "The voice it speaks in. " + next },
+    { key: "access", type: "choice", label: "May", "default": "read-only",
+      options: [{ value: "read-only", label: "Only read" }, { value: "workspace-write", label: "Change files in its folder" }],
+      help: "What " + name + " may do in its folder when you ask it to. It never asks for approval (no one would answer): what it may not do, it doesn't. " + next }
+  ].concat(avatarFields(name))
 }
 
 // The fields of a program in a terminal (TerminalModule), an agent or one
@@ -287,11 +325,11 @@ function moduleTitle(id, module) {
 }
 
 // Which list of the Modules page a module is in: "standalone" (a place of
-// its own), "agent" (a coding agent), "terminal" (one of the config's
-// `terminals`), else "notch".
+// its own), "agent" (a coding agent, or a conversation with one: `live`),
+// "terminal" (one of the config's `terminals`), else "notch".
 function moduleKind(m) {
   if (m && m.standalone) return "standalone"
-  if (m && m.agent) return "agent"
+  if (m && (m.agent || m.live)) return "agent"
   if (m && m.terminal) return "terminal"
   return "notch"
 }

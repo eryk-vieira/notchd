@@ -33,6 +33,9 @@ Item {
   property bool interactive: true
   // Talking: the mouth follows a speech rhythm (Avatar.speechPlan).
   property bool speaking: false
+  // A voice as it plays, in dB (a live conversation's): the mouth follows
+  // it instead (Avatar.voiceMouth). NaN for none.
+  property real voiceLevel: NaN
   // 0..1: busy (rows glitch, the lines run) and waiting for you (a pulse).
   property real work: 0
   property real attn: 0
@@ -115,6 +118,7 @@ Item {
   property real mouthOpen: 0
   property real mouthWide: 1
   property real talk: 0
+  property real voicePeak: -20
   property var ripples: []
   readonly property real startedAt: Date.now() / 1000
 
@@ -140,9 +144,14 @@ Item {
     view.lookX += (tx - view.lookX) * .06
     view.lookY += (ty - view.lookY) * .06
     if (t >= view.blinkAt) { view.blinkStart = t; view.blinkAt = t + Avatar.nextBlink(Math.random) }
-    // Speech: a new phrase after each breath while speaking.
+    // Speech: a real voice's level, else a new phrase after each breath
+    // while speaking.
     var level = { open: 0, wide: 1 }
-    if (view.speaking) {
+    if (!isNaN(view.voiceLevel)) {
+      level = Avatar.voiceMouth(view.voiceLevel, view.voicePeak)
+      view.voicePeak = level.peak
+      view.plan = null
+    } else if (view.speaking) {
       if (!view.plan || t >= view.plan.until) view.plan = Avatar.speechPlan(t, Math.random)
       level = Avatar.speechLevel(view.plan, t)
     } else if (view.plan && t >= view.plan.end) {
@@ -150,9 +159,11 @@ Item {
     } else if (view.plan) {
       level = Avatar.speechLevel(view.plan, t)
     }
-    view.mouthOpen += (level.open - view.mouthOpen) * (level.open > view.mouthOpen ? .32 : .22)
-    view.mouthWide += (level.wide - view.mouthWide) * .2
-    view.talk += ((view.speaking ? 1 : 0) - view.talk) * .08
+    var voice = !isNaN(view.voiceLevel)
+    view.mouthOpen += (level.open - view.mouthOpen) * (level.open > view.mouthOpen ? (voice ? .5 : .32) : (voice ? .3 : .22))
+    view.mouthWide += (level.wide - view.mouthWide) * (voice ? .25 : .2)
+    var talking = isNaN(view.voiceLevel) ? (view.speaking ? 1 : 0) : Math.min(1, level.open * 1.5)
+    view.talk += (talking - view.talk) * (isNaN(view.voiceLevel) ? .08 : .15)
   }
 
   readonly property var paletteRgb: Avatar.palette([Theme.accent.r, Theme.accent.g, Theme.accent.b], view.colors)

@@ -20,11 +20,13 @@ ColumnLayout {
   readonly property var value: row.stored === undefined ? row.field["default"] : row.stored
   readonly property bool wide: row.field.type === "modules" || row.field.type === "workspaces"
     || row.field.type === "notches" || row.field.type === "moduleCatalog"
-    || (row.field.type === "choice" && row.field.display === "cards") || row.field.type === "avatar"
+    || (row.field.type === "choice" && (row.field.display === "cards" || row.field.display === "chips"))
+    || row.field.type === "avatar"
 
   readonly property Component control: {
     switch (row.field.type) {
-      case "choice": return row.field.display === "cards" ? cardsControl : segmentedControl
+      case "choice": return row.field.display === "cards" ? cardsControl
+                          : row.field.display === "chips" ? chipsControl : segmentedControl
       case "integer": return sliderControl
       case "number": return sliderControl
       case "boolean": return toggleControl
@@ -85,6 +87,10 @@ ColumnLayout {
   Component {
     id: cardsControl
     CardChoice { field: row.field; value: row.value; onEdited: function(v) { row.edit(v) } }
+  }
+  Component {
+    id: chipsControl
+    ChipChoice { field: row.field; value: row.value; onEdited: function(v) { row.edit(v) } }
   }
   Component {
     id: sliderControl

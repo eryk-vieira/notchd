@@ -215,6 +215,32 @@ test('an agent without a command is an error, not an agent', () => {
   }
 });
 
+test('a live module\'s file brings the conversation\'s fields, then the avatar\'s', () => {
+  const info = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'Codex Live', live: { command: ' codex ' } })));
+  assert.equal(info.live, true);
+  assert.equal(info.agent, undefined);
+  assert.deepEqual(info.settings.map((f) => f.key), ['command', 'directory', 'voice', 'access', 'avatar', 'avatarColors', 'avatarStyle', 'avatarCell']);
+  assert.equal(Settings.settingDefault(info.settings, 'command'), 'codex');
+  assert.equal(Settings.settingDefault(info.settings, 'access'), 'read-only');
+  // Codex's own voice by default, the others as chips.
+  const voice = info.settings.find((f) => f.key === 'voice');
+  assert.equal(voice.default, '');
+  assert.equal(voice.display, 'chips');
+  assert.equal(voice.options[0].value, '');
+  assert.ok(voice.options.some((o) => o.value === 'maple' && o.label === 'Maple'));
+  // Listed with the agents.
+  assert.equal(Settings.moduleKind({ live: true }), 'agent');
+  assert.deepEqual(plain(Settings.catalogPart([{ moduleId: 'codex-live', live: true }, { moduleId: 'media' }], 'agent').map((m) => m.moduleId)), ['codex-live']);
+});
+
+test('a live module without a command is an error', () => {
+  for (const live of [{}, { command: ' ' }, true, []]) {
+    const info = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'X', live })));
+    assert.equal(info.live, undefined, JSON.stringify(live));
+    assert.equal(info.error, 'live: needs a command');
+  }
+});
+
 test('parseModuleInfo keeps a title and well-formed fields, drops the rest', () => {
   assert.deepEqual(plain(Settings.parseModuleInfo('{ "title": "Timer", "settings": [{ "key": "a", "type": "boolean" }, 3, { "key": "b" }] }')),
     { title: 'Timer', settings: [{ key: 'a', type: 'boolean' }] });
@@ -264,10 +290,11 @@ test('every module JSON file is well-formed', () => {
     assert.equal(info.error, undefined, file);
     assert.ok(info.title, `${file}: no title`);
     const keys = Object.keys(JSON.parse(text));
-    assert.deepEqual(keys.filter((k) => !['title', 'settings', 'standalone', 'agent'].includes(k)), [], `${file}: unknown keys`);
+    assert.deepEqual(keys.filter((k) => !['title', 'settings', 'standalone', 'agent', 'live'].includes(k)), [], `${file}: unknown keys`);
     if (info.standalone)
       for (const f of info.settings) assert.ok(!['enabled', 'position'].includes(String(f.key).split('.')[0]), `${file}: ${f.key} is the standalone switch's or position's`);
-    const inherited = info.agent ? Settings.agentSettings(JSON.parse(text).agent, info.title).length : 0;
+    const inherited = info.agent ? Settings.agentSettings(JSON.parse(text).agent, info.title).length
+      : info.live ? Settings.liveSettings(JSON.parse(text).live, info.title).length : 0;
     assert.ok(info.settings.length >= Math.max(inherited, JSON.parse(text).settings?.length ?? 0), `${file}: a field was dropped`);
     for (const f of info.settings) {
       if (f.type === 'note') continue;

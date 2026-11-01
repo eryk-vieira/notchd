@@ -15,14 +15,14 @@ The window is generated from `NotchService.settingsSchema`: the core's fields, t
 | `section` | heading the field sits under, within its page; sections keep the order their first field appears in |
 | `default` | value shown while the key is absent; picking it removes the key |
 | `options` | `[{ value, label, preview }]`, for `choice` |
-| `display` | `"cards"` shows a `choice` as picture cards instead of segments; `"percent"` shows a 0..1 `number` as 0 to 100 % |
+| `display` | `"cards"` shows a `choice` as picture cards instead of segments, `"chips"` as chips that wrap under the label (a long list of short options); `"percent"` shows a 0..1 `number` as 0 to 100 % |
 | `min`, `max`, `step`, `unit` | for `integer` and `number` (a slider; a `number`'s step may be a fraction) |
 | `absolute` | in a module's fields: `key` is a config key as given, not under the module's id (a terminal's `terminals.<id>.command`) |
 | `required` | for `string`: emptying it is refused (marked, as a bad color is) instead of removing the key |
 
 | Type | Control |
 |---|---|
-| `choice` | `SegmentedControl`, or `CardChoice` with `display: "cards"` |
+| `choice` | `SegmentedControl`, `CardChoice` with `display: "cards"`, or `ChipChoice` with `display: "chips"` |
 | `integer`, `number` | `SliderControl` |
 | `boolean` | `Toggle` |
 | `string`, `color` | `TextControl` (a color adds a swatch and is validated) |

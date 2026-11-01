@@ -15,6 +15,7 @@ Working on notchd itself. For using it, see the [README](README.md); for the rul
 | `rsvg-convert` | `librsvg` | `make icons` |
 | Omarchy 4 | | the Omarchy host, `make validate`, `make restart` |
 | `qmltermwidget` (optional) | `qmltermwidget` | the `claude` and `codex` modules' terminal (`make deps`); without it their QML tests only check the message that asks for it |
+| GStreamer's WebRTC, python-gobject, libpulse (optional) | `gst-plugins-bad`, `gst-plugins-good`, `libnice`, `python-gobject`, `libpulse` | Codex Live (`make live-deps`). The QML tests use a fake bridge; `tests/codex_live_test.py` checks the echo canceller's branch where they are |
 | Python, NumPy, Pillow, ONNX Runtime, MediaPipe (optional) | `python-numpy`, `python-pillow`, `python-onnxruntime-cpu`, `python-mediapipe` (Omarchy repo) | making avatars (`make avatar-deps`; MediaPipe brings TensorFlow, ~1.5 GB). The tests use a fake pipeline and never need them |
 
 ## Layout
@@ -107,8 +108,8 @@ Run `make check` before every commit. It is everything below:
 
 | Target | What it does |
 |---|---|
-| `make test` | Node tests of `core/*.js` and `core/settings/*.js`; `tests/make_avatar_test.py`, the avatar pipeline with MediaPipe faked (skipped without NumPy and Pillow) |
-| `make lint` | `qmllint` over `shell.qml` and the core; fails on any warning. Also checks that each committed `.qsb` matches its shader and that `make-avatar.py` parses |
+| `make test` | Node tests of `core/*.js` and `core/settings/*.js`; `tests/make_avatar_test.py`, the avatar pipeline with MediaPipe faked (skipped without NumPy and Pillow); `tests/codex_live_test.py`, the live bridge without Codex |
+| `make lint` | `qmllint` over `shell.qml` and the core; fails on any warning. Also checks that each committed `.qsb` matches its shader and that `make-avatar.py` and `codex-live.py` parse |
 | `make validate` | `omarchy plugin validate .` |
 | `make visual` | renders the settings window and the notch on each edge (the real modules, the media one playing the demo player's track) offscreen into `build/visual/`; fails on any QML warning, so it also proves the core loads |
 
@@ -155,6 +156,12 @@ Objects and arrays built inside the vm have their own prototypes; compare them t
 ### Avatars
 
 The QML tests and visual scenarios never run the real pipeline: `NOTCHD_AVATAR_PIPELINE` points at `tests/qml/fixtures/bin/make-avatar`, which prints the same lines and copies `tests/qml/fixtures/avatar/` (a drawn head, no one's face, made with ImageMagick). A photo whose name has `noface` or `missing` fails as the real one does without a face or a package. `tests/make_avatar_test.py` covers the script itself without models: MediaPipe faked, the order of its steps (the depth goes first: ONNX Runtime loaded after python-mediapipe's TensorFlow aborts the process). To try the real one: `make avatar-deps`, then `python3 core/avatar/make-avatar.py --photo <photo> --out /tmp/avatar --models ~/.cache/notchd/models`. Never commit a real person's photo or avatar.
+
+### Codex Live
+
+The QML tests and visual scenarios never run the real bridge: `NOTCHD_LIVE_BRIDGE` points at `tests/qml/fixtures/bin/codex-live`, which prints the same lines (live, a question, an answer, a voice level) and waits for `{"stop": true}`; a `--codex` with `missing` in it fails as the real one does without its packages. `tests/codex_live_test.py` covers what the bridge makes of the server's messages, and builds the echo canceller's branch where GStreamer is.
+
+By hand, the bridge runs on its own and prints its lines: `python3 core/live/codex-live.py`, talk, Ctrl+C. `--mic <file.wav>` puts a recording in the microphone's place (begin it with ~12 s of silence, while it connects); `NOTCHD_LIVE_DEBUG=1` copies the log to stderr; `NOTCHD_LIVE_RECORD=<file.wav>` writes Codex's voice as it is decoded. To hear nothing while measuring what it plays, give it a sink of its own: `pactl load-module module-null-sink sink_name=notchd_test`, `PULSE_SINK=notchd_test`, record `notchd_test.monitor` with `parec`, and `pactl unload-module` it after. Bound every such run with `timeout -k`, and check nothing is left playing.
 
 ### App icon
 

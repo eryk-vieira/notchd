@@ -18,9 +18,11 @@ ln -s -- "$root/tests/qml/shell.qml" "$scratch/config/shell.qml"
 ln -s -- "$root/tests/qml/fixtures" "$scratch/config/fixtures"
 
 # Fake `claude` and `codex` terminal UIs (tests/qml/fixtures/bin), state,
-# avatars and Claude Code's dir in the scratch dir; a fake avatar pipeline.
+# avatars and Claude Code's dir in the scratch dir; a fake avatar pipeline
+# and a fake live bridge.
 NOTCHD_QMLTEST_DIR="$scratch/data" XDG_STATE_HOME="$scratch/data/state" XDG_DATA_HOME="$scratch/data/share" XDG_CACHE_HOME="$scratch/data/cache" \
   NOTCHD_AVATAR_PIPELINE="$root/tests/qml/fixtures/bin/make-avatar" CLAUDE_CONFIG_DIR="$scratch/data/claude" \
+  NOTCHD_LIVE_BRIDGE="$root/tests/qml/fixtures/bin/codex-live" NOTCHD_FAKE_LIVE_ARGS="$scratch/data/live-args" \
   PATH="$root/tests/qml/fixtures/bin:$PATH" \
   NOTCHD_FAKE_CLAUDE_ARGS="$scratch/data/claude-args" NOTCHD_FAKE_CODEX_ARGS="$scratch/data/codex-args" "$root/scripts/isolated.sh" "$scratch/runtime" \
   timeout 90 quickshell -p "$scratch/config" --no-color > "$scratch/log" 2>&1 || true

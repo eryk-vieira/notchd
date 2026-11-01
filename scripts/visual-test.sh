@@ -24,9 +24,11 @@ ln -s -- "$root/tests/visual/shell.qml" "$scratch/config/shell.qml"
 # Cut off from the session, so nothing here touches its sockets, with the
 # demo player as the only MPRIS player (with-demo-player.sh).
 # Fake `claude` and `codex` terminal UIs, state and avatars in the scratch
-# dir; the avatar scenario draws tests/qml/fixtures/avatar.
+# dir; the avatar scenario draws tests/qml/fixtures/avatar. A fake live
+# bridge: no microphone, no network.
 NOTCHD_VISUAL_DIR="$scratch/shots" XDG_STATE_HOME="$scratch/shots/state" XDG_DATA_HOME="$scratch/shots/share" XDG_CACHE_HOME="$scratch/shots/cache" \
   NOTCHD_AVATAR_FIXTURE="$root/tests/qml/fixtures/avatar" NOTCHD_AVATAR_PIPELINE="$root/tests/qml/fixtures/bin/make-avatar" CLAUDE_CONFIG_DIR="$scratch/shots/claude" \
+  NOTCHD_LIVE_BRIDGE="$root/tests/qml/fixtures/bin/codex-live" \
   PATH="$root/tests/qml/fixtures/bin:$PATH" \
   "$root/scripts/with-demo-player.sh" "$scratch/demo" "$scratch/log" \
   timeout 40 quickshell -p "$scratch/config" --no-color || true

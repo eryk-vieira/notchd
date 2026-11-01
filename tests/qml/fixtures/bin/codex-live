@@ -1,0 +1,36 @@
+#!/bin/sh
+# A fake core/live/codex-live.py for the QML tests ($NOTCHD_LIVE_BRIDGE):
+# the same arguments and lines, no Codex, no network, no sound. It writes
+# its arguments, one a line, to $NOTCHD_FAKE_LIVE_ARGS, says it is live,
+# hears a question and answers it, then waits for stdin: {"mute": ...}
+# answers {"muted": ...}, {"stop": true} or the end of stdin closes it.
+# A --codex with "missing" in it fails as the real one does without its
+# packages.
+[ -n "$NOTCHD_FAKE_LIVE_ARGS" ] && printf '%s\n' "$@" > "$NOTCHD_FAKE_LIVE_ARGS"
+codex=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --codex) codex=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+echo '{"status": "starting"}'
+case "$codex" in
+  *missing*) echo '{"error": "Codex Live needs packages that aren'"'"'t installed.", "packages": ["gst-plugins-bad", "libnice"]}'; exit 2 ;;
+esac
+echo '{"status": "connecting"}'
+echo '{"status": "live"}'
+echo '{"transcript": {"role": "user", "delta": "Rodei os"}}'
+echo '{"transcript": {"role": "user", "text": "Rodei os testes.", "done": true}}'
+echo '{"transcript": {"role": "assistant", "delta": "Ótimo!"}}'
+echo '{"level": -18.5}'
+echo '{"mic": -30}'
+echo '{"working": true}'
+while read -r line; do
+  case "$line" in
+    *'"stop"'*) break ;;
+    *'"mute":true'*) echo '{"muted": true}' ;;
+    *'"mute":false'*) echo '{"muted": false}' ;;
+  esac
+done
+echo '{"status": "closed", "reason": "requested"}'

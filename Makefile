@@ -14,16 +14,17 @@ LINT_FILES = shell.qml core/*.qml core/settings/*.qml core/settings/previews/*.q
 # Dev config for `make dev`, so it never touches ~/.config/notchd.
 DEV_CONFIG ?= $(CURDIR)/build/dev-config.json
 
-.PHONY: check test qmltest visual hero icons shaders bench lint validate dev restart deps avatar-deps clean
+.PHONY: check test qmltest visual hero icons shaders bench lint validate dev restart deps avatar-deps live-deps clean
 
 check: test qmltest lint validate visual
 
-# Node tests of the pure-JS rules (core/*.js, core/settings/*.js), and the
+# Node tests of the pure-JS rules (core/*.js, core/settings/*.js), the
 # avatar pipeline's tests that need no models (skipped without NumPy and
-# Pillow).
+# Pillow) and the live bridge's that need no GStreamer.
 test:
 	node --test tests/*.test.mjs
 	python3 tests/make_avatar_test.py
+	python3 tests/codex_live_test.py
 
 # QML behaviour tests (tests/qml/shell.qml), offscreen: bindings, signals
 # and animations the Node tests can't reach. Regression tests live here.
@@ -82,6 +83,8 @@ lint:
 	else echo "qsb not found: shaders not checked" >&2; fi
 	@python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' core/avatar/make-avatar.py \
 	  && echo "make-avatar.py: parses"
+	@python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' core/live/codex-live.py \
+	  && echo "codex-live.py: parses"
 
 # The repo root is the Omarchy plugin.
 validate:
@@ -122,6 +125,20 @@ avatar-deps:
 	@missing=; for pkg in $(AVATAR_PACKAGES); do pacman -Q "$$pkg" >/dev/null 2>&1 || missing="$$missing $$pkg"; done; \
 	if [ -z "$$missing" ]; then echo "notchd: the avatar's packages are installed"; \
 	else echo "notchd: installing$$missing (agents' avatars; python-mediapipe brings python-tensorflow, ~1.5 GB in all)"; \
+	  sudo pacman -S --needed$$missing; fi
+
+# What a spoken conversation (the codex-live module, core/live/codex-live.py)
+# needs: GStreamer's WebRTC (gst-plugins-bad, libnice), Opus over RTP
+# (gst-plugins-good) and the microphone and speakers through pipewire-pulse
+# (pulsesrc, pulsesink), Python's GObject.
+# About 8 MB; not part of deps, as only that module uses them.
+LIVE_PACKAGES = python-gobject gst-plugins-base gst-plugins-good gst-plugins-bad libnice libpulse
+live-deps:
+	@if ! command -v pacman >/dev/null 2>&1; then \
+	  echo "notchd: install $(LIVE_PACKAGES) (or their equivalents) for Codex Live" >&2; exit 1; fi
+	@missing=; for pkg in $(LIVE_PACKAGES); do pacman -Q "$$pkg" >/dev/null 2>&1 || missing="$$missing $$pkg"; done; \
+	if [ -z "$$missing" ]; then echo "notchd: Codex Live's packages are installed"; \
+	else echo "notchd: installing$$missing (Codex Live: WebRTC and the microphone)"; \
 	  sudo pacman -S --needed$$missing; fi
 
 clean:

@@ -6,6 +6,7 @@ import "core"
 import "core/settings"
 import "core/Position.js" as Position
 import "core/Avatar.js" as Avatar
+import "core/Live.js" as Live
 
 // Behaviour tests that need the QML runtime: bindings, signals, animations.
 // Rules that are plain JS belong in the Node tests instead. Most cases here
@@ -126,7 +127,11 @@ ShellRoot {
       { name: "navigation: x twice removes the selected notch, s opens its settings", run: root.navigationRemove },
       { name: "navigation: m moves the notch live; Enter keeps it, Escape or the shortcut puts it back", run: root.navigationMove },
       { name: "avatar: a photo makes its files, sets the agent's avatar and the preview draws it; remove takes them away", run: root.avatarMakeAndRemove },
-      { name: "avatar: no face, missing packages or a relative path say why and leave the config alone", run: root.avatarFailures }
+      { name: "avatar: no face, missing packages or a relative path say why and leave the config alone", run: root.avatarFailures },
+      { name: "live: a click opens the notch and starts talking, a hover doesn't; closing ends it", run: root.liveTalks },
+      { name: "live: stop holds until the notch closes; mute goes to the bridge; IPC words and errors", run: root.liveStopAndCommands },
+      { name: "live: without its packages it says what to install, and the config stays as it was", run: root.liveMissingPackages },
+      { name: "live: a new session ends the one running, clears the transcript and starts another", run: root.liveNewSession }
     ]
     Qt.callLater(root.next)
   }
@@ -1868,6 +1873,153 @@ ShellRoot {
         avatarSvc.removeAvatar("btop")
         root.check(Object.keys(avatarSvc.avatarJobs).length === 0, "remove kept the failed jobs")
       }]
+    ], root.done)
+  }
+
+  // A spoken conversation (LiveModule) with a fake bridge
+  // (tests/qml/fixtures/bin/codex-live): it says it is live, hears a
+  // question, answers, and closes on {"stop": true}.
+  NotchService {
+    id: liveSvc
+    ipcTarget: "notchd-qmltest-live"
+    configPath: root.dir + "/live.json"
+    compositor: workspace4
+    defaultModules: ["codex-live"]
+  }
+  FloatingWindow {
+    implicitWidth: 700
+    implicitHeight: 600
+    NotchCard { notch: liveSvc.notches.length > 0 ? liveSvc.notches[0].copies[0] : null }
+  }
+  FileView {
+    id: liveArgs
+    path: Quickshell.env("NOTCHD_FAKE_LIVE_ARGS")
+    blockLoading: true
+    printErrors: false
+  }
+  function liveCopy() { return liveSvc.notches[0].copies[0] }
+
+  function liveTalks() {
+    var m = liveSvc.moduleById("codex-live")
+    liveSvc.replaceConfig({ "codex-live": { voice: "maple", directory: "~/talk", access: "workspace-write" } })
+    // A hover shows it and leaves the microphone off.
+    root.liveCopy().hovered = true
+    root.steps([
+      [400, function() {
+        root.check(root.liveCopy().mode === "expanded", "hovered, the notch didn't open")
+        root.check(!m.open && m.bridge === null && !m.running, "a hover started a conversation")
+        root.liveCopy().hovered = false
+        liveSvc.open()
+      }],
+      [600, function() {
+        root.check(m.open, "opened by a click, the module isn't open")
+        root.check(!!m.bridge && m.live, "no conversation: " + JSON.stringify(m.conv))
+        root.check(m.conv.transcript.length === 2 && m.conv.transcript[0].text === "Rodei os testes."
+                   && m.conv.transcript[1].role === "assistant", "transcript: " + JSON.stringify(m.conv.transcript))
+        root.check(m.speaking && m.statusText === "Speaking", "the voice's level didn't make it speak: " + m.statusText)
+        root.check(m.working, "the task didn't show")
+        liveArgs.reload()
+        var args = liveArgs.text().split("\n")
+        var home = Quickshell.env("HOME")
+        root.check(args.indexOf("--voice") !== -1 && args[args.indexOf("--voice") + 1] === "maple", "args: " + args)
+        root.check(args[args.indexOf("--cwd") + 1] === home + "/talk", "the folder: " + args)
+        root.check(args[args.indexOf("--access") + 1] === "workspace-write", "the access: " + args)
+        root.check(args[args.indexOf("--codex") + 1] === "codex", "the command: " + args)
+        // Closed for a moment, it goes on.
+        liveSvc.close()
+      }],
+      [500, function() {
+        root.check(!!m.bridge, "closing for a moment ended it")
+        root.check(m.compact !== null, "talking with the notch closed, nothing shows closed")
+      }],
+      [1800, function() {
+        root.check(m.bridge === null, "closed, the conversation went on")
+        root.check(m.conv.status === "closed" && !m.working && !m.running, "closed state: " + JSON.stringify(m.conv))
+        root.check(m.compact === null, "closed and not talking, the compact view stays")
+        root.check(m.conv.transcript.length === 2, "the transcript went with it")
+      }]
+    ], function() {
+      liveSvc.replaceConfig({})
+      root.done()
+    })
+  }
+
+  function liveStopAndCommands() {
+    var m = liveSvc.moduleById("codex-live")
+    root.check(/^not in a conversation/.test(liveSvc.liveCommand("codex-live", "mute")), "mute without a conversation")
+    root.check(/^usage: live codex-live/.test(liveSvc.liveCommand("codex-live", "sing")), "no usage")
+    root.check(/^no live module codex; live modules: codex-live/.test(liveSvc.liveCommand("codex", "start")), "an agent took live")
+    root.check(/^usage: live codex-live/.test(liveSvc.liveCommand("codex-live", "avatar")), "no usage for a bare avatar")
+    root.check(liveSvc.liveCommand("codex-live", "start") === "ok", "start was refused")
+    root.steps([
+      [600, function() {
+        root.check(root.liveCopy().pinned && m.live, "start didn't open the notch and talk")
+        root.check(liveSvc.liveCommand("codex-live", "mute") === "ok", "mute was refused")
+      }],
+      [300, function() {
+        root.check(m.conv.muted, "the bridge didn't say muted")
+        root.check(liveSvc.liveCommand("codex-live", "stop") === "ok", "stop was refused")
+      }],
+      [600, function() {
+        root.check(m.bridge === null && !m.running, "stop didn't end it")
+        root.check(root.liveCopy().pinned, "stop closed the notch")
+      }],
+      [1800, function() {
+        root.check(m.bridge === null, "stopped with the notch open, it started again")
+        liveSvc.close()
+      }],
+      [400, function() { liveSvc.open() }],
+      [600, function() {
+        root.check(m.live, "opened again after a stop, it didn't talk")
+        root.check(liveSvc.liveCommand("codex-live", "toggle") === "ok", "toggle was refused")
+      }],
+      [600, function() {
+        root.check(m.bridge === null, "toggle didn't stop it")
+        liveSvc.close()
+      }],
+      [1800, function() {}]
+    ], root.done)
+  }
+
+  function liveMissingPackages() {
+    var m = liveSvc.moduleById("codex-live")
+    liveSvc.replaceConfig({ "codex-live": { command: "missing-codex" } })
+    liveSvc.open()
+    root.steps([
+      [800, function() {
+        root.check(m.bridge === null && !m.running, "it kept running: " + JSON.stringify(m.conv))
+        root.check(/Install gst-plugins-bad, libnice \(make live-deps\)\.$/.test(Live.errorText(m.conv)), "error: " + JSON.stringify(m.conv))
+        root.check(m.statusText === "Stopped", "status: " + m.statusText)
+        root.check(JSON.stringify(liveSvc.config) === JSON.stringify({ "codex-live": { command: "missing-codex" } }),
+                   "the config changed: " + JSON.stringify(liveSvc.config))
+        liveSvc.close()
+      }],
+      [1800, function() {}]
+    ], function() {
+      liveSvc.replaceConfig({})
+      root.done()
+    })
+  }
+
+  function liveNewSession() {
+    var m = liveSvc.moduleById("codex-live")
+    liveSvc.open()
+    var first = null
+    root.steps([
+      [600, function() {
+        first = m.bridge
+        root.check(!!first && m.live && m.conv.transcript.length > 0, "no conversation: " + JSON.stringify(m.conv))
+        root.check(Live.micLevel(m.conv) > 0, "the microphone's level didn't come through: " + m.conv.mic)
+        root.check(liveSvc.liveCommand("codex-live", "new") === "ok", "new was refused")
+      }],
+      [900, function() {
+        root.check(!!m.bridge && m.bridge !== first, "no new bridge")
+        root.check(m.live, "the new session isn't live: " + JSON.stringify(m.conv))
+        // The fake says the same two lines again: the old ones are gone.
+        root.check(m.conv.transcript.length === 2, "the transcript wasn't cleared: " + JSON.stringify(m.conv.transcript))
+        liveSvc.close()
+      }],
+      [2000, function() { root.check(m.bridge === null, "closed, it went on") }]
     ], root.done)
   }
 

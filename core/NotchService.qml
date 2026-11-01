@@ -7,6 +7,7 @@ import "State.js" as State
 import "Navigate.js" as Navigate
 import "Agent.js" as Agent
 import "Avatar.js" as Avatar
+import "Live.js" as Live
 import "settings/Settings.js" as Settings
 
 // The notches' source of truth: config, modules, the notches (Notch, one per
@@ -62,7 +63,8 @@ Item {
     resources: Qt.resolvedUrl("modules/resources.qml"),
     timer: Qt.resolvedUrl("modules/timer.qml"),
     claude: Qt.resolvedUrl("modules/claude.qml"),
-    codex: Qt.resolvedUrl("modules/codex.qml")
+    codex: Qt.resolvedUrl("modules/codex.qml"),
+    "codex-live": Qt.resolvedUrl("modules/codex-live.qml")
   })
 
   function moduleUrl(id) {
@@ -132,11 +134,11 @@ Item {
   onModuleInfoReadyChanged: if (svc.moduleInfoReady) svc.refreshModuleIds()
   onConfigResolvedChanged: svc.refreshModuleIds()
   // Every module with its title and fields: [{ moduleId, title, settings,
-  // standalone, agent, terminal }].
+  // standalone, agent, live, terminal }].
   readonly property var moduleCatalog: svc.availableModuleIds.map(function(id) {
     var info = svc.moduleInfo[id] || {}
     return { moduleId: id, title: Settings.moduleTitle(id, info), settings: info.settings || [],
-             standalone: !!info.standalone, agent: !!info.agent, terminal: !!info.terminal }
+             standalone: !!info.standalone, agent: !!info.agent, live: !!info.live, terminal: !!info.terminal }
   })
   // Agents ask their plan usage over the network, with the logins their
   // CLIs keep (AgentUsage). Off offscreen (scripts/isolated.sh sets
@@ -167,6 +169,33 @@ Item {
     if (cmd.action === "avatar") return svc.avatarCommand(id, cmd.text, "terminal")
     var m = svc.moduleById(id)
     return m ? m.command(command) : id + " module not loaded"
+  }
+
+  // ---------------------------------------------------------------- live
+  // Spoken conversations (`"live"` in their file, LiveModule): the bridge
+  // that carries the voice (core/live/codex-live.py; the QML tests put a
+  // fake in its place) and the `live` IPC.
+  readonly property string liveBridge: Quickshell.env("NOTCHD_LIVE_BRIDGE")
+    || Avatar.localPath(Qt.resolvedUrl("live/codex-live.py"), Quickshell.shellDir)
+  function isLive(id) { return !!svc.moduleInfo[id] && !!svc.moduleInfo[id].live }
+  // A live module's IPC command (LiveModule.command): "ok", or what was
+  // wrong. "avatar ..." is answered here, loaded or not.
+  function liveCommand(id, command) {
+    if (!svc.isLive(id)) {
+      var ids = svc.availableModuleIds.filter(function(a) { return svc.isLive(a) })
+      return "no live module " + id + (ids.length > 0 ? "; live modules: " + ids.join(", ") : "")
+    }
+    var cmd = Live.parseCommand(command)
+    if (cmd.action === "avatar") return svc.avatarCommand(id, cmd.text, "live")
+    var m = svc.moduleById(id)
+    return m ? m.command(command) : id + " module not loaded"
+  }
+  // A notch is open on `module` by a click or a shortcut (pinned, showing
+  // it): a live module talks only then.
+  function liveOpen(module) {
+    return svc.copies.some(function(c) {
+      return c.pinned && c.mode === "expanded" && c.shownModules.indexOf(module) !== -1
+    })
   }
 
   // ---------------------------------------------------------------- avatars
@@ -957,6 +986,9 @@ Item {
     function terminal(id: string, command: string): string { return svc.terminalCommand(id, command) }
     function claude(command: string): string { return svc.agentCommand("claude", command) }
     function codex(command: string): string { return svc.agentCommand("codex", command) }
+    // A spoken conversation, by its module's id: "start" opens its notch and
+    // starts talking, "stop", "toggle", "mute", "unmute"; see LiveModule.qml.
+    function live(id: string, command: string): string { return svc.liveCommand(id, command) }
     function state(): string {
       return JSON.stringify({
         // The selected notch while navigating, else null.

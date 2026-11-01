@@ -252,3 +252,16 @@ function speechLevel(plan, t) {
   }
   return { open: 0, wide: 1 }
 }
+
+// The mouth from a voice as it plays: `db` its level now (dB below full
+// scale), `peak` the recent peak (the last call's, -20 to begin with). The
+// level counts against that peak, which falls 7 dB a second (0.12 a frame
+// at 60 fps), so a loud voice and a quiet one move it alike: open about
+// .35 most of the time, wide only on stressed vowels. { open, wide, peak }.
+function voiceMouth(db, peak) {
+  var level = Number(db)
+  if (!isFinite(level)) level = -100
+  var p = Math.max(level, (isFinite(Number(peak)) ? Number(peak) : -20) - .12)
+  var rel = Math.min(1, Math.max(0, (level - p + 20) / 20))
+  return { open: level < -55 ? 0 : .8 * Math.pow(rel, 2.2), wide: 1, peak: p }
+}

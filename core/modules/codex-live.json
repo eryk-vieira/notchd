@@ -1,0 +1,6 @@
+{
+  "title": "Codex Live",
+  "live": {
+    "command": "codex"
+  }
+}

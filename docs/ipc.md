@@ -128,7 +128,7 @@ It answers `ok`, `no notch shows <id>`, `the terminal needs the qmltermwidget pa
 
 ## Avatars
 
-An agent or a terminal of your own gets a face made from a photo ([modules.md](modules.md#avatars)): `avatar <photo>` makes it, `avatar remove` removes it, by the agent's or terminal's id, loaded or not. The path is the photo's, absolute or under `~`.
+An agent, a live module or a terminal of your own gets a face made from a photo ([modules.md](modules.md#avatars)): `avatar <photo>` makes it, `avatar remove` removes it, by its id (`agent`, `live` or `terminal`), loaded or not. The path is the photo's, absolute or under `~`.
 
 ```sh
 omarchy-shell eryk.notchd agent claude "avatar ~/Pictures/me.jpg"
@@ -136,6 +136,25 @@ omarchy-shell eryk.notchd terminal btop "avatar remove"
 ```
 
 It answers `ok` once it starts; making it takes a few seconds, more the first time (the models download), and the settings show how it goes. It ends in the log: why it failed (`No face found in the photo...`, a package missing). Or `already making <id>'s avatar`, `the photo's full path, please: <path>`, the usage.
+
+## Live
+
+A spoken conversation (`codex-live`, [modules.md](modules.md#live)), by its module's id. It talks while its notch is open by a click or a shortcut; these drive it from a key or a script:
+
+```sh
+bind = SUPER ALT, V, exec, omarchy-shell eryk.notchd live codex-live toggle
+```
+
+| Command | |
+|---|---|
+| `start` | open its notch (the first that lists it), which starts talking |
+| `stop` | end the conversation; the notch stays open, and it starts again the next time it opens |
+| `toggle` | `stop` while it talks, else `start` |
+| `new` | a new session, the transcript cleared |
+| `mute`, `unmute` | the microphone, while it talks |
+| `"avatar <photo>"`, `"avatar remove"` | its avatar, as an agent's ([Avatars](#avatars)) |
+
+It answers `ok`, `no notch shows <id>; add it to one`, `not in a conversation`, the usage, `<id> module not loaded`, or `no live module <id>` with the ones there are.
 
 ## Terminals
 
