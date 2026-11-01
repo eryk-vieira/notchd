@@ -533,6 +533,18 @@ Item {
     }
   }
 
+  // A module opens the first notch of the config that shows it, or closes
+  // every one that does (NotchModule.openNotch / closeNotch).
+  function openModule(module) {
+    for (var i = 0; i < svc.notches.length; i++)
+      if (svc.notches[i].hasModule(module)) { svc.notches[i].open(); return true }
+    return false
+  }
+  function closeModule(module) {
+    for (var i = 0; i < svc.notches.length; i++)
+      if (svc.notches[i].hasModule(module)) svc.notches[i].close()
+  }
+
   // Without a notch named, open and toggle act on the first notch and close
   // closes them all.
   function open() { if (svc.notches.length > 0) svc.notches[0].open() }

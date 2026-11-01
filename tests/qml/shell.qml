@@ -5,6 +5,7 @@ import Quickshell.Io
 import "core"
 import "core/settings"
 import "core/Position.js" as Position
+import "core/Claude.js" as Claude
 
 // Behaviour tests that need the QML runtime: bindings, signals, animations.
 // Rules that are plain JS belong in the Node tests instead. Most cases here
@@ -97,7 +98,10 @@ ShellRoot {
       { name: "Escape in a field inside the notch closes it", run: root.escapeCloses },
       { name: "a module sets the width of its expanded view", run: root.expandedWidthFromModule },
       { name: "claude: a question gets its answer from the process, and a new chat starts over", run: root.claudeChat },
-      { name: "a notch in the list dropped on the top edge stays there", run: root.dropOnTopStays }
+      { name: "a notch in the list dropped on the top edge stays there", run: root.dropOnTopStays },
+      { name: "claude: a session Claude Code no longer has starts over and asks again", run: root.claudeSessionGone },
+      { name: "claude: ask over IPC opens the chat's notch and asks", run: root.claudeAsk },
+      { name: "claude: back from a terminal, the chat is read again with its title", run: root.claudeReadsTranscript }
     ]
     Qt.callLater(root.next)
   }
@@ -1118,14 +1122,18 @@ ShellRoot {
         root.check(m.chat.messages.length === 2 && m.chat.messages[1].text === "two words",
                    "the answer is " + JSON.stringify(m.chat.messages))
         root.check(m.chat.sessionId === "00000000-0000-4000-8000-000000000001", "no session id: " + m.chat.sessionId)
-        root.check(m.chatTitle === "Reply with exactly: two words", "the title is " + m.chatTitle)
         claudeArgs.reload()
         var args = claudeArgs.text()
         root.check(args.indexOf("--model sonnet") !== -1 && args.indexOf("--tools=WebSearch,WebFetch") !== -1,
                    "started with " + args)
+      }],
+      // Haiku (the fake) names the chat after its first answer.
+      [800, function() {
+        root.check(m.chatTitle === "Fake chat title", "the title is " + m.chatTitle)
         claudeSession.reload()
-        root.check(claudeSession.text().indexOf("00000000-0000-4000-8000-000000000001") !== -1,
-                   "the session was not saved: " + claudeSession.text())
+        var saved = claudeSession.text()
+        root.check(saved.indexOf("00000000-0000-4000-8000-000000000001") !== -1 && saved.indexOf("Fake chat title") !== -1,
+                   "the session and its title were not saved: " + saved)
         m.newChat()
       }],
       [500, function() {
@@ -1168,5 +1176,76 @@ ShellRoot {
     main.setValue("position", Position.configValue({ edge: "top", offset: 0.5, screen: "" }, main.inheritedPosition))
     root.check(main.edge === "top" && main.placement.screen === "", "the first notch went to " + JSON.stringify(main.placement))
     root.done()
+  }
+
+  function claudeSessionGone() {
+    var m = chatSvc.moduleById("claude")
+    m.newChat()
+    m.chat = Object.assign({}, m.chat, { sessionId: "11111111-2222-4333-8444-555555555555" })
+    m.send("hi")
+    root.steps([[2000, function() {}]], function() {
+      root.check(!m.chat.busy && m.chat.error === "", "it did not recover: " + JSON.stringify(m.chat))
+      root.check(m.chat.sessionId === "00000000-0000-4000-8000-000000000001", "no new session: " + m.chat.sessionId)
+      root.check(m.chat.messages.length === 2 && m.chat.messages[1].text === "two words",
+                 "the question was not asked again: " + JSON.stringify(m.chat.messages))
+      root.check(m.chat.notice !== "", "no notice that the old chat was gone")
+      m.newChat()
+      root.done()
+    })
+  }
+
+  function claudeAsk() {
+    var m = chatSvc.moduleById("claude")
+    var copy = chatSvc.notches[0].copies[0]
+    root.check(m.command("ask") === "ok" && copy.pinned, "ask without a question did not open the notch")
+    copy.close()
+    root.check(m.command("ask Reply with exactly: two words") === "ok", "ask failed")
+    root.check(copy.pinned && copy.keyboardFocus === "exclusive", "ask did not open the notch with the keyboard")
+    root.check(m.command("ask again") !== "ok", "a second ask while busy was taken")
+    root.check(m.command("nonsense").indexOf("usage") === 0, "an unknown command did not answer the usage")
+    root.steps([[1500, function() {}]], function() {
+      root.check(m.chat.messages.length === 2 && m.chat.messages[1].text === "two words", "no answer: " + JSON.stringify(m.chat.messages))
+      m.closeNotch()
+      root.check(!copy.pinned, "closeNotch left it pinned")
+      m.newChat()
+      root.done()
+    })
+  }
+
+  // A transcript as Claude Code leaves it after a terminal session: the
+  // question, the answer, and the title it made.
+  Process { id: transcriptDir }
+  FileView { id: transcriptWriter; printErrors: false }
+  function claudeReadsTranscript() {
+    var m = chatSvc.moduleById("claude")
+    var path = Claude.transcriptPath(m.claudeDir, m.home, "sid-terminal")
+    transcriptDir.command = ["mkdir", "-p", path.replace(/\/[^\/]*$/, "")]
+    transcriptDir.running = true
+    root.steps([
+      [300, function() {
+        transcriptWriter.path = path
+        transcriptWriter.setText([
+          { type: "user", uuid: "u1", message: { role: "user", content: "pergunta no notch" } },
+          { type: "assistant", uuid: "a1", message: { content: [{ type: "text", text: "resposta" }] } },
+          { type: "user", uuid: "u2", message: { role: "user", content: "pergunta no terminal" } },
+          { type: "assistant", uuid: "a2", message: { content: [{ type: "text", text: "outra" }] } },
+          { type: "ai-title", aiTitle: "Conversa no terminal", sessionId: "sid-terminal" }
+        ].map(function(e) { return JSON.stringify(e) }).join("\n") + "\n")
+      }],
+      [300, function() {
+        m.newChat()
+        m.chat = Object.assign({}, m.chat, { sessionId: "sid-terminal", title: "old" })
+        m.handedOff = true
+        m.reloadTranscript()
+      }],
+      [300, function() {}]
+    ], function() {
+      root.check(!m.handedOff && !m.reloading, "still waiting on the transcript")
+      root.check(m.chat.messages.length === 4 && m.chat.messages[3].text === "outra",
+                 "the chat was not read again: " + JSON.stringify(m.chat.messages))
+      root.check(m.chatTitle === "Conversa no terminal", "the title is " + m.chatTitle)
+      m.newChat()
+      root.done()
+    })
   }
 }

@@ -81,6 +81,18 @@ Item {
     if (notch) notch.dismissPeek(module)
   }
 
+  // Opens (pins) the first notch that shows this module, on the focused
+  // screen: for a module started from a shortcut or IPC. False if none does.
+  function openNotch() {
+    return notch ? notch.openModule(module) : false
+  }
+
+  // Closes every notch that shows this module: before handing off to
+  // another window, which can't get the keyboard while it is pinned.
+  function closeNotch() {
+    if (notch) notch.closeModule(module)
+  }
+
   // Pins every notch open on this module, so its window takes the keyboard
   // (wantsKeyboard) and leaving it with the pointer doesn't close it.
   function requestKeyboard() {

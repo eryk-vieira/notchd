@@ -14,7 +14,7 @@ Every host exposes the same methods on its `ipcTarget`. The CLI depends on the h
 | `open`, `toggle` | pin the first notch open on the focused monitor, or flip it |
 | `close` | close every notch |
 | `openNotch <id>`, `closeNotch <id>`, `toggleNotch <id>` | the same for one notch, by its `id` (`main`, `notch-2`...) |
-| `claude <command>` | the `claude` module: `new` starts a new chat (below) |
+| `claude <command>` | the `claude` module: `new` starts a new chat, `"ask <question>"` opens it and asks (below) |
 | `timer <command>` | the `timer` module: start, pause or stop a countdown or a pomodoro (below) |
 | `settings` | open or close the settings window |
 | `recenter` | put every notch back in the middle of the top edge, following focus (removes each `position`) |
@@ -86,5 +86,11 @@ bind = SUPER ALT, C, exec, omarchy-shell eryk.notchd toggleNotch claude
 | Command | |
 |---|---|
 | `new` | a new chat: the context starts empty |
+| `"ask <question>"` | open the chat's notch (the first that lists `claude`) and ask; `ask` alone only opens it |
 
-It answers `ok`, the usage, or `claude module not loaded` when no notch lists `claude`.
+```sh
+omarchy-shell eryk.notchd claude "ask what does EXDEV mean?"
+omarchy-shell eryk.notchd claude "ask explain: $(wl-paste --primary)"   # the selected text
+```
+
+It answers `ok`, `busy: an answer is on its way` (an ask while one is), `no notch shows claude`, the usage, or `claude module not loaded` when no notch lists `claude`.

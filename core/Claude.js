@@ -10,8 +10,13 @@
 //   busy       an answer is on its way
 //   activity   while busy: "thinking" | "searching" | "writing"
 //   error      why the last answer failed, else ""
+//   notice     something to know that is no error ("" for none)
+//   title      a title made for the chat (by Haiku, or Claude Code's own
+//              once it ran in a terminal); "" uses the first question
+//   retry      the session was gone: the module sends the last question
+//              again, in a new session (resend)
 
-var EMPTY = { sessionId: "", messages: [], busy: false, activity: "", error: "" }
+var EMPTY = { sessionId: "", messages: [], busy: false, activity: "", error: "", notice: "", title: "", retry: false }
 
 // Tools a web-enabled chat gets. They run without asking: nobody is at a
 // terminal to answer a permission prompt.
@@ -66,7 +71,7 @@ function send(state, text) {
   if (t === "") return state
   return Object.assign({}, state, {
     messages: state.messages.concat([{ role: "user", text: t, tools: [] }, { role: "assistant", text: "", tools: [] }]),
-    busy: true, activity: "thinking", error: ""
+    busy: true, activity: "thinking", error: "", notice: ""
   })
 }
 
@@ -116,7 +121,26 @@ function applyStream(state, e) {
   return state
 }
 
+// Whether a result says the session to resume is gone (Claude Code
+// cleaned up its transcript).
+function sessionGone(ev) {
+  var errors = ev && ev.errors && ev.errors.length !== undefined ? ev.errors : []
+  for (var i = 0; i < errors.length; i++)
+    if (/no conversation found/i.test(String(errors[i]))) return true
+  return false
+}
+
 function applyResult(state, ev) {
+  // The session is gone: nothing before the last question is in the
+  // context any more, so the chat starts over from it (`retry`).
+  if (sessionGone(ev) && state.busy) {
+    var question = lastQuestion(state)
+    return Object.assign({}, EMPTY, {
+      messages: [{ role: "user", text: question, tools: [] }, { role: "assistant", text: "", tools: [] }],
+      busy: true, activity: "thinking", retry: true,
+      notice: "The earlier chat was gone, so this is a new one."
+    })
+  }
   var failed = ev.is_error === true || (ev.subtype && ev.subtype !== "success")
   var next = Object.assign({}, state, { busy: false, activity: "" })
   if (ev.session_id) next.sessionId = String(ev.session_id)
@@ -124,8 +148,23 @@ function applyResult(state, ev) {
   // No partial messages came (or none with text): the result has the answer.
   if (!failed && answer && answer.text.trim() === "" && ev.result)
     next = withLast(next, function(m) { return Object.assign({}, m, { text: String(ev.result) }) })
-  if (failed) return fail(next, String(ev.result || ev.subtype || "the answer failed"))
+  if (failed) {
+    var errors = ev.errors && ev.errors.length ? ev.errors.join("\n") : ""
+    return fail(next, String(ev.result || errors || ev.subtype || "the answer failed"))
+  }
   return next
+}
+
+// The line that sends the last question again after `retry`, and the state
+// without the flag.
+function resend(state) {
+  return { state: Object.assign({}, state, { retry: false }), line: inputLine(lastQuestion(state)) }
+}
+
+function lastQuestion(state) {
+  for (var i = state.messages.length - 1; i >= 0; i--)
+    if (state.messages[i].role === "user") return state.messages[i].text
+  return ""
 }
 
 // The state after the answer failed (the process died, an error result):
@@ -138,16 +177,55 @@ function fail(state, why) {
   return next
 }
 
-// What the closed notch calls the session: its first question, on one line,
-// cut at `max` characters; "" before the first.
+// What the closed notch calls the session: its title, else its first
+// question, on one line, cut at `max` characters; "" before the first.
 function title(state, max) {
   var n = max || 40
-  for (var i = 0; i < state.messages.length; i++) {
-    if (state.messages[i].role !== "user") continue
-    var t = state.messages[i].text.replace(/\s+/g, " ").trim()
-    return t.length > n ? t.slice(0, n - 1).replace(/\s+$/, "") + "…" : t
-  }
-  return ""
+  var t = state.title || ""
+  for (var i = 0; t === "" && i < state.messages.length; i++)
+    if (state.messages[i].role === "user") t = state.messages[i].text
+  t = t.replace(/\s+/g, " ").trim()
+  return t.length > n ? t.slice(0, n - 1).replace(/\s+$/, "") + "…" : t
+}
+
+// Whether the chat should get a title now: its first answer just came, it
+// has none, and nothing failed.
+function wantsTitle(state) {
+  if (state.busy || state.title || state.error || state.sessionId === "") return false
+  var questions = 0
+  for (var i = 0; i < state.messages.length; i++) if (state.messages[i].role === "user") questions++
+  return questions === 1 && lastAnswer(state) !== ""
+}
+
+// The command that asks Haiku for a title, on its own: no session kept, no
+// tools, nothing of the user's setup. Prints the title alone.
+function titleCommand(state) {
+  var question = lastQuestion(state).slice(0, 1000)
+  var answer = lastAnswer(state).slice(0, 1000)
+  return ["claude", "-p", "--model", "haiku", "--no-session-persistence",
+    "--setting-sources", "", "--strict-mcp-config", "--tools=", "--output-format", "text",
+    "--system-prompt", "You name chats. Reply with a title of 3 to 5 words for the chat you are given, in the language of its question. The title only: no quotes, no final period.",
+    "Question:\n" + question + "\n\nAnswer:\n" + answer]
+}
+
+// A title as Haiku printed it, cleaned: its first line, without quotes,
+// Markdown or a final period, at most 60 characters; "" if nothing is left.
+function cleanTitle(text) {
+  var lines = String(text || "").split("\n")
+  var t = ""
+  for (var i = 0; i < lines.length && t === ""; i++) t = lines[i].trim()
+  t = t.replace(/^[#*_\s]+|[*_\s]+$/g, "").replace(/^(title|título)\s*:\s*/i, "")
+  t = t.replace(/^["'“”‘’«]+|["'“”‘’»]+$/g, "").replace(/[.。]+$/, "").trim()
+  return t.length > 60 ? t.slice(0, 59).replace(/\s+$/, "") + "…" : t
+}
+
+// The command that opens the session in a terminal, in the directory it
+// runs in (Claude Code finds a session's transcript by it). `terminal` is
+// the command that opens a terminal running the command after it:
+// xdg-terminal-exec by default, or "alacritty -e" and the like.
+function terminalCommand(terminal, dir, sessionId) {
+  var argv = String(terminal || "xdg-terminal-exec").trim().split(/\s+/)
+  return argv.concat(["sh", "-c", "cd \"$0\" && exec claude --resume \"$1\"", String(dir), String(sessionId)])
 }
 
 // The last answer's text, for copying.
@@ -173,6 +251,8 @@ function fromTranscript(text, sessionId) {
   var lines = String(text || "").split("\n")
   for (var i = 0; i < lines.length; i++) {
     var e = parseLine(lines[i])
+    // Claude Code names a session it ran interactively (a terminal).
+    if (e && e.type === "ai-title" && e.aiTitle) { state.title = String(e.aiTitle); continue }
     if (!e || !e.message || e.isSidechain || e.isMeta) continue
     if (e.uuid) { if (seen[e.uuid]) continue; seen[e.uuid] = true }
     var content = e.message.content

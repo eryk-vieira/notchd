@@ -140,3 +140,83 @@ test('fromTranscript: questions and answers, without tool results or side chains
     { role: 'assistant', text: 'A França.', tools: [] },
   ]);
 });
+
+// What `claude -p --resume <id>` prints when Claude Code no longer has the
+// session (recorded, id changed), before it exits with 1.
+const gone = { type: 'result', subtype: 'error_during_execution', is_error: true, num_turns: 0,
+  session_id: '11111111-2222-4333-8444-555555555555',
+  errors: ['No conversation found with session ID: 11111111-2222-4333-8444-555555555555'] };
+
+test('a session gone starts over from the last question, to send again', () => {
+  let s = run(Claude.send(Claude.EMPTY, 'first'), events('notools'));
+  s = Claude.send(s, 'second');
+  s = Claude.apply(s, gone);
+  assert.equal(s.retry, true);
+  assert.equal(s.busy, true);
+  assert.equal(s.sessionId, '');
+  assert.equal(s.error, '');
+  assert.match(s.notice, /new one/);
+  assert.deepEqual(plain(s.messages.map((m) => [m.role, m.text])), [['user', 'second'], ['assistant', '']]);
+  const { state, line } = Claude.resend(s);
+  assert.equal(state.retry, false);
+  assert.equal(JSON.parse(line).message.content, 'second');
+  // The answer in the new session clears nothing but the flag already gone.
+  const after = run(state, events('notools'));
+  assert.equal(after.messages[1].text, 'two words');
+  assert.match(after.notice, /new one/);
+  assert.equal(Claude.send(after, 'third').notice, '');
+});
+
+test('an error result without text says what its errors say', () => {
+  let s = Claude.send(Claude.EMPTY, 'q');
+  s = Claude.apply(s, { type: 'result', subtype: 'error_during_execution', is_error: true, errors: ['rate limited'] });
+  assert.equal(s.error, 'rate limited');
+  assert.equal(s.retry, false);
+});
+
+test('title: a made title wins over the first question', () => {
+  const s = Object.assign({}, Claude.send(Claude.EMPTY, 'Como converter HEIC'), { title: 'Converter HEIC para JPG' });
+  assert.equal(Claude.title(s, 40), 'Converter HEIC para JPG');
+  assert.equal(Claude.title(Object.assign({}, Claude.EMPTY, { title: 'Só o título' })), 'Só o título');
+});
+
+test('wantsTitle: once, after the first answer, unless it has one or failed', () => {
+  const one = run(Claude.send(Claude.EMPTY, 'q'), events('notools'));
+  assert.equal(Claude.wantsTitle(one), true);
+  assert.equal(Claude.wantsTitle(Claude.send(Claude.EMPTY, 'q')), false);            // busy
+  assert.equal(Claude.wantsTitle(Object.assign({}, one, { title: 't' })), false);
+  assert.equal(Claude.wantsTitle(run(Claude.send(one, 'again'), events('notools'))), false);
+  assert.equal(Claude.wantsTitle(Object.assign({}, one, { error: 'x' })), false);
+});
+
+test('titleCommand: Haiku, no session kept, no tools, the chat in the prompt', () => {
+  const one = run(Claude.send(Claude.EMPTY, 'Reply with exactly: two words'), events('notools'));
+  const argv = plain(Claude.titleCommand(one));
+  assert.deepEqual(argv.slice(argv.indexOf('--model'), argv.indexOf('--model') + 2), ['--model', 'haiku']);
+  for (const flag of ['-p', '--no-session-persistence', '--strict-mcp-config', '--tools=']) assert.ok(argv.includes(flag), flag);
+  assert.ok(!argv.includes('--resume'));
+  const prompt = argv[argv.length - 1];
+  assert.ok(prompt.includes('Reply with exactly: two words') && prompt.includes('two words'));
+});
+
+test('cleanTitle: first line, no quotes, Markdown, label or final period', () => {
+  assert.equal(Claude.cleanTitle('"Converter HEIC para JPG."\n'), 'Converter HEIC para JPG');
+  assert.equal(Claude.cleanTitle('\n**Title: Kernel Linux estável**\nmore'), 'Kernel Linux estável');
+  assert.equal(Claude.cleanTitle('“Copa de 2022”'), 'Copa de 2022');
+  assert.equal(Claude.cleanTitle('   '), '');
+  assert.equal(Claude.cleanTitle('x'.repeat(80)).length, 60);
+});
+
+test('terminalCommand: the terminal, then claude --resume in the session dir', () => {
+  assert.deepEqual(plain(Claude.terminalCommand('', '/s/claude', 'id1')),
+    ['xdg-terminal-exec', 'sh', '-c', 'cd "$0" && exec claude --resume "$1"', '/s/claude', 'id1']);
+  assert.deepEqual(plain(Claude.terminalCommand(' alacritty  -e ', '/d', 'x')).slice(0, 3), ['alacritty', '-e', 'sh']);
+});
+
+test('fromTranscript: Claude Code\'s own title, from a terminal session', () => {
+  const lines = [
+    { type: 'user', uuid: 'u1', message: { role: 'user', content: 'oi' } },
+    { type: 'ai-title', aiTitle: 'Saudação simples', sessionId: 'sid' },
+  ].map((e) => JSON.stringify(e)).join('\n');
+  assert.equal(Claude.fromTranscript(lines, 'sid').title, 'Saudação simples');
+});

@@ -23,6 +23,7 @@ NotchModule {
   expanded: Component { Text { text: "details"; color: Theme.foreground } }
 
   // m.requestPeek(3000) pops the notch open with `peek` for 3 s.
+  // m.openNotch() pins the first notch that shows it open; m.closeNotch() closes them.
 }
 ```
 
