@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import Quickshell
+import Quickshell.Io
 import "core"
 import "core/settings"
 
@@ -93,7 +94,8 @@ ShellRoot {
       { name: "timer commands: pomodoro phases, pause, errors and its settings", run: root.timerCommands },
       { name: "a module you type into takes the keyboard only while pinned open", run: root.keyboardOnlyWhilePinned },
       { name: "Escape in a field inside the notch closes it", run: root.escapeCloses },
-      { name: "a module sets the width of its expanded view", run: root.expandedWidthFromModule }
+      { name: "a module sets the width of its expanded view", run: root.expandedWidthFromModule },
+      { name: "claude: a question gets its answer from the process, and a new chat starts over", run: root.claudeChat }
     ]
     Qt.callLater(root.next)
   }
@@ -1086,5 +1088,55 @@ ShellRoot {
       root.check(escapeSvc.closes === 1, "Escape closed it " + escapeSvc.closes + " times")
       root.done()
     })
+  }
+
+  // ---------------------------------------------------------------- claude
+  // The claude module against a fake `claude` (tests/qml/fixtures/bin) that
+  // answers each message with recorded events; its state and Claude Code's
+  // dir are in the scratch dir (scripts/qml-test.sh).
+  NotchService {
+    id: chatSvc
+    ipcTarget: "notchd-qmltest-claude"
+    configPath: root.dir + "/claude.json"
+    compositor: workspace4
+    defaultModules: ["claude"]
+  }
+  FileView { id: claudeArgs; path: root.dir + "/claude-args"; printErrors: false; blockLoading: true }
+  FileView { id: claudeSession; path: root.dir + "/state/notchd/claude/session.json"; printErrors: false; blockLoading: true }
+
+  function claudeChat() {
+    var m = chatSvc.moduleById("claude")
+    if (!root.check(!!m, "the claude module did not load")) { root.done(); return }
+    root.check(m.chatTitle === "", "a fresh chat has a title: " + m.chatTitle)
+    m.send("Reply with exactly: two words")
+    root.check(m.chat.busy, "sending did not make it busy")
+    root.steps([
+      [1500, function() {
+        root.check(!m.chat.busy, "still busy: " + JSON.stringify(m.chat))
+        root.check(m.chat.messages.length === 2 && m.chat.messages[1].text === "two words",
+                   "the answer is " + JSON.stringify(m.chat.messages))
+        root.check(m.chat.sessionId === "00000000-0000-4000-8000-000000000001", "no session id: " + m.chat.sessionId)
+        root.check(m.chatTitle === "Reply with exactly: two words", "the title is " + m.chatTitle)
+        claudeArgs.reload()
+        var args = claudeArgs.text()
+        root.check(args.indexOf("--model sonnet") !== -1 && args.indexOf("--tools=WebSearch,WebFetch") !== -1,
+                   "started with " + args)
+        claudeSession.reload()
+        root.check(claudeSession.text().indexOf("00000000-0000-4000-8000-000000000001") !== -1,
+                   "the session was not saved: " + claudeSession.text())
+        m.newChat()
+      }],
+      [500, function() {
+        root.check(m.chat.messages.length === 0 && m.chat.sessionId === "", "a new chat kept " + JSON.stringify(m.chat))
+        root.check(!m.stopping, "the old process never exited")
+        m.send("again")
+      }],
+      [1500, function() {
+        root.check(!m.chat.busy && m.chat.messages.length === 2, "the new chat got no answer: " + JSON.stringify(m.chat))
+        claudeArgs.reload()
+        root.check(claudeArgs.text().indexOf("--resume") === -1, "a new chat resumed the old one: " + claudeArgs.text())
+        m.newChat()
+      }]
+    ], function() { root.done() })
   }
 }

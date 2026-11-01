@@ -57,7 +57,8 @@ Item {
     media: Qt.resolvedUrl("modules/media.qml"),
     activities: Qt.resolvedUrl("modules/activities.qml"),
     resources: Qt.resolvedUrl("modules/resources.qml"),
-    timer: Qt.resolvedUrl("modules/timer.qml")
+    timer: Qt.resolvedUrl("modules/timer.qml"),
+    claude: Qt.resolvedUrl("modules/claude.qml")
   })
 
   function moduleUrl(id) {
@@ -624,6 +625,11 @@ Item {
     function timer(command: string): string {
       var m = svc.moduleById("timer")
       return m ? m.command(command) : "timer module not loaded"
+    }
+    // The claude module: "new" starts a new chat; see modules/claude.qml.
+    function claude(command: string): string {
+      var m = svc.moduleById("claude")
+      return m ? m.command(command) : "claude module not loaded"
     }
     function state(): string {
       return JSON.stringify({

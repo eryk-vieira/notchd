@@ -14,6 +14,7 @@ Every host exposes the same methods on its `ipcTarget`. The CLI depends on the h
 | `open`, `toggle` | pin the first notch open on the focused monitor, or flip it |
 | `close` | close every notch |
 | `openNotch <id>`, `closeNotch <id>`, `toggleNotch <id>` | the same for one notch, by its `id` (`main`, `notch-2`...) |
+| `claude <command>` | the `claude` module: `new` starts a new chat (below) |
 | `timer <command>` | the `timer` module: start, pause or stop a countdown or a pomodoro (below) |
 | `settings` | open or close the settings window |
 | `recenter` | put every notch back in the middle of the top edge, following focus (removes each `position`) |
@@ -73,3 +74,17 @@ omarchy-shell eryk.notchd timer toggle
 ```
 
 It answers `ok`, `no timer running`, the usage, or `timer module not loaded` when no notch lists `timer`.
+
+## Claude
+
+The `claude` module is a quick chat; the notch that shows it opens with `toggleNotch <id>`, which you can bind to a key. From a Hyprland binding:
+
+```sh
+bind = SUPER ALT, C, exec, omarchy-shell eryk.notchd toggleNotch claude
+```
+
+| Command | |
+|---|---|
+| `new` | a new chat: the context starts empty |
+
+It answers `ok`, the usage, or `claude module not loaded` when no notch lists `claude`.

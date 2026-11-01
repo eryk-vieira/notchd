@@ -6,6 +6,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
+- `claude` module: a quick chat with Claude, on your Claude Code login. The notch is one session (`claude -p` kept open, without your hooks, MCP servers or CLAUDE.md): the closed notch shows the chat's title, the open one the chat, streamed in as Markdown, and a field to type in. It can search the web. The restart button, or `claude new` over IPC, starts a new chat; the chat comes back after a restart. Settings: Modules › Claude (model, web search, system prompt, and how long the `claude` process stays up while the chat is closed, 10 min by default). Not loaded by default: give it a notch of its own and bind `toggleNotch <id>` to a key.
 - Modules you type into (`wantsKeyboard`): the notch takes the keyboard while it is pinned open on one, by a click, a shortcut (`toggleNotch`) or a press on the module's field (`requestKeyboard()`), never on hover alone; Escape closes it. Modules can also set their expanded view's width (`expandedWidth`).
 - An app icon: the notch with an orange dot and an `n`, in Gruvbox colors. `assets/icons/` has the SVG, PNGs at every size from 16 to 1024 px, a `.ico` and a one-color symbolic SVG.
 - Omarchy: a notchd button in the bar, with the app icon. Its panel lists every notch, where it is and what it shows; clicking one opens or closes it, its gear opens that notch's settings, and Settings (or a right click on the icon) opens the settings window.

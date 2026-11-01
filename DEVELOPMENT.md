@@ -34,9 +34,10 @@ core/                 the framework: no desktop-specific code
   Outline.js          the notch's outline: shoulders, corners, joins (pure JS)
   Resources.js        /proc and df parsing, when a resource runs short (pure JS)
   Countdown.js        timer and pomodoro: durations, commands, the countdown (pure JS)
+  Claude.js           the claude chat: its command line, stream-json events, transcripts (pure JS)
   ReservedSpace.qml   how much of its edge windows leave to the closed notch
   *Compositor.qml     compositor adapters (Hyprland, generic)
-  modules/            built-in modules: media, activities, resources, timer
+  modules/            built-in modules: media, activities, resources, timer, claude
   settings/           the settings window, its controls and Settings.js
 hosts/
   omarchy/            Omarchy shell plugin entry points and the osd module
@@ -44,7 +45,8 @@ tests/
   *.test.mjs          Node tests of the pure-JS rules
   load.mjs            loads a core .js file the way QML sees it
   qml/shell.qml       QML behaviour tests, regression tests among them
-  qml/fixtures/       modules only the QML tests load (a module you type into)
+  qml/fixtures/       modules only the QML tests load (a module you type into), and a fake `claude`
+  fixtures/           recorded `claude` stream-json events (scrubbed), for claude.test.mjs and the fake
   visual/shell.qml    offscreen scenarios: the settings window, the notch per edge
   visual/hero.qml     the README image: the real notch in four states
   visual/demo-player.py  a fake MPRIS player with a fictional track
