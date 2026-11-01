@@ -175,6 +175,12 @@ ShellRoot {
       done.requestPeek(600000)
       claudeSvc.setConfigValue("claude.directory", root.outDir)
       claudeSvc.open()
+      // The plan's limits, by hand: offscreen nothing asks the network.
+      claudeSvc.moduleById("claude").usage.apply({ limits: [
+        { kind: "session", group: "session", percent: 42, resets_at: new Date(Date.now() + 130 * 60000).toISOString() },
+        { kind: "weekly_all", group: "weekly", percent: 83, resets_at: new Date(Date.now() + 3 * 86400000).toISOString() },
+        { kind: "weekly_scoped", group: "weekly", percent: 5, resets_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+          scope: { model: { display_name: "Fable" } } } ] })
       claudeBusySvc.moduleById("claude").status = { working: true, title: "Convert HEIC photos to JPG" }
       codexSvc.setConfigValue("codex.directory", root.outDir)
       codexSvc.open()

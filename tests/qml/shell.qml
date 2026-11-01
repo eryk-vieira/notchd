@@ -103,6 +103,7 @@ ShellRoot {
       { name: "claude: runs in the notch, keeps running closed, and its title says when it works", run: root.claudeRuns },
       { name: "claude: ask over IPC opens the notch and types the question in; new starts another", run: root.claudeAsk },
       { name: "agent toggle opens the agent's notch, whatever it is called, and closes it", run: root.agentToggle },
+      { name: "agent usage: the limits show in the open notch, and passing the warning peeks once", run: root.agentUsage },
       { name: "claude: the closed notch keeps its size while it works", run: root.agentBusySteady },
       { name: "codex: closed and idle for idleMinutes, it stops; opened again, it starts", run: root.codexIdle },
       { name: "terminal: the band behind your messages (ANSI 8) is gray, not orange", run: root.messageBandGray },
@@ -1361,6 +1362,39 @@ ShellRoot {
       m.stop()
       root.done()
     })
+  }
+
+  // The plan's limits (AgentUsage), fed answers by hand: offscreen, nothing
+  // asks the network or reads a real login (NOTCHD_OFFLINE).
+  function agentUsage() {
+    var m = claudeSvc.moduleById("claude")
+    var copy = claudeSvc.notches[0].copies[0]
+    // `day`: the session window (its reset), so a new window starts over.
+    var answer = function(session, day) {
+      return { limits: [
+        { kind: "session", group: "session", percent: session, resets_at: "2099-01-0" + (day || 2) + "T05:00:00Z" },
+        { kind: "weekly_all", group: "weekly", percent: 20, resets_at: "2099-01-07T00:00:00Z" } ] }
+    }
+    root.check(!m.usage.live, "offscreen, the usage asks the network")
+    root.check(m.usageProvider === "claude" && m.usage.active, "claude has no usage: " + m.usageProvider)
+    root.check(!m.showsUsage, "usage shown before any answer")
+    root.check(m.usage.apply(answer(85, 1)), "the answer was refused")
+    root.check(m.showsUsage && m.usage.limits.length === 2, "the limits do not show: " + JSON.stringify(m.usage.limits))
+    root.check(copy.peekModule === null, "the first answer warned: a restart would warn again")
+    root.check(m.usage.apply(answer(10)) && !m.usage.apply({ nope: 1 }), "an answer that isn't one was taken")
+    m.usage.apply(answer(81))
+    root.check(copy.peekModule === m && m.peekReason === "usage", "passing 80 % did not peek")
+    root.check(m.usageAlert && m.usageAlert.level === 80 && m.usageAlert.label === "5h", "the warning: " + JSON.stringify(m.usageAlert))
+    copy.dismissPeek()
+    m.usage.apply(answer(90))
+    root.check(copy.peekModule === null, "warned twice in one window")
+    m.usage.apply(answer(100))
+    root.check(copy.peekModule === m && m.usageAlert.level === 100, "the limit reached did not peek")
+    copy.dismissPeek()
+    claudeSvc.setConfigValue("claude.usage", false)
+    root.check(!m.showsUsage, "switched off, the usage still shows")
+    claudeSvc.setConfigValue("claude.usage", undefined)
+    root.done()
   }
 
   // Bug (claude chat, kept for the terminal): while busy the mark cycled

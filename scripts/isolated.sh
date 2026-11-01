@@ -18,5 +18,5 @@ chmod 700 -- "$runtime"
 
 exec env -u WAYLAND_DISPLAY -u DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE \
   -u DBUS_SESSION_BUS_ADDRESS -u QT_QPA_PLATFORMTHEME \
-  XDG_RUNTIME_DIR="$runtime" NO_AT_BRIDGE=1 QT_QPA_PLATFORM=offscreen \
+  XDG_RUNTIME_DIR="$runtime" NO_AT_BRIDGE=1 QT_QPA_PLATFORM=offscreen NOTCHD_OFFLINE=1 \
   dbus-run-session -- "$@"

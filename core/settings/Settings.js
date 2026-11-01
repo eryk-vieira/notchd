@@ -91,7 +91,8 @@ function modulePageId(moduleId) { return "modules/" + moduleId }
 // `settings` fields, whether it is `standalone` (no notch shows it; it has
 // a place of its own) and whether it is an `agent` (a coding agent in a
 // terminal: `"agent": { "command": ... }`, which brings the fields every
-// agent has, agentSettings). Anything malformed is dropped, so a bad file
+// agent has, agentSettings; `"usage"` there names where its plan usage
+// comes from, core/Usage.js, as `usage`). Anything malformed is dropped, so a bad file
 // costs the module its page and nothing else; `error` says why.
 function parseModuleInfo(text) {
   var info = { title: "", settings: [] }
@@ -108,6 +109,7 @@ function parseModuleInfo(text) {
   if (agent !== undefined) {
     if (agent && typeof agent === "object" && !Array.isArray(agent) && typeof agent.command === "string" && agent.command.trim() !== "") {
       info.agent = true
+      if (typeof agent.usage === "string" && agent.usage !== "") info.usage = agent.usage
       inherited = agentSettings(agent, info.title)
     } else {
       info.error = "agent: needs a command"
@@ -139,6 +141,12 @@ function agentSettings(agent, title) {
     { key: "font", type: "string", label: "Font", "default": "",
       help: "A monospace font family for the terminal; empty uses the theme's. " + later }
   ]
+  // `agent.usage`: the plan's limits, asked the way its CLI does.
+  if (typeof agent.usage === "string" && agent.usage !== "") fields.push(
+    { key: "usage", type: "boolean", label: "Plan usage", "default": true, section: "Usage",
+      help: "How much of the plan's limits (5 hours, the week) is used, in the open notch, asked every few minutes with the login " + name + " keeps. notchd only reads that login; " + name + " renews it when it runs." },
+    { key: "usageWarn", type: "integer", label: "Warn at", "default": 80, min: 50, max: 100, step: 5, unit: "%", section: "Usage",
+      help: "The notch peeks once when a limit passes this, and again when it is reached. 100 warns only at the limit." })
   fields.forEach(function(f) {
     if (typeof extra[f.key] === "string" && extra[f.key] !== "") f.help = f.help ? f.help + " " + extra[f.key] : extra[f.key]
   })

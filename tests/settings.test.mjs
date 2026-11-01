@@ -197,6 +197,16 @@ test('an agent\'s file brings the fields every agent has, its command the defaul
   assert.equal(info.settings.find((f) => f.key === 'font').label, 'Its font');
 });
 
+test('an agent with usage gets its switch and warning, under Usage', () => {
+  const info = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'Claude', agent: { command: 'claude', usage: 'claude' } })));
+  assert.equal(info.usage, 'claude');
+  const usage = info.settings.filter((f) => f.section === 'Usage');
+  assert.deepEqual(usage.map((f) => [f.key, f.default]), [['usage', true], ['usageWarn', 80]]);
+  const none = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'Aider', agent: { command: 'aider' } })));
+  assert.equal(none.usage, undefined);
+  assert.ok(!none.settings.some((f) => f.key === 'usage'));
+});
+
 test('an agent without a command is an error, not an agent', () => {
   for (const agent of [{}, { command: '' }, { command: 3 }, 'claude', []]) {
     const info = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'X', agent })));

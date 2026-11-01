@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import "Agent.js" as Agent
 import "Terminal.js" as Terminal
+import "Usage.js" as Usage
 
 // Base type for a module that runs a program's own terminal UI in the
 // notch: a coding agent (modules/codex.qml, modules/claude.qml). The
@@ -70,12 +71,41 @@ NotchModule {
   property int viewsOpen: 0
   onWorkingChanged: {
     if (m.working) m.attention = false
+    // A task ended: its usage moved.
+    else if (m.typed) usageSource.refresh()
     if (Agent.donePeek({ wasWorking: !m.working, working: m.working, open: m.viewsOpen > 0, typed: m.typed })) {
       // Done while you weren't looking: news until its view opens.
       m.attention = true
+      m.peekReason = "done"
       m.requestPeek(5000)
     }
   }
+  // What the peek says: "done" (the agent finished), "usage" (a limit
+  // passed the warning, `usageAlert`).
+  property string peekReason: "done"
+
+  // ---------------------------------------------------------------- usage
+  // The plan's limits (AgentUsage), from the file's `agent.usage`; the
+  // settings `usage` (on) and `usageWarn` (%).
+  readonly property string usageProvider: {
+    var info = m.notch && m.notch.moduleInfo ? m.notch.moduleInfo[m.moduleId] : null
+    return info && info.usage ? String(info.usage) : ""
+  }
+  property alias usage: usageSource
+  property var usageAlert: null
+  AgentUsage {
+    id: usageSource
+    provider: m.usageProvider
+    live: !!m.notch && m.notch.usageLive
+    enabled: m.setting("usage") !== false
+    threshold: Number(m.setting("usageWarn")) || 80
+    onAlert: function(limit) {
+      m.usageAlert = limit
+      m.peekReason = "usage"
+      m.requestPeek(limit.level >= 100 ? 8000 : 6000)
+    }
+  }
+  readonly property bool showsUsage: usageSource.active && usageSource.limits.length > 0
   onViewsOpenChanged: if (m.viewsOpen > 0) m.attention = false
 
   // ------------------------------------------------------------- terminal
@@ -284,9 +314,12 @@ NotchModule {
       Column {
         anchors.verticalCenter: parent.verticalCenter
         Text {
+          readonly property var alert: m.peekReason === "usage" ? m.usageAlert : null
           textFormat: Text.PlainText
-          text: m.appName + " is done"
-          color: Theme.foreground
+          text: !alert ? m.appName + " is done"
+            : alert.level >= 100 ? m.appName + ": " + alert.label + " limit reached"
+            : m.appName + ": " + alert.label + " limit at " + Math.round(alert.percent) + " %"
+          color: alert && alert.level >= 100 ? Theme.danger : Theme.foreground
           font.family: Theme.font.family
           font.pixelSize: Theme.font.body
         }
@@ -294,7 +327,9 @@ NotchModule {
           visible: text !== ""
           width: Math.min(implicitWidth, Theme.space(260))
           textFormat: Text.PlainText
-          text: m.sessionTitle
+          text: m.peekReason === "usage" && m.usageAlert
+            ? (m.usageAlert.resetsAt ? "Resets in " + Usage.resetIn(m.usageAlert.resetsAt, Date.now()) : "")
+            : m.sessionTitle
           elide: Text.ElideRight
           color: Theme.muted
           font.family: Theme.font.family
@@ -342,6 +377,9 @@ NotchModule {
           onActivated: m.closeNotch()
         }
       }
+
+      // The plan's limits: a bar each, how much is used and when it resets.
+      UsageBars { Layout.fillWidth: true; visible: m.showsUsage }
 
       // The terminal, in a frame. The terminal itself is m.term, put here
       // while this view is the last one open.
@@ -458,6 +496,64 @@ NotchModule {
       }
     }
   }
+  // The plan's limits in a row (AgentUsage): "5h ▬▬── 42 % · 2h 10m". A
+  // bar past the warning is red; stale limits are faint, with why.
+  component UsageBars: Flow {
+    id: bars
+    spacing: Theme.space(16)
+    // The time left, kept fresh.
+    property real now: Date.now()
+    Timer { interval: 30000; running: bars.visible; repeat: true; onTriggered: bars.now = Date.now() }
+    Repeater {
+      model: usageSource.limits
+      delegate: Row {
+        required property var modelData
+        readonly property bool hot: modelData.percent >= 100
+          || (usageSource.threshold < 100 && modelData.percent >= usageSource.threshold)
+        spacing: Theme.space(6)
+        opacity: usageSource.stale ? 0.55 : 1
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: modelData.label
+          color: Theme.muted
+          font.family: Theme.font.family
+          font.pixelSize: Theme.font.caption
+        }
+        Rectangle {
+          anchors.verticalCenter: parent.verticalCenter
+          width: Theme.space(56)
+          height: Theme.space(4)
+          radius: height / 2
+          color: Theme.line
+          Rectangle {
+            width: parent.width * Math.min(1, modelData.percent / 100)
+            height: parent.height
+            radius: parent.radius
+            color: hot ? Theme.danger : Theme.accent
+          }
+        }
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: Math.round(modelData.percent) + " %"
+            + (modelData.resetsAt ? " · " + Usage.resetIn(modelData.resetsAt, bars.now) : "")
+          color: hot ? Theme.danger : Theme.foreground
+          font.family: Theme.font.family
+          font.pixelSize: Theme.font.caption
+        }
+      }
+    }
+    Text {
+      visible: usageSource.stale && usageSource.problem !== ""
+      textFormat: Text.PlainText
+      text: usageSource.problem
+      color: Theme.faint
+      font.family: Theme.font.family
+      font.pixelSize: Theme.font.caption
+    }
+  }
+
   // A green dot while it works; its place stays while off.
   // Green while it works; the accent once it is done and you haven't
   // looked (`attention`).

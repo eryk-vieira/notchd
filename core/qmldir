@@ -10,4 +10,5 @@ Notch 1.0 Notch.qml
 NotchCopy 1.0 NotchCopy.qml
 NotchWindow 1.0 NotchWindow.qml
 TerminalModule 1.0 TerminalModule.qml
+AgentUsage 1.0 AgentUsage.qml
 KeepShown 1.0 KeepShown.qml

@@ -6,6 +6,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
+- Plan usage for `claude` and `codex`: the open agent shows a bar per limit (5 hours, the week, a model's week) with how much is used and when it resets, and peeks once when one passes 80 % (`usageWarn`) and when it is reached. notchd asks the endpoint each CLI calls, every 5 minutes and when the agent finishes a task, with the login the CLI keeps, which it only reads; when that lapses, the last figures stay, marked stale, until the agent renews it. Settings: Modules › Agents › its gear › Usage.
 - Agents, a kind of module of their own: `claude` and `codex` are listed apart on the Modules page, under Agents, and share one set of fields (folder, command, stop when idle, size, font), which a new agent gets by saying `"agent": { "command": ... }` in its JSON file. `agent <id> toggle` opens or closes the notch that shows an agent, on its tab, whatever the notch is called; bind that instead of `toggleNotch <name>`, which renaming the notch breaks. `agent <id> new` and `agent <id> "ask ..."` do what `claude new` and `claude "ask ..."` do, which stay.
 - An agent without a folder of its own starts in notchd's: `notchd` in your Documents folder, made the first time, instead of your home.
 - Leaving the notch from the keyboard: Ctrl+Escape in the `claude` or `codex` terminal closes the notch (the agent goes on), and a focus or workspace shortcut that moves to a window closes it too. Before, the open notch kept the keyboard until a click away.

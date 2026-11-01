@@ -2,6 +2,7 @@
   "title": "Codex",
   "agent": {
     "command": "codex",
+    "usage": "codex",
     "help": {
       "command": "Options that change its config (-c, --search, --enable) run it without its shared background server.",
       "idleMinutes": "Codex takes 500 to 700 MB, besides its shared background server."

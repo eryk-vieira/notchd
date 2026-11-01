@@ -2,6 +2,7 @@
   "title": "Claude",
   "agent": {
     "command": "claude",
+    "usage": "claude",
     "help": {
       "command": "For example \"claude --permission-mode auto\"."
     }

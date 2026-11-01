@@ -95,6 +95,10 @@ Item {
     return { moduleId: id, title: Settings.moduleTitle(id, info), settings: info.settings || [],
              standalone: !!info.standalone, agent: !!info.agent }
   })
+  // Agents ask their plan usage over the network, with the logins their
+  // CLIs keep (AgentUsage). Off offscreen (scripts/isolated.sh sets
+  // NOTCHD_OFFLINE): tests and renders never read a real login.
+  property bool usageLive: Quickshell.env("NOTCHD_OFFLINE") !== "1"
   // Agents (`"agent"` in their file): coding agents in a terminal
   // (TerminalModule), with the fields every agent has and the `agent` IPC.
   function isAgent(id) { return !!svc.moduleInfo[id] && !!svc.moduleInfo[id].agent }
@@ -698,7 +702,13 @@ Item {
               .map(function(c) { return { screen: c.screenName, mode: c.mode } })
           }
         }),
-        modules: svc.modules.map(function(m) { return { id: m.moduleId, active: m.active, priority: m.priority } })
+        modules: svc.modules.map(function(m) {
+          var out = { id: m.moduleId, active: m.active, priority: m.priority }
+          // An agent's plan usage (AgentUsage): its limits, and why they are stale.
+          var u = m.usage
+          if (u && u.active) out.usage = { limits: u.limits, stale: u.stale, problem: u.problem, fetchedAt: u.fetchedAt }
+          return out
+        })
       })
     }
   }
