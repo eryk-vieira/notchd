@@ -1,0 +1,9 @@
+#!/bin/sh
+# A fake `claude` for the QML tests (scripts/qml-test.sh puts it first on
+# PATH): records its arguments, then answers each stdin line with the
+# events in $NOTCHD_FAKE_CLAUDE_EVENTS, as `claude -p --output-format
+# stream-json` would.
+printf '%s\n' "$*" > "${NOTCHD_FAKE_CLAUDE_ARGS:-/dev/null}"
+while IFS= read -r line; do
+  cat "$NOTCHD_FAKE_CLAUDE_EVENTS"
+done

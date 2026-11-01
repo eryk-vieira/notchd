@@ -17,7 +17,11 @@ ln -s -- "$root/hosts" "$scratch/config/hosts"
 ln -s -- "$root/tests/qml/shell.qml" "$scratch/config/shell.qml"
 ln -s -- "$root/tests/qml/fixtures" "$scratch/config/fixtures"
 
-NOTCHD_QMLTEST_DIR="$scratch/data" "$root/scripts/isolated.sh" "$scratch/runtime" \
+# The claude module's state and Claude Code's dir in the scratch dir, and a
+# fake `claude` that replays recorded events.
+NOTCHD_QMLTEST_DIR="$scratch/data" XDG_STATE_HOME="$scratch/data/state" CLAUDE_CONFIG_DIR="$scratch/data/claude" \
+  PATH="$root/tests/qml/fixtures/bin:$PATH" NOTCHD_FAKE_CLAUDE_EVENTS="$root/tests/fixtures/claude-notools.jsonl" \
+  NOTCHD_FAKE_CLAUDE_ARGS="$scratch/data/claude-args" "$root/scripts/isolated.sh" "$scratch/runtime" \
   timeout 60 quickshell -p "$scratch/config" --no-color > "$scratch/log" 2>&1 || true
 
 grep -oE '(PASS|FAIL) .*' "$scratch/log" || true

@@ -1,0 +1,41 @@
+{
+  "title": "Claude",
+  "settings": [
+    {
+      "key": "model",
+      "type": "choice",
+      "label": "Model",
+      "default": "sonnet",
+      "options": [
+        { "value": "haiku", "label": "Haiku" },
+        { "value": "sonnet", "label": "Sonnet" },
+        { "value": "opus", "label": "Opus" }
+      ],
+      "help": "Applies from the next message."
+    },
+    {
+      "key": "web",
+      "type": "boolean",
+      "label": "Web search",
+      "default": true,
+      "help": "Lets Claude search the web and read pages, without asking."
+    },
+    {
+      "key": "idleMinutes",
+      "type": "integer",
+      "label": "Stop when idle",
+      "default": 10,
+      "min": 0,
+      "max": 120,
+      "step": 5,
+      "unit": "min",
+      "help": "The claude process takes about 175 MB; closed this long, it stops, and the next message resumes the chat (a few seconds slower). 0 keeps it running."
+    },
+    {
+      "key": "systemPrompt",
+      "type": "string",
+      "label": "System prompt",
+      "default": "You are a quick assistant that lives in the user's desktop notch. Answer briefly and directly, in the language the user writes in. Use Markdown only when it helps: short lists, code blocks."
+    }
+  ]
+}
