@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import ".."
 import "../Claude.js" as Claude
+import "../Markdown.js" as Markdown
 
 // A quick chat with Claude, for everyday questions: the notch is one Claude
 // Code session, run on the user's own login (`claude -p` over stream-json,
@@ -282,6 +283,15 @@ NotchModule {
   }
 
   // ----------------------------------------------------------------- views
+  // How answers are drawn (Markdown.toHtml): theme colors as CSS, so links
+  // and code read on any theme.
+  function css(c) { return "rgba(" + Math.round(c.r * 255) + "," + Math.round(c.g * 255) + "," + Math.round(c.b * 255) + "," + c.a + ")" }
+  readonly property var markdownStyle: ({
+    accent: m.css(Theme.accent), muted: m.css(Theme.muted), line: m.css(Theme.line), code: m.css(Theme.selected),
+    quote: m.css(Theme.hover),
+    body: Theme.font.body, heading: Theme.font.heading, gap: Theme.space(10), lineHeight: 140
+  })
+
   readonly property var spinnerFrames: ["·", "✢", "✳", "✶", "✻", "✽"]
   property int spinnerIndex: 0
   readonly property string mark: m.chat.busy ? m.spinnerFrames[m.spinnerIndex] : "✻"
@@ -408,7 +418,7 @@ NotchModule {
         Column {
           id: historyColumn
           width: history.width
-          spacing: Theme.space(12)
+          spacing: Theme.space(20)
           Repeater {
             model: rows
             delegate: Item {
@@ -446,7 +456,7 @@ NotchModule {
                 id: answer
                 visible: entry.role === "assistant"
                 width: entry.width
-                spacing: Theme.space(4)
+                spacing: Theme.space(8)
                 Text {
                   visible: entry.tools !== ""
                   textFormat: Text.PlainText
@@ -460,8 +470,8 @@ NotchModule {
                   width: parent.width
                   readOnly: true
                   selectByMouse: true
-                  textFormat: TextEdit.MarkdownText
-                  text: entry.text
+                  textFormat: TextEdit.RichText
+                  text: Markdown.toHtml(entry.text, m.markdownStyle)
                   wrapMode: TextEdit.Wrap
                   color: Theme.foreground
                   selectionColor: Theme.selected
