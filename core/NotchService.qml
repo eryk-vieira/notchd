@@ -585,10 +585,17 @@ Item {
   // A shortcut (IPC `navigate`) highlights every notch with its number and
   // the keyboard picks one (Navigate.js): its copy on the focused screen
   // opens as a preview, Tab walks its tabs, Enter pins it open (the others
-  // close) and Escape leaves everything as it was. NotchSurface's
-  // navigation window holds the keyboard meanwhile and hands keys to
-  // navKey().
+  // close) and Escape leaves everything as it was. Keys also open the
+  // selected notch's settings, remove it (asked twice) and move it
+  // (`navMode` "move": the edge, along it, the screen; Escape puts it
+  // back). NotchSurface's navigation window holds the keyboard meanwhile
+  // and hands keys to navKey().
   property bool navigating: false
+  // "select", "move" or "remove" (Navigate.step).
+  property string navMode: "select"
+  // Where the notch being moved was: { notch, position, workspaces }, its
+  // own config keys as they were, put back on Escape.
+  property var navMoveFrom: null
   // The selected notch, by index in `notches`.
   property int navSelected: -1
   // Each copy's tab as navigation started, given back on Escape.
@@ -610,6 +617,8 @@ Item {
       for (var j = 0; j < svc.notches[i].copies.length; j++)
         tabs.push({ copy: svc.notches[i].copies[j], tab: svc.notches[i].copies[j].tab })
     svc.navTabs = tabs
+    svc.navMode = "select"
+    svc.navMoveFrom = null
     svc.navigating = true
     return "ok"
   }
@@ -619,9 +628,13 @@ Item {
   // (State.keyboardChange).
   property bool navSettling: false
   Timer { id: navSettleTimer; interval: 600; onTriggered: svc.navSettling = false }
-  // `restore`: give each copy back the tab it had (Escape).
+  // `restore`: give each copy back the tab it had (Escape), and a notch
+  // being moved its place.
   function endNavigation(restore) {
     if (!svc.navigating) return
+    if (restore) svc.undoMove()
+    svc.navMoveFrom = null
+    svc.navMode = "select"
     svc.navSettling = true
     navSettleTimer.restart()
     svc.navigating = false
@@ -642,17 +655,55 @@ Item {
     var copy = svc.navCopy()
     var tabs = copy ? copy.tabModules.map(function(m) { return m.moduleId }) : []
     var shown = copy && copy.shownModules.length > 0 ? copy.shownModules[0].moduleId : ""
-    var next = Navigate.step({ selected: svc.navSelected, count: svc.notches.length, tabs: tabs, tab: shown }, key)
+    var next = Navigate.step({ mode: svc.navMode, selected: svc.navSelected, count: svc.notches.length,
+                               tabs: tabs, tab: shown }, key)
+    var notch = svc.navNotch
     if (next.action === "leave") { svc.endNavigation(true); return }
     if (next.action === "open") {
-      var notch = svc.navNotch
       svc.endNavigation(false)
       for (var i = 0; i < svc.notches.length; i++) if (svc.notches[i] !== notch) svc.notches[i].close()
       if (notch) notch.open()
       return
     }
+    if (next.action === "settings") {
+      var index = svc.navSelected
+      svc.endNavigation(true)
+      svc.openSettings(index)
+      return
+    }
+    if (next.action === "remove" && notch) {
+      // Its copies go with it: no tab to give back on Escape.
+      svc.navTabs = svc.navTabs.filter(function(e) { return notch.copies.indexOf(e.copy) === -1 })
+      svc.removeNotch(svc.navSelected)
+    }
+    if (next.action === "moveStart" && notch) {
+      svc.navMoveFrom = {
+        notch: notch,
+        position: svc.plainValue(notch.configKey("position")),
+        workspaces: svc.plainValue(notch.configKey("workspaces"))
+      }
+    }
+    if (next.action === "move" && notch) {
+      notch.moveTo(Navigate.moveTarget(notch.placement, next.move,
+        svc.screens.map(function(s) { return s.name }), copy ? copy.screenName : ""))
+    }
+    if (next.action === "moveDone") svc.navMoveFrom = null
+    if (next.action === "moveCancel") { svc.undoMove(); svc.navMoveFrom = null }
+    svc.navMode = next.mode
     svc.navSelected = next.selected
     if (next.tab !== "" && next.tab !== shown && copy) copy.showTab(next.tab)
+  }
+  // A config key's value as it is, copied (undefined when it isn't set).
+  function plainValue(key) {
+    var v = svc.configValue(key)
+    return v === undefined ? undefined : JSON.parse(JSON.stringify(v))
+  }
+  // A notch being moved goes back where it was, its workspaces too.
+  function undoMove() {
+    var from = svc.navMoveFrom
+    if (!from || !from.notch) return
+    from.notch.setValue("workspaces", from.workspaces)
+    from.notch.setValue("position", from.position)
   }
 
   // --------------------------------------------------------------- modules

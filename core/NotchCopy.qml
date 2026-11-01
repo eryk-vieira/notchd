@@ -1,5 +1,6 @@
 import QtQuick
 import "State.js" as State
+import "Navigate.js" as Navigate
 
 // A notch on screen: one copy of a Notch, with the state the pointer and
 // peeks change (hover, pin, peek, drag) and so its own mode. A notch that
@@ -136,7 +137,11 @@ Item {
   readonly property bool navSelected: copy.navShown && !!copy.owner && copy.owner.navSelected
   readonly property int navNumber: copy.owner ? copy.owner.navNumber : 0
   readonly property string navName: copy.owner ? copy.owner.notchId : ""
-  readonly property int navCount: copy.svc ? copy.svc.notches.length : 0
+  // "select", "move" or "remove" (NotchService.navMode), and the keys the
+  // selected notch's label lists, a line each (Navigate.hint).
+  readonly property string navMode: copy.navSelected ? copy.svc.navMode : "select"
+  readonly property var navHint: copy.navSelected
+    ? Navigate.hint(copy.navMode, copy.svc.notches.length, copy.tabModules.length > 1, copy.svc.screens.length) : []
   readonly property bool preview: copy.navSelected && copy.owner.focusedCopy() === copy
   // Pinned some other way while navigating (a click, a shortcut), it is the
   // notch you went to, so navigation ends (onPinnedChanged); Enter ends it

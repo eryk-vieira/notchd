@@ -3,6 +3,7 @@ import Quickshell
 import "State.js" as State
 import "Position.js" as Position
 import "Navigate.js" as Navigate
+import "Config.js" as Config
 
 // One notch of the config's `notches` (or the top-level one): its modules,
 // where it hangs and how. NotchService makes one per notch; it shows as
@@ -79,6 +80,23 @@ Item {
 
   function configKey(key) { return (notch.spec ? notch.spec.prefix : "") + key }
   function setValue(key, value) { if (notch.svc) notch.svc.setConfigValue(notch.configKey(key), value) }
+
+  // Moves it to `place` ({ edge, offset, screen }), as a drop or the
+  // keyboard (navigation's move) says. Taken to a screen that shows a
+  // workspace `workspaces` leaves out, that workspace is let in first
+  // (Config.withWorkspace): with the home set before it, the notch would
+  // hop back to the other screen and return.
+  function moveTo(place) {
+    var service = notch.svc
+    if (!service) return
+    var home = null
+    for (var i = 0; place.screen && place.screen !== Position.ALL_SCREENS && i < service.screens.length; i++)
+      if (service.screens[i].name === place.screen) home = service.screens[i]
+    var compositor = service.compositor
+    if (home && compositor && notch.workspaces && !notch.showsOn(home))
+      notch.setValue("workspaces", Config.withWorkspace(notch.workspaces, compositor.activeWorkspace(home)))
+    notch.setValue("position", Position.configValue(place, notch.inheritedPosition))
+  }
 
   // Whether the closed notch hangs on `screen`, by the workspace it shows.
   // Bindings that call it follow workspace switches.

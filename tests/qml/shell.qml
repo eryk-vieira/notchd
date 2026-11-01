@@ -117,7 +117,9 @@ ShellRoot {
       { name: "navigation: Enter pins the selected notch and closes the others; a click ends it too", run: root.navigationOpen },
       { name: "navigation: Tab walks the selected notch's tabs, Escape gives its tab back", run: root.navigationTabs },
       { name: "navigation takes the keyboard from an open agent without closing it, and gives it back", run: root.navigationKeepsAgent },
-      { name: "a notch open on the screen without focus keeps the keyboard", run: root.keyboardOnOtherScreen }
+      { name: "a notch open on the screen without focus keeps the keyboard", run: root.keyboardOnOtherScreen },
+      { name: "navigation: x twice removes the selected notch, s opens its settings", run: root.navigationRemove },
+      { name: "navigation: m moves the notch live; Enter keeps it, Escape or the shortcut puts it back", run: root.navigationMove }
     ]
     Qt.callLater(root.next)
   }
@@ -1113,6 +1115,78 @@ ShellRoot {
 
   // Bug guarded: navigation takes the keyboard from an agent pinned open;
   // losing it that way closed the agent's notch, as a click away does.
+  // Navigation's keys for the selected notch (Navigate.step): a removal
+  // asked twice, its settings.
+  function navigationRemove() {
+    root.steps([
+      [0, function() {
+        twoScreens.focusedScreenName = "B"
+        multi.replaceConfig({ notches: root.twoNotches.notches.concat([{ id: "extra", modules: [], position: { edge: "bottom" } }]) })
+      }],
+      [300, function() {
+        multi.navigate()
+        multi.navKey("3")
+        root.check(multi.notches.length === 3 && multi.navNotch && multi.navNotch.notchId === "extra",
+                   "the third notch is not selected (test setup)")
+        multi.navKey("remove")
+        root.check(multi.navMode === "remove", "x did not ask first: " + multi.navMode)
+        root.check(multi.navNotch.copies[0].navMode === "remove", "the label does not show the question")
+        multi.navKey("leave")
+        root.check(multi.navigating && multi.navMode === "select" && multi.notches.length === 3,
+                   "Escape at the question did not keep the notch and stay in navigation")
+        multi.navKey("remove")
+        multi.navKey("remove")
+      }],
+      [300, function() {
+        root.check(multi.notches.length === 2, "x twice left " + multi.notches.length + " notches")
+        root.check(multi.navSelected === 1 && multi.navNotch && multi.navNotch.notchId === "side",
+                   "after removing the last one, " + multi.navSelected + " is selected, not the one before")
+        multi.navKey("settings")
+        root.check(!multi.navigating, "s did not end navigation")
+        root.check(multi.settingsOpen && multi.settingsNotch === 1, "s did not open the selected notch's settings")
+        multi.closeSettings()
+      }]
+    ], function() { multi.replaceConfig(root.twoNotches); root.done() })
+  }
+
+  // Moving the selected notch (m): arrows for the edge, Shift along it, Tab
+  // the screen, live; Enter keeps it, Escape or the shortcut puts it back.
+  function navigationMove() {
+    var side = multi.notchById("side")
+    if (!root.check(!!side, "the side notch did not load")) { root.done(); return }
+    twoScreens.focusedScreenName = "B"
+    multi.navigate()
+    multi.navKey("2")
+    multi.navKey("move")
+    root.check(multi.navMode === "move", "m did not start moving: " + multi.navMode)
+    multi.navKey("down")
+    root.check(side.placement.edge === "bottom", "down put it on " + side.placement.edge)
+    multi.navKey("slideOn")
+    root.check(Math.abs(side.placement.offset - 0.55) < 1e-9, "Shift+→ slid it to " + side.placement.offset)
+    multi.navKey("leave")
+    root.check(multi.navigating && multi.navMode === "select", "Escape while moving left navigation")
+    root.check(side.placement.edge === "left" && side.placement.offset === 0.5, "Escape did not put it back: "
+               + side.placement.edge + " " + side.placement.offset)
+    root.check(JSON.stringify(multi.configValue("notches.1.position")) === JSON.stringify({ edge: "left" }),
+               "the config after Escape: " + JSON.stringify(multi.configValue("notches.1.position")))
+    multi.navKey("move")
+    multi.navKey("up")
+    multi.navKey("open")
+    root.check(multi.navigating && multi.navMode === "select", "Enter while moving left navigation")
+    root.check(side.placement.edge === "top", "Enter did not keep it on top: " + side.placement.edge)
+    multi.navKey("move")
+    multi.navKey("nextTab")
+    root.check(side.placement.screen === "A", "Tab took it to '" + side.placement.screen + "', not A")
+    multi.navKey("leave")
+    root.check(side.placement.screen === "", "Escape left it on " + side.placement.screen)
+    multi.navKey("move")
+    multi.navKey("next")
+    multi.navigate()
+    root.check(!multi.navigating && side.placement.edge === "top", "the shortcut while moving left it on " + side.placement.edge)
+    multi.replaceConfig(root.twoNotches)
+    root.done()
+  }
+
   // Bug: a notch pinned open on the screen without focus closed at once:
   // on demand, Hyprland gave its keyboard back to the focused screen. It
   // stays exclusive there, on demand once its screen has focus.

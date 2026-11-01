@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import "Position.js" as Position
-import "Config.js" as Config
 
 // One notch copy (NotchCopy) on screen: a layer-shell overlay on the screen
 // the copy names, the card hanging from the edge its notch's `position`
@@ -305,12 +304,7 @@ Scope {
           var drop = Object.assign({}, root.dragPlacement)
           drop.screen = notch.everyScreen ? Position.ALL_SCREENS
             : (Quickshell.screens || []).length > 1 ? root.dragScreen : ""
-          // The workspace first: with the home set before it, the notch
-          // would hop back to the other screen and return.
-          var home = drop.screen && !notch.everyScreen ? root.screenNamed(drop.screen) : null
-          if (home && root.compositor && notch.workspaces && !notch.showsOn(home))
-            notch.setValue("workspaces", Config.withWorkspace(notch.workspaces, root.compositor.activeWorkspace(home)))
-          notch.setValue("position", Position.configValue(drop, notch.inheritedPosition))
+          notch.moveTo(drop)
         }
         root.dragPlacement = null
         root.dragScreen = ""

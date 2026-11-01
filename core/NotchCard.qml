@@ -487,11 +487,13 @@ Item {
     // Hairline on the open sides only, so the notch reads against dark
     // windows without drawing a seam where it meets the edge, the screen's
     // side or a neighbor.
-    // While navigating, in the accent, the selected notch's thicker.
+    // While navigating, the selected notch's in the accent, the others'
+    // muted: a hairline still, the color sets them apart.
     ShapePath {
       fillColor: "transparent"
-      strokeColor: card.navShown ? Theme.accent : card.roomy || card.stretched ? Theme.line : "transparent"
-      strokeWidth: card.navSelected ? 2 : 1
+      strokeColor: card.navSelected ? Theme.accent : card.navShown ? Theme.muted
+        : card.roomy || card.stretched ? Theme.line : "transparent"
+      strokeWidth: 1
       PathSvg { path: outline.paths.stroke }
     }
   }
@@ -504,12 +506,9 @@ Item {
   readonly property bool navSelected: card.navShown && !!card.notch.navSelected
   readonly property int navNumber: card.navShown ? Number(card.notch.navNumber) || 0 : 0
   readonly property string navName: card.navShown ? String(card.notch.navName || "") : ""
-  readonly property bool navTabs: card.navSelected && (card.notch.tabModules || []).length > 1
-  readonly property int navCount: card.navSelected ? Number(card.notch.navCount) || 0 : 0
-  readonly property string navKeysHint: [
-    card.navCount > 1 ? "1-" + Math.min(9, card.navCount) + " ←→" : "",
-    card.navTabs ? "Tab" : "", "Enter", "Esc"
-  ].filter(function(s) { return s !== "" }).join("  ")
+  // Asking before removing it, the label turns to the danger color.
+  readonly property bool navRemoving: card.navSelected && card.notch.navMode === "remove"
+  readonly property var navHint: card.navSelected ? (card.notch.navHint || []) : []
   Rectangle {
     id: navLabel
     visible: card.navShown
@@ -518,7 +517,7 @@ Item {
     height: navText.implicitHeight + Theme.space(6)
     radius: Theme.radiusSmall
     color: Theme.background
-    border.color: card.navSelected ? Theme.accent : Theme.line
+    border.color: card.navRemoving ? Theme.danger : card.navSelected ? Theme.accent : Theme.line
     border.width: 1
     // Right of the card past its shoulder, at its top, or left of it where
     // the right has no room; on the right edge, left of it, the open side.
@@ -552,19 +551,22 @@ Item {
         }
         Text {
           textFormat: Text.PlainText
-          text: card.navName
-          color: card.navSelected ? Theme.foreground : Theme.muted
+          text: card.navRemoving ? "remove " + card.navName + "?" : card.navName
+          color: card.navRemoving ? Theme.danger : card.navSelected ? Theme.foreground : Theme.muted
           font.family: Theme.font.family
           font.pixelSize: Theme.font.caption
         }
       }
-      Text {
-        visible: card.navSelected
-        textFormat: Text.PlainText
-        text: card.navKeysHint
-        color: Theme.faint
-        font.family: Theme.font.family
-        font.pixelSize: Theme.font.caption - 1
+      Repeater {
+        model: card.navHint
+        delegate: Text {
+          required property var modelData
+          textFormat: Text.PlainText
+          text: String(modelData)
+          color: Theme.faint
+          font.family: Theme.font.family
+          font.pixelSize: Theme.font.caption - 1
+        }
       }
     }
   }

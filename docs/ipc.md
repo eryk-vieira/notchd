@@ -45,8 +45,11 @@ For an array, put a space before the bracket: `set modules ' ["media","activitie
 | `Tab`, `Shift+Tab` | the selected notch's next or previous tab |
 | `Enter` | pin it open on that tab and leave; the other notches close. It takes the keyboard, so `Esc` or `Ctrl+Esc` closes it later |
 | `Esc`, `Ctrl+Esc` | leave, each notch on the tab it had |
+| `s` | leave and open the selected notch's page in settings |
+| `x` | ask to remove the selected notch: `x` again removes it, any other key keeps it. The last notch stays |
+| `m` | move the selected notch, live: `←` `↑` `↓` `→` (`h` `k` `j` `l`) onto that edge, `Shift`+arrow 5 % along it, `Tab` / `Shift+Tab` to the next or previous monitor (letting in its workspace, as a drop does). `Enter` keeps it, `Esc` puts it back; both stay in navigation |
 
-`navigate` again leaves too, as Escape does, and a click that pins a notch leaves on that one. An agent open when it starts keeps running and gets the keyboard back on Escape. Bind it to a key:
+`navigate` again leaves too, as Escape does (a move under way goes back), and a click that pins a notch leaves on that one. An agent open when it starts keeps running and gets the keyboard back on Escape. Bind it to a key:
 
 ```lua
 o.bind("SUPER + N", "Navigate notches", "omarchy-shell eryk.notchd navigate")   -- Omarchy, ~/.config/hypr/bindings.lua

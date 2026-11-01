@@ -83,6 +83,9 @@ To write your own, see [docs/modules.md](docs/modules.md).
 | `Tab`, `Shift+Tab` | the selected notch's next or previous tab |
 | `Enter` | open it, pinned, on that tab (an agent gets the keyboard); the other notches close |
 | `Esc`, `Ctrl+Esc`, or the shortcut again | leave, everything as it was |
+| `s` | the selected notch's settings |
+| `x`, then `x` again | remove the selected notch (any other key keeps it); never the last one |
+| `m` | move the selected notch: `←` `↑` `↓` `→` (or `hjkl`) put it on that edge, `Shift`+arrow slides it along, `Tab` takes it to the next monitor; `Enter` keeps it there, `Esc` puts it back |
 
 A notch pinned open, this way, by a click or a shortcut, takes the keyboard: `Esc` or `Ctrl+Esc` closes it (in an agent's terminal, `Ctrl+Esc`).
 
