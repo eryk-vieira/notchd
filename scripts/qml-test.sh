@@ -17,14 +17,14 @@ ln -s -- "$root/hosts" "$scratch/config/hosts"
 ln -s -- "$root/tests/qml/shell.qml" "$scratch/config/shell.qml"
 ln -s -- "$root/tests/qml/fixtures" "$scratch/config/fixtures"
 
-# The claude module's state and Claude Code's dir in the scratch dir, and a
-# fake `claude` that replays recorded events.
+# Fake `claude` and `codex` terminal UIs (tests/qml/fixtures/bin), state and
+# Claude Code's dir in the scratch dir.
 NOTCHD_QMLTEST_DIR="$scratch/data" XDG_STATE_HOME="$scratch/data/state" CLAUDE_CONFIG_DIR="$scratch/data/claude" \
-  PATH="$root/tests/qml/fixtures/bin:$PATH" NOTCHD_FAKE_CLAUDE_EVENTS="$root/tests/fixtures/claude-notools.jsonl" \
-  NOTCHD_FAKE_CLAUDE_ARGS="$scratch/data/claude-args" "$root/scripts/isolated.sh" "$scratch/runtime" \
+  PATH="$root/tests/qml/fixtures/bin:$PATH" \
+  NOTCHD_FAKE_CLAUDE_ARGS="$scratch/data/claude-args" NOTCHD_FAKE_CODEX_ARGS="$scratch/data/codex-args" "$root/scripts/isolated.sh" "$scratch/runtime" \
   timeout 60 quickshell -p "$scratch/config" --no-color > "$scratch/log" 2>&1 || true
 
-grep -oE '(PASS|FAIL) .*' "$scratch/log" || true
+grep -oE '(PASS|FAIL|NOTE) .*' "$scratch/log" || true
 
 # The offscreen backend's lack of window masks is expected (the pointer
 # tests use a window).

@@ -23,9 +23,9 @@ ln -s -- "$root/tests/visual/shell.qml" "$scratch/config/shell.qml"
 
 # Cut off from the session, so nothing here touches its sockets, with the
 # demo player as the only MPRIS player (with-demo-player.sh).
-# The claude module's state in the scratch dir, and a fake `claude`.
+# Fake `claude` and `codex` terminal UIs, state in the scratch dir.
 NOTCHD_VISUAL_DIR="$scratch/shots" XDG_STATE_HOME="$scratch/shots/state" CLAUDE_CONFIG_DIR="$scratch/shots/claude" \
-  PATH="$root/tests/qml/fixtures/bin:$PATH" NOTCHD_FAKE_CLAUDE_EVENTS="$root/tests/fixtures/claude-notools.jsonl" \
+  PATH="$root/tests/qml/fixtures/bin:$PATH" \
   "$root/scripts/with-demo-player.sh" "$scratch/demo" "$scratch/log" \
   timeout 40 quickshell -p "$scratch/config" --no-color || true
 

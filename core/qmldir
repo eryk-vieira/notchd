@@ -9,3 +9,4 @@ ReservedSpace 1.0 ReservedSpace.qml
 Notch 1.0 Notch.qml
 NotchCopy 1.0 NotchCopy.qml
 NotchWindow 1.0 NotchWindow.qml
+TerminalModule 1.0 TerminalModule.qml

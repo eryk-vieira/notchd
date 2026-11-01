@@ -1,22 +1,22 @@
 #!/bin/sh
-# A fake `claude` for the QML tests (scripts/qml-test.sh puts it first on
-# PATH). Asked for a title (--no-session-persistence), it prints one.
-# Otherwise it records its arguments, then answers each stdin line with the
-# events in $NOTCHD_FAKE_CLAUDE_EVENTS, as `claude -p --output-format
-# stream-json` would.
-case " $* " in
-  *" --no-session-persistence "*) echo '"Fake chat title."'; exit 0 ;;
-esac
-printf '%s\n' "$*" > "${NOTCHD_FAKE_CLAUDE_ARGS:-/dev/null}"
-# A session Claude Code no longer has: what the real one prints, then exit 1.
-gone=11111111-2222-4333-8444-555555555555
-case " $* " in
-  *" --resume $gone "*)
-    IFS= read -r line
-    echo '{"type":"result","subtype":"error_during_execution","is_error":true,"session_id":"'$gone'","errors":["No conversation found with session ID: '$gone'"]}'
-    echo "No conversation found with session ID: $gone" >&2
-    exit 1 ;;
-esac
+# A fake `claude` for the QML tests and visual scenarios (the scripts put
+# it first on PATH). It records its arguments, folder and pid, then sets the
+# terminal's title the way Claude Code does: "✳ Claude Code" while idle.
+# Each line typed to it: "work" turns a half circle a while and names the
+# conversation, "quit" exits; anything else is recorded after the arguments.
+printf '%s\n%s\n%s\n' "$*" "$PWD" "$$" > "${NOTCHD_FAKE_CLAUDE_ARGS:-/dev/null}"
+title() { printf '\033]0;%s\007' "$1"; }
+name="Claude Code"
+title "✳ $name"
+echo "fake claude ready"
 while IFS= read -r line; do
-  cat "$NOTCHD_FAKE_CLAUDE_EVENTS"
+  case "$line" in
+    work)
+      title "◐ $name"; sleep 0.3
+      name="Fake conversation"
+      title "◑ $name"; sleep 0.3
+      title "✳ $name"; echo "worked" ;;
+    quit) echo "bye"; exit 0 ;;
+    *) echo "got: $line"; printf 'got %s\n' "$line" >> "${NOTCHD_FAKE_CLAUDE_ARGS:-/dev/null}" ;;
+  esac
 done

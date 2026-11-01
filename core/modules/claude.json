@@ -2,54 +2,56 @@
   "title": "Claude",
   "settings": [
     {
-      "key": "model",
-      "type": "choice",
-      "label": "Model",
-      "default": "sonnet",
-      "options": [
-        { "value": "haiku", "label": "Haiku" },
-        { "value": "sonnet", "label": "Sonnet" },
-        { "value": "opus", "label": "Opus" }
-      ],
-      "help": "Applies from the next message."
-    },
-    {
-      "key": "web",
-      "type": "boolean",
-      "label": "Web search",
-      "default": true,
-      "help": "Lets Claude search the web and read pages, without asking."
-    },
-    {
-      "key": "titles",
-      "type": "boolean",
-      "label": "Titles by Haiku",
-      "default": true,
-      "help": "After the first answer, Haiku names the chat for the closed notch. Off, the first question names it."
-    },
-    {
-      "key": "terminal",
+      "key": "directory",
       "type": "string",
-      "label": "Terminal",
-      "default": "xdg-terminal-exec",
-      "help": "Opens a terminal running the command after it, for Continue in terminal: xdg-terminal-exec, or e.g. \"alacritty -e\"."
+      "label": "Folder",
+      "default": "~",
+      "help": "Where Claude Code starts; ~ is your home. Applies the next time it starts (the restart button)."
+    },
+    {
+      "key": "command",
+      "type": "string",
+      "label": "Command",
+      "default": "claude",
+      "help": "The command line that runs Claude Code, e.g. \"claude --permission-mode auto\". Applies the next time it starts."
     },
     {
       "key": "idleMinutes",
       "type": "integer",
       "label": "Stop when idle",
-      "default": 10,
+      "default": 0,
       "min": 0,
-      "max": 120,
-      "step": 5,
+      "max": 240,
+      "step": 15,
       "unit": "min",
-      "help": "The claude process takes about 175 MB; closed this long, it stops, and the next message resumes the chat (a few seconds slower). 0 keeps it running."
+      "help": "Closed and not working this long, Claude Code stops; the next time the notch opens, a new one starts (/resume brings the conversation back). 0 keeps it running."
     },
     {
-      "key": "systemPrompt",
+      "key": "width",
+      "type": "integer",
+      "label": "Width",
+      "default": 760,
+      "min": 480,
+      "max": 1600,
+      "step": 20,
+      "unit": "px"
+    },
+    {
+      "key": "height",
+      "type": "integer",
+      "label": "Terminal height",
+      "default": 420,
+      "min": 200,
+      "max": 1000,
+      "step": 20,
+      "unit": "px"
+    },
+    {
+      "key": "font",
       "type": "string",
-      "label": "System prompt",
-      "default": "You are a quick assistant that lives in the user's desktop notch. Answer briefly and directly, in the language the user writes in. Use Markdown only when it helps: short lists, code blocks."
+      "label": "Font",
+      "default": "",
+      "help": "A monospace font family for the terminal; empty uses the theme's. Applies the next time it starts."
     }
   ]
 }

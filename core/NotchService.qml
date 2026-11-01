@@ -58,7 +58,8 @@ Item {
     activities: Qt.resolvedUrl("modules/activities.qml"),
     resources: Qt.resolvedUrl("modules/resources.qml"),
     timer: Qt.resolvedUrl("modules/timer.qml"),
-    claude: Qt.resolvedUrl("modules/claude.qml")
+    claude: Qt.resolvedUrl("modules/claude.qml"),
+    codex: Qt.resolvedUrl("modules/codex.qml")
   })
 
   function moduleUrl(id) {
@@ -638,10 +639,15 @@ Item {
       var m = svc.moduleById("timer")
       return m ? m.command(command) : "timer module not loaded"
     }
-    // The claude module: "new" starts a new chat; see modules/claude.qml.
+    // The claude and codex modules: "new" starts a new session, "ask
+    // <question>" opens the notch and types it in; see TerminalModule.qml.
     function claude(command: string): string {
       var m = svc.moduleById("claude")
       return m ? m.command(command) : "claude module not loaded"
+    }
+    function codex(command: string): string {
+      var m = svc.moduleById("codex")
+      return m ? m.command(command) : "codex module not loaded"
     }
     function state(): string {
       return JSON.stringify({

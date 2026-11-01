@@ -5,7 +5,6 @@ import Quickshell.Io
 import "core"
 import "core/settings"
 import "core/Position.js" as Position
-import "core/Claude.js" as Claude
 
 // Behaviour tests that need the QML runtime: bindings, signals, animations.
 // Rules that are plain JS belong in the Node tests instead. Most cases here
@@ -97,13 +96,15 @@ ShellRoot {
       { name: "a module you type into takes the keyboard only while pinned open", run: root.keyboardOnlyWhilePinned },
       { name: "Escape in a field inside the notch closes it", run: root.escapeCloses },
       { name: "a module sets the width of its expanded view", run: root.expandedWidthFromModule },
-      { name: "claude: a question gets its answer from the process, and a new chat starts over", run: root.claudeChat },
       { name: "a notch in the list dropped on the top edge stays there", run: root.dropOnTopStays },
-      { name: "claude: a session Claude Code no longer has starts over and asks again", run: root.claudeSessionGone },
-      { name: "claude: ask over IPC opens the chat's notch and asks", run: root.claudeAsk },
-      { name: "claude: back from a terminal, the chat is read again with its title", run: root.claudeReadsTranscript },
-      { name: "claude: the closed notch keeps its size while an answer is on its way", run: root.claudeBusySteady },
-      { name: "corners: a side notch's place never feeds back into the insets it takes", run: root.cornersNoLoop }
+      { name: "corners: a side notch's place never feeds back into the insets it takes", run: root.cornersNoLoop },
+      { name: "codex: without qmltermwidget, the notch says what to install", run: root.codexMissing },
+      { name: "codex: runs in the notch, keeps running closed, and its title says when it works", run: root.codexRuns },
+      { name: "claude: runs in the notch, keeps running closed, and its title says when it works", run: root.claudeRuns },
+      { name: "claude: ask over IPC opens the notch and types the question in; new starts another", run: root.claudeAsk },
+      { name: "claude: the closed notch keeps its size while it works", run: root.agentBusySteady },
+      { name: "codex: closed and idle for idleMinutes, it stops; opened again, it starts", run: root.codexIdle },
+      { name: "terminal: the band behind your messages (ANSI 8) is gray, not orange", run: root.messageBandGray }
     ]
     Qt.callLater(root.next)
   }
@@ -1098,60 +1099,6 @@ ShellRoot {
     })
   }
 
-  // ---------------------------------------------------------------- claude
-  // The claude module against a fake `claude` (tests/qml/fixtures/bin) that
-  // answers each message with recorded events; its state and Claude Code's
-  // dir are in the scratch dir (scripts/qml-test.sh).
-  NotchService {
-    id: chatSvc
-    ipcTarget: "notchd-qmltest-claude"
-    configPath: root.dir + "/claude.json"
-    compositor: workspace4
-    defaultModules: ["claude"]
-  }
-  FileView { id: claudeArgs; path: root.dir + "/claude-args"; printErrors: false; blockLoading: true }
-  FileView { id: claudeSession; path: root.dir + "/state/notchd/claude/session.json"; printErrors: false; blockLoading: true }
-
-  function claudeChat() {
-    var m = chatSvc.moduleById("claude")
-    if (!root.check(!!m, "the claude module did not load")) { root.done(); return }
-    root.check(m.chatTitle === "", "a fresh chat has a title: " + m.chatTitle)
-    m.send("Reply with exactly: two words")
-    root.check(m.chat.busy, "sending did not make it busy")
-    root.steps([
-      [1500, function() {
-        root.check(!m.chat.busy, "still busy: " + JSON.stringify(m.chat))
-        root.check(m.chat.messages.length === 2 && m.chat.messages[1].text === "two words",
-                   "the answer is " + JSON.stringify(m.chat.messages))
-        root.check(m.chat.sessionId === "00000000-0000-4000-8000-000000000001", "no session id: " + m.chat.sessionId)
-        claudeArgs.reload()
-        var args = claudeArgs.text()
-        root.check(args.indexOf("--model sonnet") !== -1 && args.indexOf("--tools=WebSearch,WebFetch") !== -1,
-                   "started with " + args)
-      }],
-      // Haiku (the fake) names the chat after its first answer.
-      [800, function() {
-        root.check(m.chatTitle === "Fake chat title", "the title is " + m.chatTitle)
-        claudeSession.reload()
-        var saved = claudeSession.text()
-        root.check(saved.indexOf("00000000-0000-4000-8000-000000000001") !== -1 && saved.indexOf("Fake chat title") !== -1,
-                   "the session and its title were not saved: " + saved)
-        m.newChat()
-      }],
-      [500, function() {
-        root.check(m.chat.messages.length === 0 && m.chat.sessionId === "", "a new chat kept " + JSON.stringify(m.chat))
-        root.check(!m.stopping, "the old process never exited")
-        m.send("again")
-      }],
-      [1500, function() {
-        root.check(!m.chat.busy && m.chat.messages.length === 2, "the new chat got no answer: " + JSON.stringify(m.chat))
-        claudeArgs.reload()
-        root.check(claudeArgs.text().indexOf("--resume") === -1, "a new chat resumed the old one: " + claudeArgs.text())
-        m.newChat()
-      }]
-    ], function() { root.done() })
-  }
-
   // ------------------------------------------------------------------ drop
   // Bug: with the top-level position on the left, a notch in `notches`
   // dropped on the top edge was saved without `edge` (top is the default),
@@ -1180,110 +1127,290 @@ ShellRoot {
     root.done()
   }
 
-  function claudeSessionGone() {
-    var m = chatSvc.moduleById("claude")
-    m.newChat()
-    m.chat = Object.assign({}, m.chat, { sessionId: "11111111-2222-4333-8444-555555555555" })
-    m.send("hi")
-    root.steps([[2000, function() {}]], function() {
-      root.check(!m.chat.busy && m.chat.error === "", "it did not recover: " + JSON.stringify(m.chat))
-      root.check(m.chat.sessionId === "00000000-0000-4000-8000-000000000001", "no new session: " + m.chat.sessionId)
-      root.check(m.chat.messages.length === 2 && m.chat.messages[1].text === "two words",
-                 "the question was not asked again: " + JSON.stringify(m.chat.messages))
-      root.check(m.chat.notice !== "", "no notice that the old chat was gone")
-      m.newChat()
+  // ---------------------------------------------------------------- agents
+  // The claude and codex modules (TerminalModule) against fake terminal UIs
+  // (tests/qml/fixtures/bin) that set the terminal's title as Claude Code and
+  // Codex do. The terminal needs the qmltermwidget package; where it isn't
+  // installed, the cases that need it note so in the log and pass.
+  NotchService {
+    id: codexSvc
+    ipcTarget: "notchd-qmltest-codex"
+    configPath: root.dir + "/codex.json"
+    compositor: workspace4
+    defaultModules: ["codex"]
+  }
+  FloatingWindow {
+    id: codexWin
+    implicitWidth: 900
+    implicitHeight: 600
+    NotchCard { notch: codexSvc.notches.length > 0 ? codexSvc.notches[0].copies[0] : null }
+    TestCase { id: codexKeys; when: false }
+  }
+  NotchService {
+    id: claudeSvc
+    ipcTarget: "notchd-qmltest-claude"
+    configPath: root.dir + "/claude.json"
+    compositor: workspace4
+    defaultModules: ["claude"]
+  }
+  FloatingWindow {
+    id: claudeWin
+    implicitWidth: 900
+    implicitHeight: 600
+    NotchCard { id: claudeCard; notch: claudeSvc.notches.length > 0 ? claudeSvc.notches[0].copies[0] : null }
+    TestCase { id: claudeKeys; when: false }
+  }
+
+  // Runs a command; `out` and `code` once it exits.
+  Process {
+    id: shellCmd
+    property int code: -1
+    property string out: ""
+    stdout: StdioCollector { onStreamFinished: shellCmd.out = text }
+    onExited: function(code) { shellCmd.code = code }
+  }
+  function run(argv) {
+    shellCmd.out = ""
+    shellCmd.code = -1
+    shellCmd.command = argv
+    shellCmd.running = true
+  }
+
+  // The terminal is not there: the case only notes it.
+  function noTerminal(m) {
+    if (m.available) return false
+    console.log("NOTE " + root.current + ": qmltermwidget is not installed; the terminal was not tested")
+    root.done()
+    return true
+  }
+
+  function codexMissing() {
+    var m = codexMissingSvc.moduleById("codex")
+    if (!root.check(!!m, "the codex module did not load")) { root.done(); return }
+    m.available = false
+    codexMissingSvc.open()
+    root.steps([[500, function() {}]], function() {
+      root.check(m.viewsOpen === 1, "the notch did not open on it: " + m.viewsOpen)
+      root.check(m.term === null && m.loadError === "", "it tried to start a terminal")
+      codexMissingSvc.close()
       root.done()
     })
   }
-
-  function claudeAsk() {
-    var m = chatSvc.moduleById("claude")
-    var copy = chatSvc.notches[0].copies[0]
-    root.check(m.command("ask") === "ok" && copy.pinned, "ask without a question did not open the notch")
-    copy.close()
-    root.check(m.command("ask Reply with exactly: two words") === "ok", "ask failed")
-    root.check(copy.pinned && copy.keyboardFocus === "exclusive", "ask did not open the notch with the keyboard")
-    root.check(m.command("ask again") !== "ok", "a second ask while busy was taken")
-    root.check(m.command("nonsense").indexOf("usage") === 0, "an unknown command did not answer the usage")
-    root.steps([[1500, function() {}]], function() {
-      root.check(m.chat.messages.length === 2 && m.chat.messages[1].text === "two words", "no answer: " + JSON.stringify(m.chat.messages))
-      m.closeNotch()
-      root.check(!copy.pinned, "closeNotch left it pinned")
-      m.newChat()
-      root.done()
-    })
+  NotchService {
+    id: codexMissingSvc
+    ipcTarget: "notchd-qmltest-codex-missing"
+    configPath: root.dir + "/codex-missing.json"
+    compositor: workspace4
+    defaultModules: ["codex"]
   }
+  NotchCard { notch: codexMissingSvc.notches.length > 0 ? codexMissingSvc.notches[0].copies[0] : null }
 
-  // A transcript as Claude Code leaves it after a terminal session: the
-  // question, the answer, and the title it made.
-  Process { id: transcriptDir }
-  FileView { id: transcriptWriter; printErrors: false }
-  function claudeReadsTranscript() {
-    var m = chatSvc.moduleById("claude")
-    var path = Claude.transcriptPath(m.claudeDir, m.home, "sid-terminal")
-    transcriptDir.command = ["mkdir", "-p", path.replace(/\/[^\/]*$/, "")]
-    transcriptDir.running = true
+  // One agent from start to restart: its command line and folder, Escape
+  // going to it, the dot and the title from its terminal's title, parked
+  // while closed and still running, a peek when it finishes while closed,
+  // the same terminal back on reopening, a new one (and the old one
+  // stopped) on restart, and noticing when it quits.
+  function agentRuns(svc, keys, id, expected) {
+    var m = svc.moduleById(id)
+    if (!root.check(!!m, "the " + id + " module did not load")) { root.done(); return }
+    if (root.noTerminal(m)) return
+    var cfg = {}
+    cfg[id] = { directory: root.dir }
+    svc.replaceConfig(cfg)
+    var copy = svc.notches[0].copies[0]
+    var argsFile = root.dir + "/" + id + "-args"
+    var first = null, pid = ""
+    svc.open()
     root.steps([
-      [300, function() {
-        transcriptWriter.path = path
-        transcriptWriter.setText([
-          { type: "user", uuid: "u1", message: { role: "user", content: "pergunta no notch" } },
-          { type: "assistant", uuid: "a1", message: { content: [{ type: "text", text: "resposta" }] } },
-          { type: "user", uuid: "u2", message: { role: "user", content: "pergunta no terminal" } },
-          { type: "assistant", uuid: "a2", message: { content: [{ type: "text", text: "outra" }] } },
-          { type: "ai-title", aiTitle: "Conversa no terminal", sessionId: "sid-terminal" }
-        ].map(function(e) { return JSON.stringify(e) }).join("\n") + "\n")
+      [900, function() {
+        first = m.term
+        if (!root.check(!!first, "opening the notch started no terminal")) return
+        root.check(!m.working && m.sessionTitle === "", "after starting: working " + m.working + ", title " + m.sessionTitle)
+        root.check(first.activeFocus, "the terminal does not have the focus")
+        // Escape goes to the agent: the notch stays open.
+        keys.keyClick(Qt.Key_Escape)
+        // The Escape is on the fake's line: end that line first.
+        first.write("\rwork\r")
+        root.run(["cat", argsFile])
+      }],
+      [200, function() {
+        var args = shellCmd.out.split("\n")
+        root.check(args[0] === "", id + " got options: " + args[0])
+        root.check(args[1] === root.dir, id + " started in " + args[1])
+        pid = args[2]
+        root.check(copy.pinned, "Escape closed the notch")
+        root.check(m.working, "the spinner did not make it working")
+      }],
+      [900, function() {
+        root.check(!m.working && m.sessionTitle === expected, "after work: working " + m.working + ", title " + m.sessionTitle)
+        m.closeNotch()
+      }],
+      [600, function() {
+        root.check(m.viewsOpen === 0 && m.term === first && first.parent === m, "closing did not park the terminal")
+        root.check(!m.exited, "closing stopped it")
+        m.typed = true
+        first.write("work\r")
+      }],
+      [1100, function() {
+        root.check(copy.peekModule === m, "the end of work while closed did not peek")
+        svc.open()
+      }],
+      [500, function() {
+        root.check(m.term === first && first.parent !== m && first.visible, "reopened, it did not show the same terminal")
+        m.restart()
+      }],
+      [900, function() {
+        root.check(m.term !== first && !!m.term && !m.exited, "restart did not start a new terminal")
+        root.run(["cat", argsFile])
       }],
       [300, function() {
-        m.newChat()
-        m.chat = Object.assign({}, m.chat, { sessionId: "sid-terminal", title: "old" })
-        m.handedOff = true
-        m.reloadTranscript()
+        root.check(shellCmd.out.split("\n")[2] !== pid, "the new terminal runs the old " + id)
+        root.run(["kill", "-0", pid])
       }],
-      [300, function() {}]
+      [300, function() {
+        root.check(shellCmd.code !== 0, "the old " + id + " (" + pid + ") still runs after restart")
+        m.term.write("quit\r")
+      }],
+      [500, function() {
+        root.check(m.exited && !m.working, id + " quit and the module did not notice")
+        svc.close()
+      }]
     ], function() {
-      root.check(!m.handedOff && !m.reloading, "still waiting on the transcript")
-      root.check(m.chat.messages.length === 4 && m.chat.messages[3].text === "outra",
-                 "the chat was not read again: " + JSON.stringify(m.chat.messages))
-      root.check(m.chatTitle === "Conversa no terminal", "the title is " + m.chatTitle)
-      m.newChat()
+      m.stop()
+      root.done()
+    })
+  }
+  function codexRuns() { root.agentRuns(codexSvc, codexKeys, "codex", "Fake thread") }
+  function claudeRuns() { root.agentRuns(claudeSvc, claudeKeys, "claude", "Fake conversation") }
+
+  // Over IPC: ask opens the notch with the keyboard and types the question
+  // in once the agent is up; new starts another; anything else, the usage.
+  function claudeAsk() {
+    var m = claudeSvc.moduleById("claude")
+    if (root.noTerminal(m)) return
+    var copy = claudeSvc.notches[0].copies[0]
+    var pid = ""
+    root.steps([
+      // The last case's view is still closing.
+      [600, function() {
+        root.check(m.command("nonsense").indexOf("usage") === 0, "an unknown command did not answer the usage")
+        root.check(m.command("ask why is the sky blue?") === "ok", "ask failed")
+        root.check(copy.pinned && copy.keyboardFocus === "exclusive", "ask did not open the notch with the keyboard")
+      }],
+      [1500, function() { root.run(["cat", root.dir + "/claude-args"]) }],
+      [300, function() {
+        var lines = shellCmd.out.split("\n")
+        root.check(lines.indexOf("got why is the sky blue?") !== -1, "the question did not reach claude: " + JSON.stringify(lines))
+        pid = lines[2]
+        root.check(m.command("new") === "ok", "new failed")
+      }],
+      [900, function() { root.run(["cat", root.dir + "/claude-args"]) }],
+      [300, function() {
+        root.check(shellCmd.out.split("\n")[2] !== pid, "new did not start another claude")
+        m.closeNotch()
+      }]
+    ], function() {
+      m.stop()
       root.done()
     })
   }
 
-  // Bug: while busy the mark cycled through spinner glyphs of different
-  // widths, so the closed notch kept resizing (it springs to fit). Now the
-  // logo stays, and the working dot's place is kept while it is off.
-  NotchCard {
-    id: chatCard
-    notch: chatSvc.notches.length > 0 ? chatSvc.notches[0].copies[0] : null
-  }
-  function claudeBusySteady() {
-    var m = chatSvc.moduleById("claude")
-    m.newChat()
-    chatSvc.close()
+  // Bug (claude chat, kept for the terminal): while busy the mark cycled
+  // through glyphs of different widths, so the closed notch kept resizing
+  // (it springs to fit). Now the mark stays, and the working dot's place is
+  // kept while it is off.
+  function agentBusySteady() {
+    var m = claudeSvc.moduleById("claude")
+    claudeSvc.close()
     var widths = []
     root.steps([
-      [400, function() {
-        m.chat = Object.assign({}, Claude.EMPTY, { title: "A title", sessionId: "s",
-          messages: [{ role: "user", text: "q", tools: [] }, { role: "assistant", text: "a", tools: [] }] })
-      }],
-      [500, function() { widths.push(chatCard.width) }],
-      [0, function() {
-        m.chat = Object.assign({}, Claude.EMPTY, { busy: true, activity: "thinking", title: "A title", sessionId: "s",
-          messages: [{ role: "user", text: "q", tools: [] }, { role: "assistant", text: "", tools: [] }] })
-      }],
-      [500, function() { widths.push(chatCard.width) }],
-      [130, function() { widths.push(chatCard.width) }],
-      [130, function() { widths.push(chatCard.width) }],
-      [130, function() { widths.push(chatCard.width) }],
-      [130, function() { widths.push(chatCard.width) }],
-      [130, function() { widths.push(chatCard.width) }]
+      [600, function() { m.status = { working: false, title: "A title" } }],
+      [500, function() { widths.push(claudeCard.width) }],
+      [0, function() { m.status = { working: true, title: "A title" } }],
+      [500, function() { widths.push(claudeCard.width) }],
+      [130, function() { widths.push(claudeCard.width) }],
+      [130, function() { widths.push(claudeCard.width) }]
     ], function() {
-      root.check(chatCard.mode === "compact", "the notch is " + chatCard.mode)
+      root.check(claudeCard.mode === "compact", "the notch is " + claudeCard.mode)
       var min = Math.min.apply(null, widths), max = Math.max.apply(null, widths)
       root.check(max - min < 0.5, "the closed notch changed width going busy and while busy: " + JSON.stringify(widths))
-      m.chat = Claude.EMPTY
+      m.status = { working: false, title: "" }
+      root.done()
+    })
+  }
+
+  function codexIdle() {
+    var m = codexSvc.moduleById("codex")
+    if (root.noTerminal(m)) return
+    // 0.02 min: 1.2 s.
+    codexSvc.replaceConfig({ codex: { directory: root.dir, idleMinutes: 0.02 } })
+    root.steps([
+      // The last case's view is still closing.
+      [600, function() { codexSvc.open() }],
+      [800, function() {
+        root.check(!!m.term, "opening started no terminal")
+        codexSvc.close()
+      }],
+      [700, function() { root.check(!!m.term, "it stopped before idleMinutes") }],
+      [1200, function() {
+        root.check(m.term === null, "closed and idle, it kept running")
+        codexSvc.open()
+      }],
+      [600, function() {
+        root.check(!!m.term && !m.exited, "opened again, no new terminal")
+        codexSvc.close()
+      }]
+    ], function() {
+      m.stop()
+      codexSvc.replaceConfig({})
+      root.done()
+    })
+  }
+
+  // Bug: the messages you sent to Codex sat on an orange band. Codex can't
+  // ask this terminal for its background (no OSC 11 answer), so it paints
+  // them with ANSI 8, Breeze's orange. A terminal paints a band in ANSI 8;
+  // the grab's pixel must be a gray.
+  Item { id: bandHolder; parent: codexWin.contentItem; y: 500; width: 300; height: 60 }
+  Canvas {
+    id: bandCanvas
+    parent: codexWin.contentItem
+    width: 1; height: 1
+    property var done: null
+    onImageLoaded: requestPaint()
+    onPaint: {
+      if (!bandCanvas.done) return
+      var ctx = getContext("2d")
+      ctx.drawImage(bandCanvas.done.url, -40, -8)
+      var px = ctx.getImageData(0, 0, 1, 1).data
+      var cb = bandCanvas.done.cb
+      bandCanvas.done = null
+      cb([px[0], px[1], px[2]])
+    }
+  }
+  function messageBandGray() {
+    var m = codexSvc.moduleById("codex")
+    if (root.noTerminal(m)) return
+    var c = Qt.createComponent(Qt.resolvedUrl("core/terminal/TerminalView.qml"))
+    var t = c.createObject(bandHolder, { program: "/bin/sh", width: 300, height: 60,
+      programArguments: ["-c", "printf '\\033[48;5;8m%30s\\033[0m\\n' ''; sleep 5"] })
+    var file = root.dir + "/band.png"
+    var rgb = null
+    root.steps([
+      [700, function() {
+        bandHolder.grabToImage(function(result) {
+          result.saveToFile(file)
+          bandCanvas.done = { url: "file://" + file, cb: function(px) { rgb = px } }
+          bandCanvas.loadImage("file://" + file)
+        })
+      }],
+      [500, function() {}]
+    ], function() {
+      if (root.check(rgb !== null, "could not read the band's color")) {
+        var spread = Math.max(rgb[0], rgb[1], rgb[2]) - Math.min(rgb[0], rgb[1], rgb[2])
+        root.check(spread < 16, "the band is not gray: rgb " + rgb.join(","))
+      }
+      t.destroy()
       root.done()
     })
   }
