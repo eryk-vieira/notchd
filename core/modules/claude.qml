@@ -292,16 +292,17 @@ NotchModule {
     body: Theme.font.body, heading: Theme.font.heading, gap: Theme.space(10), lineHeight: 140
   })
 
-  // The mark stays put: a spinner of glyphs of different widths kept the
-  // closed notch resizing. A dot on it says an answer is on its way.
-  readonly property string mark: "✻"
+  // Closed: [Claude's logo] [title] [a green dot while an answer is on its
+  // way]. Nothing in it changes size while answering: a spinner of glyphs of
+  // different widths kept the closed notch resizing, and the dot's place is
+  // kept while it is off.
   readonly property string activityText: m.chat.activity === "searching" ? "Searching the web…"
     : m.chat.activity === "writing" ? "Writing…" : m.chat.activity === "thinking" ? "Thinking…" : ""
 
   compact: Component {
     Row {
       spacing: Theme.space(8)
-      Mark { anchors.verticalCenter: parent.verticalCenter }
+      Logo { anchors.verticalCenter: parent.verticalCenter }
       Text {
         anchors.verticalCenter: parent.verticalCenter
         width: Math.min(implicitWidth, Theme.space(220))
@@ -312,14 +313,21 @@ NotchModule {
         font.family: Theme.font.family
         font.pixelSize: Theme.font.bodySmall
       }
+      Working { anchors.verticalCenter: parent.verticalCenter }
     }
   }
-  verticalCompact: Component { Mark {} }
+  verticalCompact: Component {
+    Column {
+      spacing: Theme.space(6)
+      Logo { anchors.horizontalCenter: parent.horizontalCenter }
+      Working { anchors.horizontalCenter: parent.horizontalCenter }
+    }
+  }
 
   peek: Component {
     Row {
       spacing: Theme.space(12)
-      Mark { anchors.verticalCenter: parent.verticalCenter; size: Theme.font.heading }
+      Logo { anchors.verticalCenter: parent.verticalCenter; size: Theme.font.heading * 1.5 }
       Column {
         anchors.verticalCenter: parent.verticalCenter
         Text {
@@ -373,7 +381,7 @@ NotchModule {
       RowLayout {
         Layout.fillWidth: true
         spacing: Theme.space(10)
-        Mark { size: Theme.font.heading }
+        Logo { size: Theme.font.heading }
         Text {
           Layout.fillWidth: true
           textFormat: Text.PlainText
@@ -383,6 +391,7 @@ NotchModule {
           font.family: Theme.font.family
           font.pixelSize: Theme.font.body
         }
+        Working { visible: m.chat.busy }
         IconButton {
           visible: Claude.lastAnswer(m.chat) !== ""
           glyph: 0xF018F  // nf-md-content_copy
@@ -588,32 +597,34 @@ NotchModule {
   }
 
   // ------------------------------------------------------------ components
-  // The ✻, and while an answer is on its way a green dot on its corner,
-  // drawn over it so the notch keeps its size.
-  component Mark: Item {
-    id: markItem
-    property int size: Theme.font.body
-    implicitWidth: glyph.implicitWidth
-    implicitHeight: glyph.implicitHeight
-    Text {
-      id: glyph
-      textFormat: Text.PlainText
-      text: m.mark
-      color: Theme.accent
-      font.family: Theme.font.family
-      font.pixelSize: markItem.size
+  // Claude's logo (core/modules/claude.svg, see NOTICE), drawn at `size`
+  // px. mipmap keeps it out of the window-sized texture atlas (modules.md).
+  component Logo: Item {
+    id: logo
+    property real size: Theme.font.body * 1.25
+    // Its size from `size` alone: from its own width, a layout feeding the
+    // image's implicit size back doubled it each pass.
+    implicitWidth: Math.round(logo.size)
+    implicitHeight: implicitWidth
+    Image {
+      anchors.fill: parent
+      source: Qt.resolvedUrl("claude.svg")
+      sourceSize.width: Math.round(logo.size) * 2
+      sourceSize.height: Math.round(logo.size) * 2
+      fillMode: Image.PreserveAspectFit
+      smooth: true
+      mipmap: true
     }
+  }
+  // A green dot while an answer is on its way; its place stays while off.
+  component Working: Item {
+    implicitWidth: Theme.space(7)
+    implicitHeight: implicitWidth
     Rectangle {
+      anchors.fill: parent
       visible: m.chat.busy
-      readonly property int ring: Math.max(1, Math.round(markItem.size / 10))
-      width: Math.max(Theme.space(4), Math.round(markItem.size * 0.36)) + 2 * ring
-      height: width
       radius: width / 2
-      x: glyph.width - width * 0.25
-      y: Math.round(glyph.height * 0.2) - width / 2
       color: Theme.success
-      border.width: ring
-      border.color: Theme.background
     }
   }
   component IconButton: Item {
