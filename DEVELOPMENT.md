@@ -35,6 +35,7 @@ core/                 the framework: no desktop-specific code
   Resources.js        /proc and df parsing, when a resource runs short (pure JS)
   Countdown.js        timer and pomodoro: durations, commands, the countdown (pure JS)
   Claude.js           the claude chat: its command line, stream-json events, transcripts (pure JS)
+  Markdown.js         Markdown to rich text styled from the theme, for the chat's answers (pure JS)
   ReservedSpace.qml   how much of its edge windows leave to the closed notch
   *Compositor.qml     compositor adapters (Hyprland, generic)
   modules/            built-in modules: media, activities, resources, timer, claude
