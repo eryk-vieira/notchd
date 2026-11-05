@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {isDark, opaque, parse, tones} from '../hosts/gnome/themeColors.js';
+import {FONTS, expandedWidth, fonts, isDark, opaque, parse, textScale, tones} from '../hosts/gnome/themeColors.js';
 
 const hex = c => '#' + [c.r, c.g, c.b].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
 
@@ -32,4 +32,25 @@ test('a see-through bar color gives none, an opaque one its channels', () => {
     assert.equal(opaque({red: 0, green: 0, blue: 0, alpha: 100}), null);
     assert.equal(opaque(null), null);
     assert.deepEqual(opaque({red: 12, green: 34, blue: 56, alpha: 255}), [12, 34, 56]);
+});
+
+test('GNOME notch text follows the desktop text scaling', () => {
+    assert.deepEqual(fonts(1), FONTS);
+    assert.deepEqual(fonts(1.25), {caption: 13, bodySmall: 14, body: 15, heading: 20, display: 30});
+    assert.deepEqual(fonts(1.5).body, 18);
+    // An unreadable factor keeps the design sizes.
+    for (const bad of [0, -1, NaN, Infinity, undefined, null, '1.5'])
+        assert.deepEqual(fonts(bad), FONTS, `factor ${bad}`);
+});
+
+test('the open GNOME notch widens with the text scaling, never narrows', () => {
+    assert.equal(expandedWidth(400, 1), 400);
+    assert.equal(expandedWidth(400, 1.25), 500);
+    assert.equal(expandedWidth(360, 2), 720);
+    // Smaller text keeps the module's width; a bad factor is 1.
+    assert.equal(expandedWidth(400, 0.8), 400);
+    for (const bad of [0, -1, NaN, undefined, '2'])
+        assert.equal(expandedWidth(400, bad), 400, `factor ${bad}`);
+    assert.equal(textScale(1.5), 1.5);
+    assert.equal(textScale(null), 1);
 });

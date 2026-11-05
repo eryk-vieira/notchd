@@ -202,16 +202,23 @@ class Shell:
         return subprocess.run(["timeout", "-k", "2", "10", NOTCHD, "ipc", *args], env=env,
                               capture_output=True, text=True).stdout.strip()
 
-    def extensions(self, verb):
+    def _session_env(self):
         # The shell's own session: GNOME 46's gnome-extensions edits the
         # `enabled-extensions` setting itself (not over D-Bus, as 51 does)
         # and reads it from the config dir of the user it runs as, so it
         # needs the shell's XDG dirs (gnome-dev.sh) to see the shell's value.
-        env = dict(os.environ, DBUS_SESSION_BUS_ADDRESS=self._address(),
-                   XDG_RUNTIME_DIR=os.path.join(self.scratch, "run"), XDG_CONFIG_HOME=os.path.join(self.scratch, "config"),
-                   XDG_DATA_HOME=os.path.join(self.scratch, "data"), XDG_CACHE_HOME=os.path.join(self.scratch, "cache"))
-        subprocess.run(["timeout", "-k", "2", "10", "gnome-extensions", verb, UUID], env=env, check=True,
-                       capture_output=True)
+        # The same goes for gsettings: never the real user's.
+        return dict(os.environ, DBUS_SESSION_BUS_ADDRESS=self._address(),
+                    XDG_RUNTIME_DIR=os.path.join(self.scratch, "run"), XDG_CONFIG_HOME=os.path.join(self.scratch, "config"),
+                    XDG_DATA_HOME=os.path.join(self.scratch, "data"), XDG_CACHE_HOME=os.path.join(self.scratch, "cache"))
+
+    def extensions(self, verb):
+        subprocess.run(["timeout", "-k", "2", "10", "gnome-extensions", verb, UUID], env=self._session_env(),
+                       check=True, capture_output=True)
+
+    def gsettings(self, *args):
+        subprocess.run(["timeout", "-k", "2", "10", "gsettings", *args], env=self._session_env(),
+                       check=True, capture_output=True)
 
     def tail(self, n=40):
         try:
@@ -382,6 +389,31 @@ class NotchOnGnome(ShellCase):
         finally:
             sh.call("PanelStyle", ("",), "(s)")
         sh.until(same, 3, "the notch back on the default bar's background")
+
+    # Bug: under Large Text the open notch kept its module's width, so the
+    # larger labels no longer fit: at factor 2 the timer's last button read
+    # "Pom…".
+    def test_the_open_notch_widens_with_the_text_scaling(self):
+        sh = self.shell
+        x, y = center(main_copy(sh.snapshot()))
+        sh.move(x, y)
+        sh.until(lambda s: main_copy(s)["mode"] == "expanded", 2)
+        sh.click()
+        s = sh.until(lambda s: grabs(s) > 0 and main_copy(s)["texts"], 2, "the pinned notch")
+        width = main_copy(s)["w"]
+        try:
+            sh.gsettings("set", "org.gnome.desktop.interface", "text-scaling-factor", "2")
+            s = sh.until(lambda s: s["theme"]["fonts"]["body"] == 24 and main_copy(s)["w"] > width
+                         and main_copy(s)["textSizes"] and all(px >= 20 for px in main_copy(s)["textSizes"]),
+                         3, "the open notch with the larger text")
+            c = main_copy(s)
+            self.assertEqual(c["ellipsized"], [], c["texts"])
+            self.assertLessEqual(c["x"] + c["w"], 1920)
+        finally:
+            sh.gsettings("reset", "org.gnome.desktop.interface", "text-scaling-factor")
+            sh.key(KEY_ESCAPE)
+        sh.until(lambda s: s["theme"]["fonts"]["body"] == 12 and main_copy(s)["mode"] == "compact", 3,
+                 "the design sizes back, closed")
 
     def test_reserve_keeps_windows_below_the_compact_notch(self):
         s = self.shell.until(lambda x: x["struts"], 3, "a strut")
@@ -794,6 +826,31 @@ class Terminal(ShellCase):
                      3, "the new terminal font")
         finally:
             sh.ipc("set", "shell.font", json.dumps("DejaVu Sans Mono"))
+
+    # Bug: under Large Text (`text-scaling-factor`) the notch's text kept its
+    # own pixel sizes, smaller than the rest of the Shell's; the terminal's
+    # font, rebuilt only when its family changed, kept its size too. And a
+    # theme change drew the module's view and the tabs again only when the
+    # notch's state changed: an unchanged view kept its old sizes.
+    def test_text_scaling_grows_the_notch_and_terminal_text(self):
+        sh = self.shell
+        self.open_terminal()
+        s = sh.until(lambda s: terminal_surface(s) and terminal_surface(s)["fontSize"] == 12, 3,
+                     "the terminal at the design size")
+        self.assertEqual(s["theme"]["fonts"]["body"], 12)
+        sizes = main_copy(s)["textSizes"]
+        self.assertTrue(sizes and all(sizes), main_copy(s)["texts"])
+        larger = [round(px * 1.5) for px in sizes]
+        try:
+            sh.gsettings("set", "org.gnome.desktop.interface", "text-scaling-factor", "1.5")
+            s = sh.until(lambda s: s["theme"]["fonts"]["body"] == 18 and terminal_surface(s)
+                         and terminal_surface(s)["fontSize"] == 18, 3, "the text 1.5 times larger")
+            self.assertEqual(s["theme"]["fonts"]["heading"], 24)
+            # The notch's own texts too, with nothing else changed.
+            sh.until(lambda s: main_copy(s)["textSizes"] == larger, 3, "the notch's texts 1.5 times larger")
+        finally:
+            sh.gsettings("reset", "org.gnome.desktop.interface", "text-scaling-factor")
+        sh.until(lambda s: s["theme"]["fonts"]["body"] == 12, 3, "the design sizes back")
 
     def test_fractional_scales_keep_the_terminal_inside_the_monitor(self):
         sh = self.shell
