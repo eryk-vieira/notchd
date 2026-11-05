@@ -4,6 +4,8 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-11-04
+
 ### Added
 
 - A [Herdr user module showcase](docs/examples/modules/herdr/) that puts agent metrics above a Herdr terminal and peeks on blocked or completed work. It installs from the example folder without a daemon rebuild.
