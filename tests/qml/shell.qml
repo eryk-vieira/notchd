@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import QtTest
 import Quickshell
 import Quickshell.Io
@@ -222,6 +223,7 @@ ShellRoot {
       { name: "a terminal of your own: from the config, in your home, its title closed, terminal <id> toggle", run: root.ownTerminal },
       { name: "settings: Add terminal makes one and opens its page; its trash can takes it out of the config", run: root.addAndRemoveTerminal },
       { name: "settings: a required text field refuses to be emptied", run: root.requiredTextField },
+      { name: "settings: no row is wider than its page; segments that don't fit beside the text wrap as chips under it", run: root.settingRowsFitPage },
       { name: "renaming or removing a terminal keeps the modules ready, and warns of nothing", run: root.terminalRenameStaysReady },
       { name: "terminal: a connection that drops is made again, and the program goes on", run: root.terminalReconnects },
       { name: "a window its monitor took away comes back with the monitor", run: root.keepShownReopens },
@@ -2337,6 +2339,81 @@ ShellRoot {
     id: requiredText
     field: ({ key: "x", type: "string", required: true })
     stored: "btop"
+  }
+
+  // A page's rows (SettingsWindow's column) at any width: a choice of long
+  // options (a user module's) made its segments wider than the page, its
+  // minimum width widened the page's column and every row's control was cut
+  // at the window's edge (issue #19); 505 is the settings window's page. Now no row outgrows the column, and
+  // segments that don't fit beside the text show as chips under it, inside
+  // the page; short ones stay segments beside it.
+  function settingRowsFitPage() {
+    // Every loaded control under `item`, as [loader's item, ...].
+    function controls(item) {
+      var out = []
+      Array.prototype.forEach.call(item.children, function(c) {
+        if (c instanceof Loader) { if (c.item) out.push(c.item) }
+        else out = out.concat(controls(c))
+      })
+      return out
+    }
+    root.go(function*() {
+      var widths = [Theme.space(300), Theme.space(505), Theme.space(900)]
+      for (var i = 0; i < widths.length; i++) {
+        fitPage.width = widths[i]
+        yield root.wait(50)
+        var w = fitPage.width, rows = [fitLong, fitShort, fitToggle, fitText]
+        for (var r = 0; r < rows.length; r++) {
+          var key = rows[r].field.key
+          root.check(rows[r].width <= w, "at " + w + " px the row of " + key + " is " + rows[r].width + " wide")
+          var items = controls(rows[r])
+          root.check(items.length === 1, "at " + w + " px " + key + " shows " + items.length + " controls")
+          items.forEach(function(c) {
+            var right = c.mapToItem(fitPage, Math.max(c.width, c.childrenRect.x + c.childrenRect.width), 0).x
+            root.check(right <= w + 0.5, "at " + w + " px the control of " + key + " ends at " + right)
+          })
+        }
+        // The window's page (505) and narrower: the long options are chips under the text.
+        if (w <= Theme.space(505)) {
+          var chips = controls(fitLong)[0]
+          root.check(fitLong.wide && chips instanceof Flow, "at " + w + " px the long choice is not chips under its text")
+        }
+        // Short options stay segments beside the text where there is room.
+        if (w >= Theme.space(505)) root.check(!fitShort.wide, "at " + w + " px the short choice left its text's side")
+      }
+    })
+  }
+  FloatingWindow {
+    implicitWidth: Theme.space(1000)
+    implicitHeight: Theme.space(700)
+    ColumnLayout {
+      id: fitPage
+      width: Theme.space(590)
+      SettingRow {
+        id: fitLong
+        Layout.fillWidth: true
+        field: ({ key: "compactStyle", type: "choice", label: "Closed notch", "default": "counts",
+                  options: [{ value: "counts", label: "Open processes and alerts" }, { value: "high", label: "High alerts only" },
+                            { value: "ticker", label: "Ticker of the latest news" }, { value: "dots", label: "A dot per process" }] })
+      }
+      SettingRow {
+        id: fitShort
+        Layout.fillWidth: true
+        field: ({ key: "effort", type: "choice", label: "Codex reasoning", "default": "medium",
+                  options: [{ value: "low", label: "Low" }, { value: "medium", label: "Medium" }, { value: "high", label: "High" }] })
+      }
+      SettingRow {
+        id: fitToggle
+        Layout.fillWidth: true
+        field: ({ key: "weekdays", type: "boolean", label: "Weekdays only", "default": true })
+      }
+      SettingRow {
+        id: fitText
+        Layout.fillWidth: true
+        field: ({ key: "query", type: "string", label: "Gmail search", "default": "FLEX newer_than:10d",
+                  help: "Gmail search Codex starts from. It may search again by reference or HBL for context." })
+      }
+    }
   }
 
   // A spoken conversation (LiveModule) with a fake bridge

@@ -52,6 +52,8 @@ ShellRoot {
                 modules: ["media", "btop"] } },
     { name: "module-terminal-light", page: "modules/btop", theme: root.light, bar: true, fields: root.omarchyFields,
       config: { terminals: { btop: { title: "System", command: "btop" } }, btop: { width: 900 } } },
+    // A user module's page (tests/modules/flex): long help texts, and a choice too long for segments (chips).
+    { name: "module-user-dark", page: "modules/flex", theme: root.dark, bar: true, fields: root.omarchyFields },
     { name: "appearance-omarchy-dark", page: "appearance", theme: root.dark, bar: true, fields: root.omarchyFields },
     { name: "notch-hanging-dark", page: "notch/0", theme: root.dark, bar: true, fields: root.omarchyFields,
       config: { position: { edge: "left", offset: 0.3 } }, scrollTo: "end" },
