@@ -298,16 +298,24 @@ export function workspaceChips(field, known, Settings) {
     }));
 }
 
-// A `notches` field (NotchCatalog.qml): a row per notch of the state, where
-// it is and what it shows. `[{index, id, summary, removable}]`.
+// A `notches` field (NotchCatalog.qml): a row per notch of the state, in the
+// order navigation numbers them (the daemon's `state.order`; ids it leaves out
+// last, in config order), each with its number, where it is and what it
+// shows. `index` is the notch's place in the config, which its page goes by.
+// `[{index, id, number, summary, removable}]`.
 export function notchRows(state, catalog, Settings) {
     const notches = state?.notches ?? [];
+    const order = state?.order ?? [];
     const names = titles(catalog);
+    const place = n => {
+        const at = order.indexOf(n.id);
+        return at === -1 ? order.length : at;
+    };
     return notches.map((n, index) => ({
-        index, id: n.id,
+        index, id: n.id, number: n.number ?? 0,
         summary: Settings.notchSummary({edge: n.edge, moduleIds: n.modules ?? []}, names),
         removable: notches.length > 1,
-    }));
+    })).sort((a, b) => place(a) - place(b) || a.index - b.index);
 }
 
 // A `moduleCatalog` field (ModuleCatalog.qml): the modules of its `part`,
@@ -345,24 +353,6 @@ export function configSets(from, to) {
     }
     return keys.filter(k => JSON.stringify(from?.[k]) !== JSON.stringify(to?.[k]))
         .map(k => ({key: k, value: to?.[k] === undefined ? null : to[k]}));
-}
-
-// A new notch, off the edges the others hang from (NotchService.addNotch):
-// `{sets, index}`, its page being `notch/<index>`.
-export function addNotch(cfg, state, Config) {
-    const notches = state?.notches ?? [];
-    const used = notches.map(n => n.edge);
-    const free = ['bottom', 'left', 'right', 'top'].filter(e => !used.includes(e));
-    const entry = {
-        id: Config.freeNotchId(notches.map(n => n.id)), modules: [],
-        position: {edge: free[0] ?? 'bottom'},
-    };
-    const next = Config.withNotchAdded(cfg ?? {}, entry);
-    return {sets: configSets(cfg, next), index: next.notches.length - 1};
-}
-
-export function removeNotch(cfg, index, Config) {
-    return configSets(cfg, Config.withoutNotch(cfg ?? {}, index));
 }
 
 // A terminal running your shell (Config.withTerminalAdded), its id not one

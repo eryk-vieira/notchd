@@ -144,18 +144,33 @@ test('workspace chips: 1 to 10 and the picked ones, numbers first', () => {
   assert.equal(M.workspaceChips(field({ type: 'workspaces' }), ['11'], Settings).at(-1).value, 11);
 });
 
-const state = { settingsOpen: false, settingsPage: 'general', notches: [
-  { id: 'main', edge: 'top', modules: ['media', 'timer'] },
-  { id: 'side', edge: 'left', modules: [] },
+const state = { settingsOpen: false, settingsPage: 'general', order: ['main', 'side'], notches: [
+  { id: 'main', edge: 'top', number: 1, modules: ['media', 'timer'] },
+  { id: 'side', edge: 'left', number: 2, modules: [] },
 ] };
 
 test('the notch list: where each is and what it shows, removable with more than one', () => {
   const rows = M.notchRows(state, catalog, Settings);
-  assert.deepEqual(rows.map((r) => [r.index, r.id, r.summary, r.removable]), [
-    [0, 'main', 'Top edge · Now playing, Timer', true],
-    [1, 'side', 'Left edge · no modules', true],
+  assert.deepEqual(rows.map((r) => [r.index, r.id, r.number, r.summary, r.removable]), [
+    [0, 'main', 1, 'Top edge · Now playing, Timer', true],
+    [1, 'side', 2, 'Left edge · no modules', true],
   ]);
   assert.equal(M.notchRows({ notches: [state.notches[0]] }, catalog, Settings)[0].removable, false);
+});
+
+test('the notch list follows the daemon\'s spatial order, each with its number, its page by config index', () => {
+  // Config order Media (left), Herdr (top center), FLEX (top left).
+  const spatial = { order: ['flex', 'herdr', 'media'], notches: [
+    { id: 'media', edge: 'left', number: 3, modules: [] },
+    { id: 'herdr', edge: 'top', number: 2, modules: [] },
+    { id: 'flex', edge: 'top', number: 1, modules: [] },
+  ] };
+  assert.deepEqual(M.notchRows(spatial, catalog, Settings).map((r) => [r.id, r.number, r.index]),
+    [['flex', 1, 2], ['herdr', 2, 1], ['media', 3, 0]]);
+  // Without an order (an older daemon) the config's.
+  const none = { notches: spatial.notches.map(({ number, ...n }) => n) };
+  assert.deepEqual(M.notchRows(none, catalog, Settings).map((r) => [r.id, r.number]),
+    [['media', 0], ['herdr', 0], ['flex', 0]]);
 });
 
 test('a module catalog part: status from the state, a page when the schema has one', () => {
@@ -178,15 +193,6 @@ test('a module catalog part: status from the state, a page when the schema has o
 test('config edits are one set per top-level key that changed, null for a removal', () => {
   assert.deepEqual(M.configSets({ a: 1, b: { c: 2 }, gone: 1 }, { a: 1, b: { c: 3 }, d: [] }),
     [{ key: 'b', value: { c: 3 } }, { key: 'gone', value: null }, { key: 'd', value: [] }]);
-});
-
-test('adding a notch takes a free id and edge; removing the second folds the list back', () => {
-  const one = { modules: ['media'] };
-  const added = M.addNotch(one, { notches: [{ id: 'main', edge: 'top' }] }, Config);
-  assert.equal(added.index, 1);
-  assert.deepEqual(plain(added.sets), [{ key: 'notches', value: [{}, { id: 'notch-2', modules: [], position: { edge: 'bottom' } }] }]);
-  const two = { modules: ['media'], notches: [{}, { id: 'notch-2', modules: [] }] };
-  assert.deepEqual(plain(M.removeNotch(two, 1, Config)), [{ key: 'notches', value: null }]);
 });
 
 test('a terminal is added under a free id and removed with its settings', () => {

@@ -197,12 +197,12 @@ ShellRoot {
       // The pointer entering or leaving a notch's copy on `screen`.
       function pointer(notch, screen, ev) {
         var copy = w.qmlCopy(notch, screen)
-        if (copy) copy.setPointer("notch", ev === "enter", ev === "enter" ? screen : "")
+        if (copy) copy.setPointer("notch", ev === "enter")
       }
       // A click on the copy (pins, or unpins).
       function press(notch, screen) {
         var copy = w.qmlCopy(notch, screen)
-        if (copy) copy.togglePinned(screen)
+        if (copy) copy.togglePinned()
       }
       function tab(notch, screen, moduleId) {
         var copy = w.qmlCopy(notch, screen)
@@ -215,8 +215,9 @@ ShellRoot {
       function handler(method) {
         for (var i = 0; i < service.data.length; i++) {
           var o = service.data[i]
-          if (o && o.target === service.ipcTarget && typeof o[method] === "function") { o[method](); return }
+          if (o && o.target === service.ipcTarget && typeof o[method] === "function") { return o[method].apply(o, Array.prototype.slice.call(arguments, 1)) }
         }
+        return undefined
       }
       function ipc(method, args) {
         if (method === "open") service.open()
@@ -249,7 +250,7 @@ ShellRoot {
       function dump() {
         var out = {}
         service.notches.forEach(function(n) {
-          out[n.notchId] = n.edge + " " + n.placement.offset + (n.placement.screen !== "" ? " " + n.placement.screen : "")
+          out[n.notchId] = n.edge + " " + n.placement.offset + (n.navNumber > 0 ? " #" + n.navNumber : "")
             + (n.tabs ? " tabs" : "") + (n.canDrag ? "" : " fixed") + " [" + n.modules.map(function(m) { return m.moduleId }).join(",") + "]"
           n.copies.forEach(function(c) { out[n.notchId + "." + c.screenName] = w.copyText(c) })
         })
@@ -260,6 +261,8 @@ ShellRoot {
           out[n.standaloneId] = n.edge + " " + n.placement.offset
           n.copies.forEach(function(c) { if (c.mode !== "rest" || c.needsWindow) out[n.standaloneId + "." + c.screenName] = w.copyText(c) })
         })
+        // The settings window as the daemon has it (the window itself is the UI's).
+        if (service.notchState && service.notchState.settingsOpen) out.settings = service.notchState.settingsPage
         if (service.navigating) {
           var copy = service.navNotch ? service.navNotch.copies[0] : null
           out.nav = service.navMode + " " + service.navSelected + (copy && copy.tab !== "" ? " tab=" + copy.tab : "")
@@ -344,9 +347,10 @@ ShellRoot {
   readonly property int beforeClose: 40
   readonly property int afterClose: 330
 
-  readonly property var oneNotch: ({ notches: [{ id: "main", modules: ["a", "b"], position: { screen: "all" } }] })
+  // A notch on both screens: a list of names, one copy on each.
+  readonly property var oneNotch: ({ notches: [{ id: "main", modules: ["a", "b"], position: { screen: ["A", "B"] } }] })
   readonly property var twoNotches: ({
-    notches: [{ id: "main", modules: ["a", "b"], position: { screen: "all" } },
+    notches: [{ id: "main", modules: ["a", "b"], position: { screen: ["A", "B"] } },
               { id: "side", modules: ["c"], position: { edge: "left" } }]
   })
   readonly property var facts: ({ a: {}, b: {} })
@@ -355,21 +359,21 @@ ShellRoot {
     var all = [
       { name: "scenario: idle, and nothing active", config: root.oneNotch, modules: root.facts, steps: function(w) { return [
         [0, function() { w.snap("idle", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.module("a", { active: false }); w.module("b", { active: false }) }],
         [150, function() { w.snap("nothing active: rest", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "rest open= closed=",
           "main.B": "rest open= closed=",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.module("b", { active: true, hasCompact: false, icon: true }) }],
         [150, function() { w.snap("b has only an icon", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=b closed=b",
           "main.B": "compact open=b closed=b",
           "solo": "top 0.5"
@@ -379,26 +383,26 @@ ShellRoot {
       { name: "scenario: hover opens and closes after their delays", config: root.oneNotch, modules: root.facts, steps: function(w) { return [
         [0, function() { w.pointer("main", "B", "enter") }],
         [root.beforeOpen, function() { w.snap("entered, before the open delay", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [root.afterOpen, function() { w.snap("open", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("main", "B", "leave") }],
         [root.beforeClose, function() { w.snap("left, before the close delay", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [root.afterClose, function() { w.snap("closed again", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
@@ -407,7 +411,7 @@ ShellRoot {
         [0, function() { w.pointer("main", "A", "enter") }],
         [30, function() { w.pointer("main", "A", "leave") }],
         [root.afterOpen, function() { w.snap("a pass over the notch opens nothing", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
@@ -417,28 +421,28 @@ ShellRoot {
       { name: "scenario: a peek shows on the focused screen and ends", config: root.oneNotch, modules: root.facts, steps: function(w) { return [
         [0, function() { w.peek("a", 400) }],
         [80, function() { w.snap("a peeks", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.screens({ focused: "A" }) }],
         [500, function() { w.snap("the peek ended", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("b", 400) }],
         [80, function() { w.snap("b peeks on the other screen", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "peek peek=b open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("b") }],
         [80, function() { w.snap("dismissed", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
@@ -449,21 +453,21 @@ ShellRoot {
         modules: { a: { priority: 1 }, b: { priority: 5 }, c: {} }, steps: function(w) { return [
         [0, function() { w.peek("a", 1500) }],
         [80, function() { w.snap("a peeks", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=b closed=b+a tabs=b+a",
           "main.B": "peek peek=a open=b closed=b+a tabs=b+a",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("b", 1500) }],
         [80, function() { w.snap("b outranks a", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=b closed=b+a tabs=b+a",
           "main.B": "peek peek=b open=b closed=b+a tabs=b+a",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("b"); w.peek("a", 1500) }],
         [80, function() { w.snap("a again after b went", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=b closed=b+a tabs=b+a",
           "main.B": "peek peek=a open=b closed=b+a tabs=b+a",
           "solo": "top 0.5"
@@ -471,14 +475,14 @@ ShellRoot {
         [0, function() { w.dismiss(""); }],
         [0, function() { w.module("a", { priority: 9 }); w.peek("b", 1500) }],
         [80, function() { w.snap("b under a's higher priority", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=b open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 1500) }],
         [80, function() { w.snap("a over b", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
@@ -489,28 +493,28 @@ ShellRoot {
         modules: { a: { peekOnFocusedScreen: true }, b: {}, c: {} }, steps: function(w) { return [
         [0, function() { w.peek("a", 1500) }],
         [80, function() { w.snap("a peeks on B", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("a"); w.screens({ focused: "A" }); w.peek("c", 1500) }],
         [80, function() { w.snap("c, only on the side notch, peeks", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "left 0.5 tabs [c]",
+          "side": "left 0.5 #2 tabs [c]",
           "side.A": "peek peek=c open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("c"); w.module("a", { peekOnFocusedScreen: false }); w.peek("b", 1500) }],
         [80, function() { w.snap("b peeks on A", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "peek peek=b open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "left 0.5 tabs [c]",
+          "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }]
@@ -520,28 +524,28 @@ ShellRoot {
         modules: { a: {}, b: { urgentPeek: true } }, steps: function(w) { return [
         [0, function() { w.pointer("main", "B", "enter") }],
         [root.afterOpen, function() { w.snap("hovered open", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 1500) }],
         [80, function() { w.snap("a plain peek does not show over it", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("b", 1500) }],
         [80, function() { w.snap("b urgent peek shows over it", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=b open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("main", "B", "leave") }],
         [root.afterClose, function() { w.snap("left", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=b open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
@@ -549,14 +553,14 @@ ShellRoot {
         // A peek then the pointer comes: a plain peek is dismissed, an urgent one stays.
         [0, function() { w.dismiss(""); w.peek("a", 1500) }],
         [60, function() { w.snap("a peeks closed", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("main", "B", "enter") }],
         [root.afterOpen, function() { w.snap("hovering dismissed a's peek", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
@@ -566,94 +570,94 @@ ShellRoot {
       { name: "scenario: pinned by a click, by open, close and toggle", config: root.oneNotch, modules: root.facts, steps: function(w) { return [
         [0, function() { w.press("main", "B") }],
         [60, function() { w.snap("clicked: pinned", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("main", "B", "enter"); w.pointer("main", "B", "leave") }],
         [root.afterClose, function() { w.snap("pinned stays open after the pointer left", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 1500) }],
         [60, function() { w.snap("a peek does not replace a pinned notch", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.press("main", "B") }],
         [60, function() { w.snap("clicked again: unpinned", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.ipc("open", []) }],
         [60, function() { w.snap("ipc open", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.ipc("close", []) }],
         [60, function() { w.snap("ipc close", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.ipc("toggle", []) }],
         [60, function() { w.snap("ipc toggle", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.ipc("closeNotch", ["main"]) }],
         [60, function() { w.snap("ipc closeNotch", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }]
       ] } },
 
-      { name: "scenario: tabs pick the module the open notch shows", config: { notches: [{ id: "main", modules: ["a", "b"], tabs: true, position: { screen: "all" } }] },
+      { name: "scenario: tabs pick the module the open notch shows", config: { notches: [{ id: "main", modules: ["a", "b"], tabs: true, position: { screen: ["A", "B"] } }] },
         modules: root.facts, steps: function(w) { return [
         [0, function() { w.snap("tabs closed", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.press("main", "B") }],
         [60, function() { w.snap("open, first tab", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.tab("main", "B", "b") }],
         [60, function() { w.snap("tab b", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned tab=b open=b closed=a+b tabs=a+b keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.module("b", { active: false }) }],
         [60, function() { w.snap("the shown tab went inactive", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a",
           "main.B": "expanded pinned tab=b open=a closed=a keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.tab("main", "B", "") }],
         [60, function() { w.snap("no tab picked", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a",
           "main.B": "expanded pinned open=a closed=a keyboard=exclusive",
           "solo": "top 0.5"
@@ -661,290 +665,290 @@ ShellRoot {
       ] } },
 
       { name: "scenario: navigation selects, walks tabs and leaves", config: { notches: [
-          { id: "main", modules: ["a", "b"], tabs: true, position: { screen: "all" } },
+          { id: "main", modules: ["a", "b"], tabs: true, position: { screen: ["A", "B"] } },
           { id: "side", modules: ["c"], position: { edge: "left" } }] },
         modules: { a: {}, b: {}, c: {} }, steps: function(w) { return [
         [0, function() { w.navigate() }],
         [80, function() { w.snap("navigating, the first notch previews", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
-          "nav": "select 0",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "select main",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Tab") }],
         [60, function() { w.snap("Tab: the next tab", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded tab=b open=b closed=a+b tabs=a+b",
-          "nav": "select 0",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "select main",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Tab", ["shift"]) }],
         [60, function() { w.snap("Shift+Tab: back", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded tab=a open=a closed=a+b tabs=a+b",
-          "nav": "select 0",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "select main",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Right") }],
         [60, function() { w.snap("Right: the second notch", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact tab=a open=a closed=a+b tabs=a+b",
-          "nav": "select 1",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "expanded open=c closed=c",
+          "nav": "select side",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "expanded open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Right") }],
         [60, function() { w.snap("Right: wraps", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded tab=a open=a closed=a+b tabs=a+b",
-          "nav": "select 0",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "select main",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("2") }],
         [60, function() { w.snap("2: the second notch", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact tab=a open=a closed=a+b tabs=a+b",
-          "nav": "select 1",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "expanded open=c closed=c",
+          "nav": "select side",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "expanded open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Escape") }],
         [60, function() { w.snap("Escape: left", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.navigate() }],
         [0, function() { w.key("Right") }],
         [0, function() { w.key("Return") }],
         [80, function() { w.snap("Enter: the second notch pinned", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "expanded pinned open=c closed=c keyboard=exclusive",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "expanded pinned open=c closed=c keyboard=exclusive",
           "solo": "top 0.5"
         }) }]
       ] } },
 
       { name: "scenario: navigation removes a notch (asked twice) and moves it", config: { notches: [
-          { id: "main", modules: ["a", "b"], position: { screen: "all" } },
+          { id: "main", modules: ["a", "b"], position: { screen: ["A", "B"] } },
           { id: "side", modules: ["c"], position: { edge: "left" } },
           { id: "extra", modules: [], position: { edge: "bottom" } }] },
         modules: { a: {}, b: {}, c: {} }, steps: function(w) { return [
         [0, function() { w.navigate(); w.key("3") }],
         [60, function() { w.snap("the third selected", {
-          "extra": "bottom 0.5 tabs []",
-          "extra.B": "expanded open= closed=",
-          "main": "top 0.5 all tabs [a,b]",
+          "extra": "bottom 0.5 #3 tabs []",
+          "extra.A": "expanded open= closed=",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "nav": "select 2",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "select extra",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("x") }],
         [60, function() { w.snap("x asks first", {
-          "extra": "bottom 0.5 tabs []",
-          "extra.B": "expanded open= closed=",
-          "main": "top 0.5 all tabs [a,b]",
+          "extra": "bottom 0.5 #3 tabs []",
+          "extra.A": "expanded open= closed=",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "nav": "remove 2",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "remove extra",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Escape") }],
         [60, function() { w.snap("Escape keeps it", {
-          "extra": "bottom 0.5 tabs []",
-          "extra.B": "expanded open= closed=",
-          "main": "top 0.5 all tabs [a,b]",
+          "extra": "bottom 0.5 #3 tabs []",
+          "extra.A": "expanded open= closed=",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "nav": "select 2",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "select extra",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("m") }],
         [60, function() { w.snap("move mode", {
-          "extra": "bottom 0.5 tabs []",
-          "extra.B": "expanded open= closed=",
-          "main": "top 0.5 all tabs [a,b]",
+          "extra": "bottom 0.5 #3 tabs []",
+          "extra.A": "expanded open= closed=",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "nav": "move 2",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "move extra",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Left") }],
         [60, function() { w.snap("moved to the left edge", {
-          "extra": "left 0.5 tabs []",
-          "extra.B": "expanded open= closed=",
-          "main": "top 0.5 all tabs [a,b]",
+          "extra": "left 0.5 #3 tabs []",
+          "extra.A": "expanded open= closed=",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "nav": "move 2",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "move extra",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Right", ["shift"]) }],
         [60, function() { w.snap("slid along it", {
-          "extra": "left 0.55 tabs []",
-          "extra.B": "expanded open= closed=",
-          "main": "top 0.5 all tabs [a,b]",
+          "extra": "left 0.55 #3 tabs []",
+          "extra.A": "expanded open= closed=",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "nav": "move 2",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "move extra",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Tab") }],
         [60, function() { w.snap("on the next screen", {
-          "extra": "left 0.55 A tabs []",
-          "extra.A": "expanded open= closed=",
-          "main": "top 0.5 all tabs [a,b]",
+          "extra": "left 0.55 #3 tabs []",
+          "extra.B": "expanded open= closed=",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "nav": "move 2",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "move extra",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Escape") }],
         [60, function() { w.snap("Escape puts it back", {
-          "extra": "bottom 0.5 tabs []",
-          "extra.B": "expanded open= closed=",
-          "main": "top 0.5 all tabs [a,b]",
+          "extra": "bottom 0.5 #3 tabs []",
+          "extra.A": "expanded open= closed=",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "nav": "select 2",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "nav": "select extra",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("x"); w.key("x") }],
         [100, function() { w.snap("x twice removed it", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "nav": "select 1",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "expanded open=c closed=c",
+          "nav": "select side",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "expanded open=c closed=c",
           "solo": "top 0.5"
         }) }]
       ] } },
 
       { name: "scenario: set changes position, edge and delays", config: root.twoNotches, modules: root.facts, steps: function(w) { return [
         [0, function() { w.snap("before", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "left 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.set("notches.1.position", { edge: "right", offset: 0.25 }) }],
         [120, function() { w.snap("the side notch on the right at 0.25", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "right 0.25 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "side": "right 0.25 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.set("notches.0.position", { edge: "bottom", screen: "A" }) }],
         [120, function() { w.snap("main kept on A at the bottom", {
-          "main": "bottom 0.5 A tabs [a,b]",
+          "main": "bottom 0.5 #2 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
-          "side": "right 0.25 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "side": "right 0.25 #1 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.set("notches.0.position", undefined) }],
         [120, function() { w.snap("main's position reset", {
-          "main": "top 0.5 tabs [a,b]",
-          "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "right 0.25 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "side": "right 0.25 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.set("position", { edge: "left" }) }],
         [120, function() { w.snap("the global position, left", {
-          "main": "left 0.5 tabs [a,b]",
-          "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "right 0.25 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "main": "left 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "side": "right 0.25 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.set("notches.0.tabs", true); w.set("notches.0.draggable", false) }],
         [120, function() { w.snap("tabs on, not draggable", {
-          "main": "left 0.5 tabs fixed [a,b]",
-          "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "right 0.25 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "main": "left 0.5 #1 tabs fixed [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "side": "right 0.25 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.set("notches.0.workspaces", ["1"]); w.set("notches.0.idleIcons", false); w.set("notches.0.reserveSpace", true) }],
         [120, function() { w.snap("workspaces, no idle icons, reserving space", {
-          "main": "left 0.5 tabs fixed [a,b]",
-          "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "right 0.25 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "main": "left 0.5 #1 tabs fixed [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "side": "right 0.25 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.set("hoverOpenDelay", 30) }],
         [100, function() { w.pointer("main", "B", "enter") }],
         [120, function() { w.snap("opens by the new delay", {
-          "main": "left 0.5 tabs fixed [a,b]",
-          "main.B": "expanded open=a closed=a+b tabs=a+b",
-          "side": "right 0.25 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "main": "left 0.5 #1 tabs fixed [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "side": "right 0.25 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }]
       ] } },
 
       { name: "scenario: a drop moves a notch", config: root.twoNotches, modules: root.facts, steps: function(w) { return [
-        [0, function() { w.drop("side", "", { edge: "right", offset: 0.7, screen: "A" }) }],
+        [0, function() { w.drop("side", "A", { edge: "right", offset: 0.7, screen: "B" }) }],
         [120, function() { w.snap("the side notch dropped on A, right", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "right 0.7 A tabs [c]",
-          "side.A": "compact open=c closed=c",
+          "side": "right 0.7 #2 tabs [c]",
+          "side.B": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
-        [0, function() { w.drop("main", "B", { edge: "bottom", offset: 0.2, screen: "all" }) }],
+        [0, function() { w.drop("main", "B", { edge: "bottom", offset: 0.2, screen: "B" }) }],
         [120, function() { w.snap("main dropped at the bottom", {
-          "main": "bottom 0.2 all tabs [a,b]",
+          "main": "bottom 0.2 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "right 0.7 A tabs [c]",
-          "side.A": "compact open=c closed=c",
+          "side": "right 0.7 #2 tabs [c]",
+          "side.B": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }]
       ] } },
@@ -955,72 +959,72 @@ ShellRoot {
         screens: { supports: true, known: ["1", "2"], workspaces: { A: "1", B: "2" } },
         modules: { a: { peekOnFocusedScreen: true }, b: {} }, steps: function(w) { return [
         [0, function() { w.snap("main hangs on A only (workspace 1)", {
-          "home": "top 0.5 A tabs [b]",
+          "home": "top 0.5 #2 tabs [b]",
           "home.A": "compact open=b closed=b",
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a",
           "main.B": "compact open=a closed=a covered",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.screens({ workspaces: { A: "2", B: "1" } }) }],
         [100, function() { w.snap("workspaces swapped", {
-          "home": "top 0.5 A tabs [b]",
+          "home": "top 0.5 #2 tabs [b]",
           "home.A": "compact open=b closed=b",
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.screens({ focused: "A" }) }],
         [100, function() { w.snap("focus on A", {
-          "home": "top 0.5 A tabs [b]",
+          "home": "top 0.5 #2 tabs [b]",
           "home.A": "compact open=b closed=b",
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 1500) }],
         [80, function() { w.snap("a peeks on the focused screen", {
-          "home": "top 0.5 A tabs [b]",
+          "home": "top 0.5 #2 tabs [b]",
           "home.A": "compact open=b closed=b",
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "peek peek=a open=a closed=a",
           "main.B": "compact open=a closed=a",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("a"); w.peek("b", 1500) }],
         [80, function() { w.snap("b, kept on A, peeks", {
-          "home": "top 0.5 A tabs [b]",
+          "home": "top 0.5 #2 tabs [b]",
           "home.A": "peek peek=b open=b closed=b",
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("b"); w.screens({ focused: "B", fullscreen: ["B"] }) }],
         [100, function() { w.snap("focus on B, fullscreen there", {
-          "home": "top 0.5 A tabs [b]",
+          "home": "top 0.5 #2 tabs [b]",
           "home.A": "compact open=b closed=b",
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("home", "A", "enter") }],
         [root.afterOpen, function() { w.snap("hover opens the notch kept on A", {
-          "home": "top 0.5 A tabs [b]",
+          "home": "top 0.5 #2 tabs [b]",
           "home.A": "expanded open=b closed=b",
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("home", "A", "leave") }],
         [root.afterClose, function() { w.snap("closed", {
-          "home": "top 0.5 A tabs [b]",
+          "home": "top 0.5 #2 tabs [b]",
           "home.A": "compact open=b closed=b",
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
           "solo": "top 0.5"
@@ -1028,9 +1032,9 @@ ShellRoot {
         // A notch kept on A, a peek while you work on B: the visitor shows it on B.
         [0, function() { w.peek("b", 1500) }],
         [80, function() { w.snap("b peeks for a notch kept on another screen", {
-          "home": "top 0.5 A tabs [b]",
+          "home": "top 0.5 #2 tabs [b]",
           "home.A": "peek peek=b open=b closed=b",
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
           "solo": "top 0.5",
@@ -1043,21 +1047,21 @@ ShellRoot {
         [0, function() { w.press("main", "B") }],
         [60, function() { w.peek("b", 600) }],
         [60, function() { w.snap("b's peek waits: the notch is open", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.press("main", "B") }],
         [120, function() { w.snap("closing: the missed peek shows", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=b open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.module("b", { attention: false }) }],
         [700, function() { w.snap("it ended", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
@@ -1065,47 +1069,130 @@ ShellRoot {
       ] } },
 
       // The pointer reports the screen the copy is on (its window's).
-      { name: "scenario: a notch that moves stays where the pointer opened it", config: { notches: [{ id: "main", modules: ["a", "b"], position: { edge: "top" } }] },
+      { name: "scenario: a notch stays on its screen, whatever has focus, and goes back when it is plugged in", config: { notches: [{ id: "main", modules: ["a", "b"], position: { edge: "top", screen: "A" } }] },
         modules: root.facts, steps: function(w) { return [
-        [0, function() { w.snap("one copy, on the focused screen", {
-          "main": "top 0.5 tabs [a,b]",
-          "main.B": "compact open=a closed=a+b tabs=a+b",
+        [0, function() { w.snap("kept on A, focus on B", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
-        [0, function() { w.pointer("main", "B", "enter") }],
-        [root.afterOpen, function() { w.snap("opens on B", {
-          "main": "top 0.5 tabs [a,b]",
-          "main.B": "expanded open=a closed=a+b tabs=a+b",
+        [0, function() { w.pointer("main", "A", "enter") }],
+        [root.afterOpen, function() { w.snap("opens on A", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "expanded open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.screens({ focused: "A" }) }],
-        [100, function() { w.snap("focus moved to A: it stays on B while open", {
-          "main": "top 0.5 tabs [a,b]",
-          "main.B": "expanded open=a closed=a+b tabs=a+b",
+        [100, function() { w.snap("focus moved to A: still there, open", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "expanded open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
-        [0, function() { w.pointer("main", "B", "leave") }],
-        [root.afterClose, function() { w.snap("closed: it follows the focus to A", {
-          "main": "top 0.5 tabs [a,b]",
+        [0, function() { w.pointer("main", "A", "leave"); w.screens({ focused: "B" }) }],
+        [root.afterClose, function() { w.snap("closed, focus on B: it does not follow", {
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.press("main", "A") }],
         [80, function() { w.snap("a click on A pins it there", {
-          "main": "top 0.5 tabs [a,b]",
-          "main.A": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
-        }) }],
-        [0, function() { w.screens({ focused: "B" }) }],
-        [100, function() { w.snap("focus on B: pinned stays on A", {
-          "main": "top 0.5 tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 1500) }],
-        [80, function() { w.snap("a peek while pinned", {
-          "main": "top 0.5 tabs [a,b]",
+        [80, function() { w.snap("a peek while pinned: the visitor shows it on B, where no notch is", {
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
+          "solo": "top 0.5",
+          "visitor.B": "peek peek=a open=a+b closed="
+        }) }],
+        [0, function() { w.dismiss(""); w.press("main", "A"); w.screens({ names: ["B"] }) }],
+        [150, function() { w.snap("A unplugged: it shows on B for now (the config is not touched)", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.B": "compact open=a closed=a+b tabs=a+b",
+          "solo": "top 0.5",
+          "visitor.B": "rest open=a+b closed= covered"
+        }) }],
+        [0, function() { w.screens({ names: ["A", "B"] }) }],
+        [150, function() { w.snap("A is back: it goes home", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "solo": "top 0.5",
+          "visitor.B": "rest open=a+b closed= covered"
+        }) }]
+      ] } },
+
+      { name: "scenario: n creates a notch, Enter keeps it and opens its settings, Escape takes it away", config: root.twoNotches, modules: root.facts, steps: function(w) { return [
+        [0, function() { w.navigate() }],
+        [0, function() { w.key("n") }],
+        [80, function() { w.snap("n: a new notch on the focused screen, moving", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "main.B": "compact open=a closed=a+b tabs=a+b",
+          "nav": "move notch-2",
+          "notch-2": "top 0.3 #3 tabs []",
+          "notch-2.B": "expanded open= closed=",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
+          "solo": "top 0.5"
+        }) }],
+        [0, function() { w.key("Down") }],
+        [80, function() { w.snap("it moves like any move", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "main.B": "compact open=a closed=a+b tabs=a+b",
+          "nav": "move notch-2",
+          "notch-2": "bottom 0.3 #3 tabs []",
+          "notch-2.B": "expanded open= closed=",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
+          "solo": "top 0.5"
+        }) }],
+        [0, function() { w.key("Escape") }],
+        [80, function() { w.snap("Escape takes it away; the selection is back", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "main.B": "expanded open=a closed=a+b tabs=a+b",
+          "nav": "select main",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
+          "solo": "top 0.5"
+        }) }],
+        [0, function() { w.key("n"); w.key("Return") }],
+        [80, function() { w.snap("Enter keeps it: navigation ends, settings opens on its page", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "main.B": "compact open=a closed=a+b tabs=a+b",
+          "notch-2": "top 0.3 #3 tabs []",
+          "notch-2.B": "rest open= closed=",
+          "settings": "notch/2",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
+          "solo": "top 0.5"
+        }) }],
+        [0, function() { w.svc.closeSettings(); w.handler("notch", "add", "--screen A --edge right --modules c") }],
+        [100, function() { w.snap("notch add over IPC", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "main.B": "compact open=a closed=a+b tabs=a+b",
+          "notch-2": "top 0.3 #4 tabs []",
+          "notch-2.B": "rest open= closed=",
+          "notch-3": "right 0.5 #3 tabs [c]",
+          "notch-3.A": "compact open=c closed=c",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
+          "solo": "top 0.5"
+        }) }],
+        [0, function() { w.handler("notch", "remove", "notch-3") }],
+        [100, function() { w.snap("notch remove over IPC", {
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "main.B": "compact open=a closed=a+b tabs=a+b",
+          "notch-2": "top 0.3 #3 tabs []",
+          "notch-2.B": "rest open= closed=",
+          "side": "left 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }]
       ] } },
@@ -1115,48 +1202,48 @@ ShellRoot {
         [0, function() { w.peek("a", 1500) }],
         [60, function() { w.screens({ focused: "A" }) }],
         [80, function() { w.snap("focus moved to A: a's peek stays on B", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
-          "side": "left 0.5 tabs [c]",
+          "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.navigate() }],
         [80, function() { w.snap("navigating over a peek", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "expanded open=a closed=a+b tabs=a+b",
           "main.B": "compact peek=a open=a closed=a+b tabs=a+b",
-          "nav": "select 0",
-          "side": "left 0.5 tabs [c]",
+          "nav": "select main",
+          "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("b", 1500) }],
         [80, function() { w.snap("a peek during navigation", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "expanded peek=b open=a closed=a+b tabs=a+b",
           "main.B": "compact peek=a open=a closed=a+b tabs=a+b",
-          "nav": "select 0",
-          "side": "left 0.5 tabs [c]",
+          "nav": "select main",
+          "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Escape") }],
         [100, function() { w.snap("navigation left", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "peek peek=b open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
-          "side": "left 0.5 tabs [c]",
+          "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("") ; w.navigate(); w.navigate() }],
         [100, function() { w.snap("navigate twice", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "left 0.5 tabs [c]",
+          "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }]
@@ -1165,48 +1252,48 @@ ShellRoot {
       { name: "scenario: modules with nothing to show, or no peek view", config: root.oneNotch,
         modules: { a: { hasCompact: false }, b: { hasCompact: false, hasPeek: false } }, steps: function(w) { return [
         [0, function() { w.snap("active without a compact view: nothing to show closed", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "rest open=a closed= tabs=a+b",
           "main.B": "rest open=a closed= tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("b", 400) }],
         [80, function() { w.snap("a peek without a peek view", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "rest open=a closed= tabs=a+b",
           "main.B": "rest open=a closed= tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 400) }],
         [80, function() { w.snap("a peeks without a compact view", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "rest open=a closed= tabs=a+b",
           "main.B": "peek peek=a open=a closed= tabs=a+b",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.module("a", { icon: true }) }],
         [500, function() { w.snap("a's icon shows closed", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a tabs=a+b",
           "main.B": "compact open=a closed=a tabs=a+b",
           "solo": "top 0.5"
         }) }]
       ] } },
 
-      { name: "scenario: a peek on another tab waits for the notch to close", config: { notches: [{ id: "main", modules: ["a", "b"], tabs: true, position: { screen: "all" } }] },
+      { name: "scenario: a peek on another tab waits for the notch to close", config: { notches: [{ id: "main", modules: ["a", "b"], tabs: true, position: { screen: ["A", "B"] } }] },
         modules: { a: {}, b: { attention: true } }, steps: function(w) { return [
         [0, function() { w.press("main", "B") }],
         [60, function() { w.tab("main", "B", "a") }],
         [60, function() { w.peek("b", 500) }],
         [60, function() { w.snap("b peeks while the notch is open on tab a", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned tab=a open=a closed=a+b tabs=a+b keyboard=exclusive",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.press("main", "B") }],
         [120, function() { w.snap("closed: b's missed peek", {
-          "main": "top 0.5 all tabs [a,b]",
+          "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=b tab=a open=a closed=a+b tabs=a+b",
           "solo": "top 0.5"
@@ -1216,33 +1303,33 @@ ShellRoot {
       { name: "scenario: recenter puts every notch back", config: root.twoNotches, modules: root.facts, steps: function(w) { return [
         [0, function() { w.set("notches.1.position", { edge: "right", offset: 0.1 }); w.set("notches.0.position", { edge: "bottom", offset: 0.9, screen: "A" }) }],
         [120, function() { w.snap("moved", {
-          "main": "bottom 0.9 A tabs [a,b]",
+          "main": "bottom 0.9 #2 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
-          "side": "right 0.1 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "side": "right 0.1 #1 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }],
         [0, function() { w.ipc("recenter", []) }],
         [120, function() { w.snap("recentered", {
-          "main": "top 0.5 tabs [a,b]",
-          "main.B": "compact open=a closed=a+b tabs=a+b",
-          "side": "top 0.5 tabs [c]",
-          "side.B": "compact open=c closed=c",
+          "main": "top 0.5 #1 tabs [a,b]",
+          "main.A": "compact open=a closed=a+b tabs=a+b",
+          "side": "top 0.5 #2 tabs [c]",
+          "side.A": "compact open=c closed=c",
           "solo": "top 0.5"
         }) }]
       ] } },
 
-      { name: "scenario: a standalone module has a notch of its own", config: { notches: [{ id: "main", modules: ["a"], position: { screen: "all" } }], solo: { position: { edge: "bottom", offset: 0.3 } } },
+      { name: "scenario: a standalone module has a notch of its own", config: { notches: [{ id: "main", modules: ["a"], position: { screen: ["A", "B"] } }], solo: { position: { edge: "bottom", offset: 0.3 } } },
         modules: { a: {}, solo: {} }, steps: function(w) { return [
         [0, function() { w.snap("solo rests", {
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a",
           "main.B": "compact open=a closed=a",
           "solo": "bottom 0.3"
         }) }],
         [0, function() { w.peek("solo", 1500) }],
         [80, function() { w.snap("solo peeks on the focused screen", {
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a",
           "main.B": "compact open=a closed=a",
           "solo": "bottom 0.3",
@@ -1250,7 +1337,7 @@ ShellRoot {
         }) }],
         [0, function() { w.dismiss("solo"); w.screens({ focused: "A" }); w.peek("solo", 1500) }],
         [80, function() { w.snap("solo peeks on A", {
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a",
           "main.B": "compact open=a closed=a",
           "solo": "left 0.6",
@@ -1259,7 +1346,7 @@ ShellRoot {
         }) }],
         [0, function() { w.set("solo.position", { edge: "left", offset: 0.6 }) }],
         [100, function() { w.snap("solo moved", {
-          "main": "top 0.5 all tabs [a]",
+          "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a",
           "main.B": "compact open=a closed=a",
           "solo": "left 0.6",

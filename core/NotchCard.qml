@@ -593,7 +593,7 @@ Item {
     }
     onReleased: if (pressArea.dragging) { pressArea.dragging = false; card.dragEnded() }
     onCanceled: if (pressArea.dragging) { pressArea.dragging = false; card.dragEnded() }
-    onClicked: if (card.notch && !pressArea.dragging) card.notch.togglePinned("")
+    onClicked: if (card.notch && !pressArea.dragging) card.notch.togglePinned()
   }
 
   Item {

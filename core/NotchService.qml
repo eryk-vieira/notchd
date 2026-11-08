@@ -739,6 +739,15 @@ Item {
     list.sort(function(a, b) { return a.index - b.index })
     return list
   }
+  // The same in the order navigation numbers them (the daemon's
+  // `state.order`: by screen, edge, then offset): what Settings lists.
+  readonly property var orderedNotches: {
+    var order = svc.notchState && svc.notchState.order ? svc.notchState.order : []
+    function place(n) { var at = order.indexOf(n.notchId); return at === -1 ? order.length : at }
+    var list = svc.notches.slice()
+    list.sort(function(a, b) { return place(a) - place(b) || a.index - b.index })
+    return list
+  }
   // Every copy of every notch: what NotchSurface puts on screen.
   readonly property var copies: {
     var out = []
@@ -757,19 +766,27 @@ Item {
     return null
   }
 
-  // A new notch in the config, off the edges the others hang from; and
-  // taking one out (Config.withNotchAdded / withoutNotch). Returns the new
-  // notch's index.
-  function addNotch() {
-    var used = svc.notches.map(function(n) { return n.edge })
-    var edges = ["bottom", "left", "right", "top"].filter(function(e) { return used.indexOf(e) === -1 })
-    var entry = { id: Config.freeNotchId(svc.notchIds), modules: [] }
-    entry.position = { edge: edges.length > 0 ? edges[0] : "bottom" }
-    var next = Config.withNotchAdded(svc.config, entry)
-    svc.replaceConfig(next)
-    return next.notches.length - 1
+  // A new notch, and taking one out: the daemon's (`notch add`, `notch remove`;
+  // the rule decides where it goes and writes its screen). `done(index)` is
+  // told the new notch's index in the config (the page to open), -1 when the
+  // daemon refused or is away. `remove` takes the notch's id.
+  function addNotch(done) {
+    svc.flushReports()
+    var index = svc.notchIds.length
+    var sent = svc.client.ipc("notch", ["add"], function(reply) {
+      if (done) done(reply.t === "ok" ? index : -1)
+    })
+    if (sent < 0 && done) done(-1)
   }
-  function removeNotch(index) { svc.replaceConfig(Config.withoutNotch(svc.config, index)) }
+  function removeNotch(id) { svc.notchIpc("notch", ["remove", id]) }
+  // The IPC form: `notch add [--screen <name>] [--edge <edge>] [--modules a,b]`
+  // or `notch remove <id>`, the arguments as one string. The daemon answers
+  // (`notchd ipc notch ...` prints it); this answers what the shell knows.
+  function notchCommand(action, args) {
+    var list = String(args || "").split(/\s+/).filter(function(a) { return a !== "" })
+    if (action === "remove" && list.length === 1 && svc.notchIds.indexOf(list[0]) === -1) return "no notch " + list[0]
+    return svc.notchIpc("notch", [action].concat(list)) ? "ok" : "notchd is not running"
+  }
 
   // What modules read: whether any notch is open, and whether one shows
   // `module`'s peek.
@@ -848,6 +865,7 @@ Item {
     svc.flushReports()
     return svc.client.ipc(method, args || [], null) >= 0
   }
+  function recenter() { svc.notchIpc("recenter") }
   function open() { svc.notchIpc("open") }
   function close() { svc.notchIpc("close") }
   function toggle() { svc.notchIpc("toggle") }
@@ -865,10 +883,9 @@ Item {
   readonly property bool navigating: !!svc.navigation
   // "select", "move" or "remove".
   readonly property string navMode: svc.navigation ? svc.navigation.mode : "select"
-  // The selected notch, by index in `notches`.
-  readonly property int navSelected: svc.navigation ? svc.navigation.selected : -1
-  readonly property var navNotch: svc.navigating && svc.navSelected >= 0 && svc.navSelected < svc.notches.length
-    ? svc.notches[svc.navSelected] : null
+  // The selected notch, by id.
+  readonly property string navSelected: svc.navigation ? svc.navigation.notch : ""
+  readonly property var navNotch: svc.navigating && svc.navSelected !== "" ? svc.notchById(svc.navSelected) : null
 
   // Starts it, or leaves it as Escape does: "ok", or what was wrong.
   function navigate() {
@@ -908,6 +925,7 @@ Item {
     id: moduleLoaders
     model: svc.configResolved && svc.moduleInfoReady ? svc.moduleIds : []
     delegate: Loader {
+      id: moduleLoader
       required property string modelData
       source: svc.loadUrl(modelData)
       onLoaded: {
@@ -926,8 +944,8 @@ Item {
       // only if it still has not a moment after it is connected.
       readonly property Timer unknown: Timer {
         interval: 3000
-        running: String(parent.source) === "" && svc.client.ready
-        onTriggered: console.warn(svc.logName + ": unknown module '" + parent.modelData + "'")
+        running: String(moduleLoader.source) === "" && svc.client.ready
+        onTriggered: console.warn(svc.logName + ": unknown module '" + moduleLoader.modelData + "'")
       }
       Component.onDestruction: Qt.callLater(svc.rebuildModules)
     }
@@ -948,13 +966,14 @@ Item {
     // Navigation: every notch highlighted and numbered, the keyboard picks
     // one; again leaves it.
     function navigate(): string { return svc.navigate() }
-    // Every notch back to the middle of the top edge, following focus, after
-    // a drag that went astray.
-    function recenter(): void {
-      var cfg = Config.withValue(svc.config, "position", undefined)
-      for (var i = 0; Config.hasNotchList(cfg) && i < cfg.notches.length; i++)
-        cfg = Config.withValue(cfg, "notches." + i + ".position", undefined)
-      svc.replaceConfig(cfg)
+    // Every notch back to the middle of the top edge, on the screen it is
+    // on, after a drag that went astray. The daemon does it.
+    function recenter(): void { svc.recenter() }
+    // Create or remove a notch: `notch add "--screen DP-1 --edge top --modules
+    // media,timer"` (every option is optional, pass "") or `notch remove <id>`.
+    function notch(action: string, args: string): string {
+      if (action !== "add" && action !== "remove") return "usage: notch add [--screen <name>] [--edge <edge>] [--modules a,b] | notch remove <id>"
+      return svc.notchCommand(action, args)
     }
     // Change one config key, as the settings window does. `value` is JSON
     // ("200", "\"notch\"", "[\"media\"]"); empty resets the key to its default.

@@ -219,7 +219,7 @@ export default class NotchdExtension extends Extension {
         notches.forEach((notch, index) => {
             // While navigating, what this notch's highlight says.
             const highlight = nav ? {
-                number: index < 9 ? index + 1 : 0, selected: nav.selected === index, mode: nav.mode,
+                number: notch.number ?? 0, selected: nav.notch === notch.id, mode: nav.mode,
                 count: notches.length, screens: this._screens.names?.length ?? 1,
             } : null;
             for (const copy of notch.copies ?? []) {

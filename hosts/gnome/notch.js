@@ -55,7 +55,7 @@ function navHint({mode, count, tabs, screens}) {
             '↵ done   Esc undo'];
     }
     return [[count > 1 ? `1-${Math.min(9, count)} ←→` : '', tabs ? 'Tab' : '', '↵ open', 'Esc'].filter(Boolean).join('   '),
-        ['m move', 's settings', count > 1 ? 'x remove' : ''].filter(Boolean).join('   ')];
+        ['m move', 's settings', 'n new', count > 1 ? 'x remove' : ''].filter(Boolean).join('   ')];
 }
 
 // The card's paddings and sizes in design pixels, as core/NotchCard.qml has
@@ -305,13 +305,9 @@ class NotchCopy extends St.Widget {
     }
 
 
-    // A notch fixed on a screen is named by it; the one that follows focus
-    // by "", except on enter and press, which name the screen the pointer
-    // is on (the open notch stays there).
-    _pointerScreen(ev) {
-        if (this._wireScreen || ev === 'leave')
-            return this._wireScreen;
-        return this._host.names()[this._monitorIndex] ?? '';
+    // A copy is named by the screen it hangs on.
+    _pointerScreen() {
+        return this._wireScreen;
     }
 
     get theme() {
@@ -322,8 +318,8 @@ class NotchCopy extends St.Widget {
     // `highlight`: while navigating, what this notch's highlight says
     // ({number, selected, mode, count, screens}), else null.
     update(notch, copy, highlight = null) {
-        // A guest's copies are one per screen, each named by its screen.
-        this._wireScreen = this.guest ? copy.screen ?? '' : notch.screen ?? '';
+        // Every copy is one per screen, each named by its screen.
+        this._wireScreen = copy.screen ?? '';
         this._notch = notch;
         this._copy = copy;
         this._navigating = !!highlight;
@@ -599,9 +595,8 @@ class NotchCopy extends St.Widget {
     }
 
     // Dropped (`drop`) or let go of: the grab goes, and the daemon is told
-    // where it landed, or that it did not move. A notch on every screen
-    // takes only the edge and offset; with one screen there is no screen to
-    // pin it to.
+    // where it landed, or that it did not move. The drop writes the screen
+    // it landed on (a notch on several screens has this copy's replaced).
     _endDrag(drop) {
         this._dragging = false;
         this._dragGrab?.dismiss();
@@ -615,8 +610,8 @@ class NotchCopy extends St.Widget {
             this._sync();
             return;
         }
-        const screen = this._notch?.screen === Position.ALL_SCREENS ? Position.ALL_SCREENS
-            : Main.layoutManager.monitors.length > 1 ? drag.screen : '';
+        // The drop writes the screen it landed on.
+        const screen = drag.screen;
         this._dropped = {edge: drag.edge, offset: drag.offset};
         this._send(Protocol.drag(this.notchId, this._wireScreen, 'drop', {edge: drag.edge, offset: drag.offset, screen}));
         // Held where it was dropped until the daemon's state has it there,

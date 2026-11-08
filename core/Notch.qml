@@ -5,12 +5,11 @@ import "Position.js" as Position
 // One notch of the config's `notches` (or the top-level one): its modules,
 // where it hangs and how. NotchService makes one per notch the daemon's
 // `state` lists; it shows as copies (NotchCopy), which bind the state of
-// each screen's copy, while this holds what they share:
-//   following focus      one copy, which moves to the focused screen
-//   kept on a screen     one copy, which stays where it hangs (its home, or
-//                        where `workspaces` sends it), peeks included
-//   on every screen      ("all") a copy per screen, each a
-//                        notch of its own
+// each screen's copy, while this holds what they share. A notch stays on the
+// screen(s) the config names (the first of the layout without one): a copy
+// on each, which the daemon lists in its state, each a notch of its own; with
+// `workspaces` leaving its screen's workspace out, the copy hides there
+// instead of moving.
 //
 // The service also makes one `visitor`: no config of its own, a copy per
 // screen at the top, each hidden until it shows a peek on a screen where no
@@ -44,10 +43,9 @@ Item {
   }
   // The copies' state, one per screen where there is one.
   readonly property var copyInfos: notch.visitor ? (notch.svc ? notch.svc.visitorInfo : []) : notch.info ? notch.info.copies : []
-  // The state of the copy on a screen; the one copy, for a notch that moves.
+  // The state of the copy on a screen.
   function copyInfo(screen) {
     var list = notch.copyInfos
-    if (!notch.everyScreen) return list.length > 0 ? list[0] : null
     for (var i = 0; i < list.length; i++) if (list[i].screen === screen) return list[i]
     return null
   }
@@ -69,10 +67,10 @@ Item {
   // Workspaces the closed notch hangs on (ids or names); null: every one.
   readonly property var workspaces: notch.spec ? notch.spec.workspaces : null
   // The position, { edge, offset, screen } (Position.js): the daemon's for a
-  // notch of the config; a standalone module's from its own key, the
-  // visitor's the default on every screen.
-  readonly property var wantedPlace: Position.resolve(notch.standaloneId !== "" ? (notch.svc ? notch.svc.standalonePosition(notch.standaloneId) : { screen: Position.ALL_SCREENS })
-    : notch.visitor ? { screen: Position.ALL_SCREENS }
+  // notch of the config (`screen` the first it hangs on); a standalone
+  // module's from its own key, the visitor's the default.
+  readonly property var wantedPlace: Position.resolve(notch.standaloneId !== "" ? (notch.svc ? notch.svc.standalonePosition(notch.standaloneId) : undefined)
+    : notch.visitor ? undefined
     : notch.info ? { edge: notch.info.edge, offset: notch.info.offset, screen: notch.info.screen }
     : notch.spec ? notch.spec.position : undefined)
   // Where it is. Replaced only when it moves: a state that says the same
@@ -81,10 +79,6 @@ Item {
   onWantedPlaceChanged: if (JSON.stringify(notch.wantedPlace) !== JSON.stringify(notch.placement)) notch.placement = notch.wantedPlace
   readonly property string edge: notch.placement.edge
   readonly property bool vertical: Position.isVertical(notch.edge)
-  // A copy on every screen, each showing the notch.
-  readonly property bool everyScreen: notch.placement.screen === Position.ALL_SCREENS
-  // Kept on one screen (its home), by name.
-  readonly property bool homed: !notch.everyScreen && notch.placement.screen !== ""
   // Whether it can be dragged to another edge.
   readonly property bool canDrag: !!notch.info && !notch.guest && notch.info.draggable
 
@@ -111,11 +105,10 @@ Item {
   readonly property var compactModule: notch.copies.length > 0 ? notch.copies[0].compactModule : null
 
   // ---------------------------------------------------------------- copies
-  // Screen names, one copy each, as the daemon has them; [""] for the one
-  // copy that moves. Replaced only when the list changes: a new one would
-  // make every copy again.
-  readonly property var wantedScreens: notch.everyScreen ? notch.copyInfos.map(function(c) { return c.screen }) : [""]
-  property var copyScreens: [""]
+  // Screen names, one copy each, as the daemon has them. Replaced only when
+  // the list changes: a new one would make every copy again.
+  readonly property var wantedScreens: notch.copyInfos.map(function(c) { return c.screen })
+  property var copyScreens: []
   onWantedScreensChanged: notch.syncScreens()
   function syncScreens() {
     if (JSON.stringify(notch.wantedScreens) !== JSON.stringify(notch.copyScreens)) notch.copyScreens = notch.wantedScreens
@@ -137,20 +130,20 @@ Item {
   }
   readonly property var copies: copyVariants.instances
 
-  // The copy on a screen; the one copy, for a notch that moves.
+  // The copy on a screen.
   function copyOn(screenName) {
     var list = notch.copies
-    if (!notch.everyScreen) return list.length > 0 ? list[0] : null
     for (var i = 0; i < list.length; i++) if (list[i].fixedScreen === screenName) return list[i]
     return null
   }
 
   // ------------------------------------------------------------ navigation
   // The number it shows while navigating (1 to 9, else 0: reached with the
-  // arrows) and whether it is the one selected (NotchService.navSelected).
-  readonly property int navNumber: notch.index >= 0 && notch.index < 9 ? notch.index + 1 : 0
-  readonly property bool navSelected: !!notch.svc && notch.svc.navigating && notch.index >= 0
-    && notch.svc.navSelected === notch.index
+  // arrows), the daemon's: where it is, not its place in the config; and
+  // whether it is the one selected (NotchService.navSelected).
+  readonly property int navNumber: notch.info && !notch.guest ? notch.info.number : 0
+  readonly property bool navSelected: !!notch.svc && notch.svc.navigating && !notch.guest
+    && notch.svc.navSelected === notch.notchId
 
   // ------------------------------------------------------------------ open
   // The daemon opens it, on the focused screen: its first copy, pinned.

@@ -3,10 +3,10 @@
 //
 // The config's `position` is { edge, offset, screen }: edge "top" |
 // "bottom" | "left" | "right", offset 0..1 along the edge (left to right,
-// top to bottom), 0.5 the middle, and screen the monitor the closed notch
-// stays on ("" or missing: the focused one, State.notchScreen; ALL_SCREENS:
-// a copy of the notch on every monitor). A missing key is top-center,
-// following focus.
+// top to bottom), 0.5 the middle, and screen the monitor the notch stays on
+// (the daemon works out which: a name, a list of names or, missing, the first
+// of the layout; the UI only draws the copies it is given). A missing key is
+// top-center.
 
 var EDGES = ["top", "bottom", "left", "right"]
 var DEFAULT_EDGE = "top"
