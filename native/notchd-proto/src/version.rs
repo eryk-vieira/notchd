@@ -59,6 +59,7 @@ pub const IPC_METHODS: &[&str] = &[
     "terminal",
     "timer",
     "navigate",
+    "notch",
     "settings",
     "recenter",
     "set",

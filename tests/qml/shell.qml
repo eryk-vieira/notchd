@@ -157,8 +157,8 @@ ShellRoot {
   function nested(fn) { return function(resume) { fn(resume) } }
 
   // The pointer comes onto a copy and stays: it opens after the hover delay.
-  function hover(copy) { copy.setPointer("test", true, copy.fixedScreen) }
-  function unhover(copy) { copy.setPointer("test", false, "") }
+  function hover(copy) { copy.setPointer("test", true) }
+  function unhover(copy) { copy.setPointer("test", false) }
 
   // Navigation's keys by what they mean; the daemon reads them as keys.
   readonly property var navKeys: ({
@@ -177,8 +177,8 @@ ShellRoot {
       { name: "workspace chips store a real list", run: root.workspaceChipsList },
       { name: "compact depth ignores peek and expanded transitions", run: root.compactDepthTransitions },
       { name: "a joined row's depth ignores a peek opening and closing", run: root.closedDepthTransitions },
-      { name: "leaving the notch before it opens forgets the screen", run: root.hoverLeaveForgetsScreen },
-      { name: "an opened notch keeps the screen the pointer opened it on", run: root.openKeepsScreen },
+      { name: "a notch with no screen stays on the first one: a pass of the pointer opens nothing, a peek shows there", run: root.hoverLeaveForgetsScreen },
+      { name: "a notch stays on its screen, open or closed, whatever has focus", run: root.openKeepsScreen },
       { name: "hover opens the notch within the delay and leaving closes it within the close delay", run: root.hoverLatency },
       { name: "peeks and the open notch never move windows", run: root.reserveIgnoresOpenNotch },
       { name: "reserved space grows at once and shrinks after the delay", run: root.reserveGrowsAndShrinks },
@@ -235,6 +235,8 @@ ShellRoot {
       { name: "a user module no notch lists is in the settings: catalog, page, defaults, and adding it loads it", run: root.userModuleInSettings },
       { name: "a timer that isn't running shows its icon in the closed notch, unless idleIcons is off", run: root.idleTimerIcon },
       { name: "navigation numbers every notch, previews the selected one and Escape leaves it as it was", run: root.navigationPreview },
+      { name: "notches are numbered by where they are, and the settings list them in that order", run: root.notchNumbers },
+      { name: "n in navigation creates a notch and moves it; Escape takes it away, Enter opens its settings", run: root.navigationNew },
       { name: "navigation: Enter pins the selected notch and closes the others; a click ends it too", run: root.navigationOpen },
       { name: "navigation: Tab walks the selected notch's tabs, Escape gives its tab back", run: root.navigationTabs },
       { name: "navigation takes the keyboard from an open agent without closing it, and gives it back", run: root.navigationKeepsAgent },
@@ -365,7 +367,7 @@ ShellRoot {
     readonly property var compactModules: cardSvc.compactModule ? [cardSvc.compactModule] : []
     readonly property var peekModule: fakeModule
     readonly property var expandedModules: []
-    function togglePinned(screenName) {}
+    function togglePinned() {}
     function close() {}
   }
   QtObject {
@@ -419,50 +421,50 @@ ShellRoot {
     })
   }
 
-  // Bug: hovering the notch named its screen as the one to open on; leaving
-  // before it opened kept that, so the next peek showed on that screen
-  // instead of the focused one.
+  // A notch with no screen hangs on the first screen of the layout and stays
+  // there: not where the pointer touched, not where the focus goes.
   function hoverLeaveForgetsScreen() {
     root.go(function*() {
       twoScreens.focusedScreenName = "B"
       multi.replaceConfig({})
       yield root.waitFor(function() { return multi.notches.length === 1 && multi.notches[0].copies.length === 1 })
       var copy = multi.notches[0].copies[0]
-      copy.setPointer("notch", true, "A")
-      copy.setPointer("notch", false, "")
+      root.check(copy.screenName === "A", "the notch is on '" + copy.screenName + "', not the first screen A")
+      copy.setPointer("notch", true)
+      copy.setPointer("notch", false)
       yield root.settle(multi)
       root.check(copy.mode !== "expanded", "opened without waiting for the hover delay")
-      // A peek now shows where you work, not where the pointer touched.
+      // A peek shows on the notch, where it hangs; where you work gets the visitor's.
       root.push("forget", true)
       yield root.settle(multi)
-      root.check(copy.mode === "peek" && copy.screenName === "B", "the peek is " + copy.mode + " on '" + copy.screenName + "', not on B")
+      root.check(copy.mode === "peek" && copy.screenName === "A", "the peek is " + copy.mode + " on '" + copy.screenName + "', not on A")
       multi.dismissPeek(null)
       root.clearActivities(multi)
     })
   }
 
-  // Bug: the copy cleared the screen it opened on as it opened (onModeChanged
-  // read `isOpen` before it updated), so an open notch followed the focus to
-  // another screen instead of staying under the pointer.
+  // Bug (when a notch followed focus): the copy cleared the screen it opened
+  // on as it opened, so an open notch followed the focus to another screen.
+  // Now no notch follows it: open or closed it stays on its screen.
   function openKeepsScreen() {
     root.go(function*() {
       twoScreens.focusedScreenName = "B"
       multi.replaceConfig({})
       yield root.waitFor(function() { return multi.notches.length === 1 && multi.notches[0].copies.length === 1 })
       var copy = multi.notches[0].copies[0]
-      copy.setPointer("notch", true, "A")
+      copy.setPointer("notch", true)
       yield root.waitFor(function() { return copy.mode === "expanded" })
       yield root.settle(multi)
-      root.check(copy.mode === "expanded" && copy.screenName === "A", "an open notch is on '" + copy.screenName + "', not under the pointer on A")
+      root.check(copy.mode === "expanded" && copy.screenName === "A", "an open notch is on '" + copy.screenName + "', not on A")
       // Focus moving does not take it away.
       twoScreens.focusedScreenName = "A"
       twoScreens.focusedScreenName = "B"
       yield root.settle(multi)
       root.check(copy.screenName === "A", "it followed focus to '" + copy.screenName + "'")
-      copy.setPointer("notch", false, "")
+      copy.setPointer("notch", false)
       yield root.waitFor(function() { return copy.mode !== "expanded" })
       yield root.settle(multi)
-      root.check(copy.screenName === "B", "closed, it did not go back to the focused screen: '" + copy.screenName + "'")
+      root.check(copy.screenName === "A", "closed, it followed the focus to '" + copy.screenName + "'")
     })
   }
 
@@ -483,11 +485,11 @@ ShellRoot {
       var worst = 0
       for (var round = 0; round < 4; round++) {
         var t0 = Date.now()
-        copy.setPointer("notch", true, "B")
+        copy.setPointer("notch", true)
         yield root.waitFor(function() { return copy.mode === "expanded" }, 2000)
         var opened = changedAt - t0
         t0 = Date.now()
-        copy.setPointer("notch", false, "")
+        copy.setPointer("notch", false)
         yield root.waitFor(function() { return copy.mode !== "expanded" }, 2000)
         var closed = changedAt - t0
         worst = Math.max(worst, opened - 150, closed - 150)
@@ -735,7 +737,7 @@ ShellRoot {
     readonly property var expandedModules: [controlModule]
     property int pins: 0
     property int closes: 0
-    function togglePinned(screenName) { pins++ }
+    function togglePinned() { pins++ }
     function close() { closes++ }
   }
   FloatingWindow {
@@ -982,16 +984,23 @@ ShellRoot {
       multi.replaceConfig(start)
       yield root.settle(multi)
       root.check(multi.notches.length === 1, "one notch to start, not " + multi.notches.length)
-      var at = multi.addNotch()
+      var at = -2
+      yield root.nested(function(resume) { multi.addNotch(function(index) { at = index; resume() }) })
+      yield root.waitFor(function() { return multi.notches.length === 2 })
       yield root.settle(multi)
       root.check(at === 1 && multi.notches.length === 2, "added at " + at + ", " + multi.notches.length + " notches")
       root.check(JSON.stringify(multi.config.notches[0]) === "{}", "the first notch should inherit it all: " + JSON.stringify(multi.config.notches))
-      root.check(multi.notches[1].edge !== multi.notches[0].edge, "the new notch hangs on the same edge")
+      // The daemon's rule: the top edge of a screen, written, in the first free spot.
+      var place = multi.config.notches[1].position
+      root.check(place && place.edge === "top" && typeof place.offset === "number" && !!place.screen, "the new notch's place: " + JSON.stringify(place))
       root.check(multi.notches[1].modules.length === 0, "the new notch starts with modules")
-      multi.removeNotch(1)
+      root.check(multi.notches[1].copies.length === 1 && multi.notches[1].copies[0].screenName === place.screen, "the new notch is not on its screen")
+      multi.removeNotch("notch-2")
       yield root.settle(multi)
       root.check(multi.notches.length === 1, "removed, " + multi.notches.length + " notches")
-      root.check(JSON.stringify(multi.config) === JSON.stringify(start), "the config came back as " + JSON.stringify(multi.config))
+      root.check(Object.keys(multi.config).sort().join() === Object.keys(start).sort().join()
+                 && JSON.stringify(multi.config.modules) === JSON.stringify(start.modules) && multi.config.hoverOpenDelay === start.hoverOpenDelay,
+                 "the config came back as " + JSON.stringify(multi.config))
     })
   }
 
@@ -1031,12 +1040,14 @@ ShellRoot {
       root.check(visitor.copyOn("A").mode !== "peek" && visitor.copyOn("B").mode !== "peek",
                  "the visitor peeked with focus where the notches are")
       multi.dismissPeek(null)
-      // A notch that follows focus peeks on B itself: no visitor.
-      multi.setConfigValue("notches.1.position.screen", "")
+      // A notch on both screens peeks on B itself, the focused one: no visitor.
+      multi.setConfigValue("notches.1.position.screen", ["A", "B"])
       twoScreens.focusedScreenName = "B"
-      root.push("follow", true)
+      yield root.waitFor(function() { return side.copies.length === 2 })
+      root.push("both", true)
       yield root.settle(multi)
-      root.check(visitor.copyOn("B").mode !== "peek", "the visitor peeked beside a notch that follows focus")
+      root.check(side.copyOn("B").mode === "peek", "the notch on B did not peek")
+      root.check(visitor.copyOn("B").mode !== "peek", "the visitor peeked beside a notch on the focused screen")
       multi.dismissPeek(null)
       root.clearActivities(multi)
     })
@@ -1410,14 +1421,14 @@ ShellRoot {
       root.check(!multi.visitor.copies.some(function(c) { return c.navShown }), "the visitor takes part in navigation")
       root.navKey(multi, "next")
       yield root.settle(multi)
-      root.check(multi.navSelected === 1 && side.copies[0].mode === "expanded", "next did not move to the second notch")
+      root.check(multi.navSelected === "side" && side.copies[0].mode === "expanded", "next did not move to the second notch")
       root.check(main.copyOn("B").mode !== "expanded", "the first notch stayed open after moving on")
       root.navKey(multi, "next")
       yield root.settle(multi)
-      root.check(multi.navSelected === 0, "next did not wrap around")
+      root.check(multi.navSelected === "main", "next did not wrap around")
       root.navKey(multi, "2")
       yield root.settle(multi)
-      root.check(multi.navSelected === 1, "2 did not select the second notch")
+      root.check(multi.navSelected === "side", "2 did not select the second notch")
       root.navKey(multi, "leave")
       yield root.settle(multi)
       root.check(!multi.navigating, "Escape did not end navigation")
@@ -1428,6 +1439,69 @@ ShellRoot {
       multi.navigate()
       yield root.settle(multi)
       root.check(!multi.navigating, "navigate again did not end navigation")
+    })
+  }
+
+  // The numbers are the daemon's: by screen, then edge, then offset, not the
+  // config's order; Settings lists the notches in that order, numbered.
+  function notchNumbers() {
+    root.go(function*() {
+      twoScreens.focusedScreenName = "B"
+      multi.replaceConfig({ notches: [
+        { id: "media", modules: ["activities"], position: { edge: "left" } },
+        { id: "herdr", modules: [] },
+        { id: "infra", modules: [], position: { offset: 0.9 } },
+        { id: "flex", modules: [], position: { offset: 0.1 } }] })
+      yield root.waitFor(function() { return multi.notches.length === 4 })
+      yield root.settle(multi)
+      var byId = function(id) { return multi.notchById(id).navNumber }
+      root.check(byId("flex") === 1 && byId("herdr") === 2 && byId("infra") === 3 && byId("media") === 4,
+                 "numbers: " + ["flex", "herdr", "infra", "media"].map(byId))
+      var order = multi.orderedNotches.map(function(n) { return n.notchId }).join(",")
+      root.check(order === "flex,herdr,infra,media", "the settings list is " + order)
+      root.check(multi.notches.map(function(n) { return n.notchId }).join(",") === "media,herdr,infra,flex", "the config order changed")
+      multi.navigate()
+      yield root.settle(multi)
+      root.check(multi.navSelected === "flex", "navigation did not start on the first: " + multi.navSelected)
+      root.navKey(multi, "next")
+      yield root.settle(multi)
+      root.check(multi.navSelected === "herdr", "→ went to " + multi.navSelected)
+      root.navKey(multi, "4")
+      yield root.settle(multi)
+      root.check(multi.navSelected === "media", "4 went to " + multi.navSelected)
+      root.navKey(multi, "leave")
+      yield root.settle(multi)
+      multi.replaceConfig(root.twoNotches)
+    })
+  }
+
+  // `n`: a notch at the top of the focused screen, moved at once; Escape
+  // takes it away, Enter keeps it and opens its page in settings.
+  function navigationNew() {
+    root.go(function*() {
+      yield root.nested(root.withTwoNotches)
+      multi.navigate()
+      yield root.settle(multi)
+      root.navKey(multi, "n")
+      yield root.waitFor(function() { return multi.notches.length === 3 })
+      yield root.settle(multi)
+      var added = multi.notchById("notch-2")
+      if (!root.check(!!added, "n did not create a notch")) return
+      var place = multi.config.notches[2].position
+      root.check(place.edge === "top" && place.screen === "B", "created at " + JSON.stringify(place) + ", not the top of the focused screen B")
+      root.check(multi.navMode === "move" && multi.navSelected === "notch-2", "navigation is " + multi.navMode + " on " + multi.navSelected)
+      root.navKey(multi, "leave")
+      yield root.settle(multi)
+      root.check(multi.notches.length === 2 && multi.navigating && multi.navMode === "select" && multi.navSelected !== "notch-2",
+                 "Escape did not undo the creation: " + multi.notches.length + " notches, " + multi.navMode + " on " + multi.navSelected)
+      root.navKey(multi, "n")
+      root.navKey(multi, "open")
+      yield root.waitFor(function() { return !multi.navigating && multi.settingsOpen })
+      root.check(multi.notches.length === 3 && !multi.navigating, "Enter did not keep the notch and end navigation")
+      root.check(multi.settingsOpen && multi.settingsPage === "notch/2" && multi.settingsNotch === 2, "settings opened on " + multi.settingsPage)
+      multi.closeSettings()
+      yield root.settle(multi)
+      multi.replaceConfig(root.twoNotches)
     })
   }
 
@@ -1442,7 +1516,7 @@ ShellRoot {
       root.check(main.copyOn("B").pinned, "main did not open (test setup)")
       multi.navigate()
       yield root.settle(multi)
-      root.check(multi.navSelected === 0, "navigation did not start on the open notch")
+      root.check(multi.navSelected === "main", "navigation did not start on the open notch")
       root.navKey(multi, "next")
       yield root.settle(multi)
       root.check(main.copyOn("B").mode !== "expanded", "the pinned notch stayed open with another one selected")
@@ -1462,7 +1536,7 @@ ShellRoot {
       yield root.settle(multi)
       multi.navigate()
       yield root.settle(multi)
-      main.copyOn("B").togglePinned("")
+      main.copyOn("B").togglePinned()
       yield root.settle(multi)
       root.check(!multi.navigating, "a click that pinned a notch left navigation on")
       main.close()
@@ -1526,7 +1600,7 @@ ShellRoot {
       root.navKey(multi, "remove")
       yield root.settle(multi)
       root.check(multi.notches.length === 2, "x twice left " + multi.notches.length + " notches")
-      root.check(multi.navSelected === 1 && multi.navNotch && multi.navNotch.notchId === "side",
+      root.check(multi.navSelected === "side" && multi.navNotch && multi.navNotch.notchId === "side",
                  "after removing the last one, " + multi.navSelected + " is selected, not the one before")
       root.navKey(multi, "settings")
       yield root.settle(multi)
@@ -1571,13 +1645,15 @@ ShellRoot {
       yield root.settle(multi)
       root.check(multi.navigating && multi.navMode === "select", "Enter while moving left navigation")
       root.check(side.placement.edge === "top", "Enter did not keep it on top: " + side.placement.edge)
+      root.check(side.placement.screen === "A", "the side notch is on '" + side.placement.screen + "', not the first screen (test setup)")
       root.navKey(multi, "move")
       root.navKey(multi, "nextTab")
       yield root.settle(multi)
-      root.check(side.placement.screen === "A", "Tab took it to '" + side.placement.screen + "', not A")
+      root.check(side.placement.screen === "B" && side.copies[0].screenName === "B", "Tab took it to '" + side.placement.screen + "', not B")
+      root.check(multi.configValue("notches.1.position.screen") === "B", "the move did not write the screen")
       root.navKey(multi, "leave")
       yield root.settle(multi)
-      root.check(side.placement.screen === "", "Escape left it on " + side.placement.screen)
+      root.check(side.placement.screen === "A", "Escape left it on " + side.placement.screen)
       root.navKey(multi, "move")
       root.navKey(multi, "next")
       yield root.settle(multi)
@@ -1735,7 +1811,7 @@ ShellRoot {
     readonly property var peekModule: null
     readonly property var expandedModules: [escapeModule]
     property int closes: 0
-    function togglePinned(screenName) {}
+    function togglePinned() {}
     function close() { closes++ }
   }
   FloatingWindow {

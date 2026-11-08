@@ -104,21 +104,14 @@ Item {
   // delays and the mode that follows.
   property var pointerSources: ({})
   readonly property bool pointerInside: Object.keys(copy.pointerSources).length > 0
-  // The screen the pointer was last on, for the copy that moves: the daemon
-  // keeps it there while it is open instead of following focus (the closed
-  // notch can hang on a screen without focus).
-  property string pointerScreen: ""
-
-  function setPointer(source, inside, screenName) {
-    // The screen first: the daemon is told as the sources change.
-    if (inside && screenName) copy.pointerScreen = screenName
+  function setPointer(source, inside) {
     var next = Object.assign({}, copy.pointerSources)
     if (inside) next[source] = true
     else delete next[source]
     copy.pointerSources = next
   }
   function sendPointer(ev) {
-    if (copy.daemon) copy.daemon.pointer(copy.wireNotch, copy.fixedScreen !== "" ? copy.fixedScreen : copy.pointerScreen, ev)
+    if (copy.daemon) copy.daemon.pointer(copy.wireNotch, copy.fixedScreen, ev)
   }
   onPointerInsideChanged: copy.sendPointer(copy.pointerInside ? "enter" : "leave")
   // A daemon that came back has not seen the pointer: tell it where it is.
@@ -128,10 +121,10 @@ Item {
   }
 
   // A press on the copy pins it open, or closes it again.
-  function togglePinned(screenName) {
+  function togglePinned() {
     if (!copy.daemon) return
     copy.svc.flushReports()
-    copy.daemon.pointer(copy.wireNotch, copy.fixedScreen !== "" ? copy.fixedScreen : (screenName || ""), "press")
+    copy.daemon.pointer(copy.wireNotch, copy.fixedScreen, "press")
   }
   // Pins it open, or closes it (and ends its hover). What is waiting to be
   // sent (a config edit, a module's news) goes first.
@@ -183,7 +176,7 @@ Item {
               "↵ done   Esc undo"]
     }
     return [[count > 1 ? "1-" + Math.min(9, count) + " ←→" : "", tabs ? "Tab" : "", "↵ open", "Esc"].filter(Boolean).join("   "),
-            ["m move", "s settings", count > 1 ? "x remove" : ""].filter(Boolean).join("   ")]
+            ["m move", "s settings", "n new", count > 1 ? "x remove" : ""].filter(Boolean).join("   ")]
   }
 
   // -------------------------------------------------------------- keyboard
@@ -207,9 +200,7 @@ Item {
 
   // ---------------------------------------------------------------- screen
   readonly property var compositor: copy.svc ? copy.svc.compositor : null
-  // The screen its window goes on, as the daemon works it out: where it
-  // hangs closed (its home, else the focused screen, else the first one
-  // whose workspace takes it), and where it opened while open.
+  // The screen its window goes on: the one it hangs on, always.
   readonly property string screenName: copy.info ? copy.info.screen : copy.fixedScreen
   // Hung nowhere: its workspace is not on any screen. A guest hangs
   // nowhere while closed.

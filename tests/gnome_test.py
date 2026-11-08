@@ -419,9 +419,9 @@ class NotchOnGnome(ShellCase):
         s = self.shell.until(lambda x: x["struts"], 3, "a strut")
         c = main_copy(s)
         self.assertGreaterEqual(s["workArea"][0]["y"], s["panel"] + c["card"]["depth"])
-        # A notch that follows focus may hang on either monitor: the daemon
-        # reserves on both, the second one has no panel.
-        self.assertGreaterEqual(s["workArea"][1]["y"], s["monitors"][1]["y"] + c["card"]["depth"])
+        # A notch hangs on the first monitor of the layout and reserves only
+        # there: the second one's work area is its whole monitor.
+        self.assertEqual(s["workArea"][1]["y"], s["monitors"][1]["y"])
 
     def test_hover_opens_within_the_delay_and_leaving_closes(self):
         sh = self.shell

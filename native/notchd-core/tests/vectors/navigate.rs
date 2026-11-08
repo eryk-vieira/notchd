@@ -46,7 +46,6 @@ pub fn call(f: &str, a: &[Value]) -> Option<Value> {
                 int(a, 3)
             ))
         }
-        "number" => json!(nav::number(int(a, 0))),
         _ => return None,
     })
 }

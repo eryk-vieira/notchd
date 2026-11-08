@@ -16,7 +16,7 @@ An agent or shell launched in a notchd terminal also receives `NOTCHD_BIN` (the 
 |---|---|
 | `push '<json>'` | add or update an activity (below) |
 | `clear <id>` | remove one; `""` removes all |
-| `open`, `toggle` | pin the first notch open on the focused monitor, or flip it |
+| `open`, `toggle` | pin the first notch open (on its copy on the focused monitor, when it has one there), or flip it |
 | `close` | close every notch |
 | `openNotch <id>`, `closeNotch <id>`, `toggleNotch <id>` | the same for one notch, by its `id` (`main`, `notch-2`...), its Name in settings: renaming it breaks a shortcut that names it |
 | `agent <id> <command>` | an agent (`claude`, `codex`) by its id: `toggle` opens or closes its notch, `new` starts a new session, `"ask <question>"` opens it and types the question in ([below](#agents)) |
@@ -25,7 +25,9 @@ An agent or shell launched in a notchd terminal also receives `NOTCHD_BIN` (the 
 | `timer <command>` | the `timer` module: start, pause or stop a countdown or a pomodoro (below) |
 | `navigate` | start or leave navigation: every notch highlighted and numbered, the keyboard picks one ([below](#navigation)) |
 | `settings` | open or close the settings window |
-| `recenter` | put every notch back in the middle of the top edge, following focus (removes each `position`) |
+| `recenter` | put every notch back in the middle of the top edge of the monitor it is on (removes each `position` but its `screen`) |
+| `notch add [--screen <name>] [--edge <edge>] [--modules a,b]` | create a notch, the rule `n` in navigation and Settings' Add share: the focused monitor (or `--screen`), the top edge (or `--edge`), the free spot nearest the middle, its screen written to the config, no modules unless `--modules` lists them. Answers its id (`notch-2`...), or why not (`no screen X`, `no edge X`) |
+| `notch remove <id>` | take a notch out of the config; the last one stays. Answers `ok`, `no notch <id>` or `the last notch stays` |
 | `set <key> <json>` | change one config key, as the settings window does; an empty value resets it |
 | `state` | as JSON: `navigation` (the notch selected while navigating, else null), `notches`, each with its id, reserved space, workspaces, position (where it is), whether it can be dragged, its modules and its `copies` (screen, mode and current peek of each); each `standalone` module's place and the copies that show it; and every loaded module, with an agent's plan `usage` (its limits, whether they are stale and why; only `notchd ipc state` has it, not the host's own target) |
 | `shutdown` | the daemon only (`notchd ipc shutdown`; the QML service has no such target): the daemon replies `ok`, closes its socket and exits. What `notchd daemon --ensure` uses to replace a daemon of another version |
@@ -43,7 +45,7 @@ For an array, put a space before the bracket: `set modules ' ["media","activitie
 
 ## Navigation
 
-`navigate` highlights every notch of the config, hidden ones included, each with a small label at its top right, outside it: its number (its place in `notches`, 1 to 9) and its name. It takes the keyboard until you leave. The selected notch opens as a preview on the focused monitor (not pinned), the keys listed in its label; the others show closed meanwhile, even one pinned open, which opens again on Escape. It starts on the open notch, else the first on the focused monitor.
+`navigate` highlights every notch of the config, hidden ones included, each with a small label at its top right, outside it: its number (1 to 9) and its name. The numbers go by where the notches are, not by their place in `notches`: by monitor (its place in the layout, left to right, then top to bottom; the numbers go on from one monitor to the next), then edge (top, left, right, bottom), then position along the edge (left to right on the top and bottom, top to bottom on the sides), ties in config order. A notch on several monitors counts on the first of them, and a hidden one (left out by `workspaces`) where it would be. `←` `→` and the digits walk the same order. It takes the keyboard until you leave. The selected notch opens as a preview on the focused monitor (not pinned), the keys listed in its label; the others show closed meanwhile, even one pinned open, which opens again on Escape. It starts on the open notch, else the first, in that order, on the focused monitor.
 
 | Key | |
 |---|---|
@@ -54,7 +56,8 @@ For an array, put a space before the bracket: `set modules ' ["media","activitie
 | `Esc`, `Ctrl+Esc` | leave, each notch on the tab it had |
 | `s` | leave and open the selected notch's page in settings |
 | `x` | ask to remove the selected notch: `x` again removes it, any other key keeps it. The last notch stays |
-| `m` | move the selected notch, live: `←` `↑` `↓` `→` (`h` `k` `j` `l`) onto that edge, `Shift`+arrow 5 % along it, `Tab` / `Shift+Tab` to the next or previous monitor (letting in its workspace, as a drop does). `Enter` keeps it, `Esc` puts it back; both stay in navigation |
+| `n` | create a notch at the top of the focused monitor, in the first free spot near the middle (`notch add` is the same rule from IPC), select it and start moving it as `m` does. `Enter` keeps it: navigation ends and settings opens on its page, to name it and pick its modules. `Esc` while moving it takes it away again. A notch left without modules stays, a thin lip at rest |
+| `m` | move the selected notch, live: `←` `↑` `↓` `→` (`h` `k` `j` `l`) onto that edge, `Shift`+arrow 5 % along it, `Tab` / `Shift+Tab` to the next or previous monitor in the layout (letting in its workspace, as a drop does). Every move writes the notch's monitor, and the order is worked out again after it, the selection staying on the moved notch. `Enter` keeps it, `Esc` puts it back; both stay in navigation |
 
 `navigate` again leaves too, as Escape does (a move under way goes back), and a click that pins a notch leaves on that one. An agent open when it starts keeps running and gets the keyboard back on Escape. Bind it to a key:
 

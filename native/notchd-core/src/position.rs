@@ -3,9 +3,10 @@
 //!
 //! The config's `position` is `{ edge, offset, screen }`: edge "top" |
 //! "bottom" | "left" | "right", offset 0..1 along the edge (left to right, top
-//! to bottom), 0.5 the middle, and screen the monitor the closed notch stays
-//! on ("" or missing: the focused one; [`ALL_SCREENS`]: a copy of the notch on
-//! every monitor). A missing key is top-center, following focus.
+//! to bottom), 0.5 the middle, and screen the monitor the notch stays on: a
+//! name, or a list of names (one copy on each; [`ALL_SCREENS`]: every
+//! connected monitor, read for existing configs). A missing key is
+//! top-center on the first monitor of the layout.
 //!
 //! Only what the config rules need lives here: [`resolve`], [`config_value`]
 //! and what they use. The pixel geometry (`place`, `dragTarget`, `pack`, ...)
@@ -25,6 +26,23 @@ pub const DEFAULT_OFFSET: f64 = 0.5;
 /// A `screen` for a copy of the notch on every monitor (`ALL_SCREENS`).
 pub const ALL_SCREENS: &str = "all";
 
+/// The screens a `position.screen` names, as written: a name is one, a list
+/// is its names (empty entries and non-strings left out); `"all"` is a name
+/// like any (every connected screen, see `spatial::screens_of`). None
+/// written, none listed.
+pub fn listed_screens(value: &Value) -> Vec<String> {
+    match value.as_object().and_then(|o| o.get("screen")) {
+        Some(Value::String(s)) if !s.is_empty() => vec![s.clone()],
+        Some(Value::Array(l)) => l
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// A position as the rules see it (`resolve`'s result).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Position {
@@ -32,7 +50,7 @@ pub struct Position {
     pub edge: String,
     /// 0 to 1 along the edge.
     pub offset: f64,
-    /// A screen name; "" follows focus, [`ALL_SCREENS`] is every screen.
+    /// The first screen named ("" for none); [`listed_screens`] has them all.
     pub screen: String,
 }
 
@@ -72,10 +90,7 @@ pub fn resolve(value: &Value) -> Position {
     Position {
         edge: edge.to_owned(),
         offset,
-        screen: get("screen")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_owned(),
+        screen: listed_screens(value).into_iter().next().unwrap_or_default(),
     }
 }
 
@@ -159,6 +174,22 @@ mod tests {
         assert!(is_vertical("right"));
         assert!(!is_vertical("top"));
         assert!(!is_vertical("bottom"));
+    }
+
+    // resolve and listed_screens: a screen is a name or a list of names
+    #[test]
+    fn listed_screens_a_name_or_a_list_of_names() {
+        let of = |v: Value| listed_screens(&v);
+        assert_eq!(of(json!({ "screen": "DP-1" })), ["DP-1"]);
+        assert_eq!(of(json!({ "screen": ["DP-2", "DP-1"] })), ["DP-2", "DP-1"]);
+        assert_eq!(of(json!({ "screen": ["DP-2", 3, "", null] })), ["DP-2"]);
+        assert!(of(json!({ "screen": "" })).is_empty());
+        assert!(of(json!({ "screen": 3 })).is_empty());
+        assert!(of(json!({})).is_empty());
+        assert!(of(Value::Null).is_empty());
+        // `resolve` has the first, for what wants one name.
+        assert_eq!(resolve(&json!({ "screen": ["B", "A"] })).screen, "B");
+        assert_eq!(resolve(&json!({ "screen": [] })).screen, "");
     }
 
     // Node: resolve keeps the home screen by name

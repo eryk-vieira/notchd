@@ -234,7 +234,7 @@ Scope {
       width: window.zone.width
       height: window.zone.height
       HoverHandler {
-        onHoveredChanged: if (root.copy) root.copy.setPointer("notch-slack", hovered, window.screenName)
+        onHoveredChanged: if (root.copy) root.copy.setPointer("notch-slack", hovered)
       }
     }
 
@@ -263,7 +263,7 @@ Scope {
       x: card.spot.x
       y: card.spot.y
 
-      onHoveredChanged: if (root.copy) root.copy.setPointer("notch", card.hovered, window.screenName)
+      onHoveredChanged: if (root.copy) root.copy.setPointer("notch", card.hovered)
 
       // Held and dragged, it jumps to the edge nearest the pointer, its
       // middle under the pointer, and lands there on release
@@ -271,10 +271,10 @@ Scope {
       // button is down, even over another screen: its position plus this
       // screen's gives the point on the desktop, and the screen there
       // (Position.screenAt) gets a preview and, on the drop, the notch.
-      // With more than one screen, the drop also makes that screen its home,
-      // and lets in the workspace it shows if `workspaces` left it out, so
-      // the notch stays where it was dropped (Config.withWorkspace). A notch
-      // on every screen only takes the edge and offset: all its copies move.
+      // The drop also writes that screen, and the daemon lets in the
+      // workspace it shows if `workspaces` left it out, so the notch stays
+      // where it was dropped. A notch on several screens has this copy's
+      // screen replaced by that one in its list.
       draggable: !!root.copy && root.copy.canDrag
       onDragStarted: if (root.copy) root.copy.setDragging(true)
       onDragMoved: function(scenePosition) {
@@ -295,8 +295,7 @@ Scope {
         var drop = null
         if (notch && root.dragPlacement) {
           drop = Object.assign({}, root.dragPlacement)
-          drop.screen = notch.everyScreen ? Position.ALL_SCREENS
-            : (Quickshell.screens || []).length > 1 ? root.dragScreen : ""
+          drop.screen = root.dragScreen
         }
         root.dragPlacement = null
         root.dragScreen = ""

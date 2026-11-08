@@ -628,21 +628,23 @@ class SettingsUi {
         };
     }
 
-    // `notches` (NotchCatalog.qml): a row per notch that opens its page, a
-    // trash can with more than one, and Add notch, which opens the new one.
+    // `notches` (NotchCatalog.qml): a row per notch, in navigation's order and
+    // with its number, that opens its page, a trash can with more than one,
+    // and Add notch, which asks the daemon for one (its rule picks the screen
+    // and the spot) and opens the new one's page: the last of the config.
     _notches(field, group) {
         const add = new Gtk.Button({label: 'Add notch', valign: Gtk.Align.CENTER});
         add.connect('clicked', () => {
-            const r = Model.addNotch(this._ctx.cfg, this._ctx.state, Config);
-            this._sets(r.sets);
-            this._openSub(`notch/${r.index}`);
+            const index = this._ctx.state?.notches?.length ?? 0;
+            this._client.ipc('notch', ['add']);
+            this._openSub(`notch/${index}`);
         });
         group.header_suffix = add;
         return this._list(group, () => Model.notchRows(this._ctx.state, this._ctx.schema.modules, Settings), n => {
-            const r = row(Adw.ActionRow, {title: n.id, subtitle: n.summary, activatable: true});
+            const r = row(Adw.ActionRow, {title: n.number > 0 ? `${n.number}  ${n.id}` : n.id, subtitle: n.summary, activatable: true});
             if (n.removable) {
                 r.add_suffix(iconButton('user-trash-symbolic', 'Remove this notch',
-                    () => this._sets(Model.removeNotch(this._ctx.cfg, n.index, Config))));
+                    () => this._client.ipc('notch', ['remove', n.id])));
             }
             r.add_suffix(new Gtk.Image({icon_name: 'go-next-symbolic'}));
             r.connect('activated', () => this._openSub(`notch/${n.index}`));

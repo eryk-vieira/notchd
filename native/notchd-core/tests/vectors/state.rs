@@ -61,14 +61,6 @@ pub fn call(f: &str, a: &[Value]) -> Option<Value> {
             let ws: Option<s::Workspace> = from_json(arg(a, 1));
             json!(s::workspace_allowed(list.as_deref(), ws.as_ref()))
         }
-        "notchScreen" => json!(s::notch_screen(&from_json(ctx))),
-        "reserveScreens" => {
-            let screens: Option<Vec<s::ScreenState>> = from_json(ctx);
-            json!(s::reserve_screens(
-                &screens.unwrap_or_default(),
-                &text(a, 1)
-            ))
-        }
         "peekCopy" => {
             let copies: Option<Vec<String>> = from_json(ctx);
             or_null(s::peek_copy(&copies.unwrap_or_default(), &text(a, 1)).map(|c| json!(c)))

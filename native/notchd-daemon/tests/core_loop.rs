@@ -141,7 +141,7 @@ fn peek_arbitration_between_two_modules() {
     assert!(s.notches[0].copies[0].peek.is_none());
     assert!(
         !ui.messages.iter().any(|m| matches!(m, ToUi::State(s)
-            if s.notches[0].copies[0].peek.as_ref().is_some_and(|p| p.module == "media"))),
+            if s.notches[0].copies.first().and_then(|c| c.peek.as_ref()).is_some_and(|p| p.module == "media"))),
         "the lower priority one never cut in"
     );
 }
@@ -291,7 +291,7 @@ fn two_uis_get_the_same_state_revs_and_a_late_one_starts_from_the_current() {
             .iter()
             .filter_map(|m| {
                 if let ToUi::State(s) = m {
-                    Some((s.rev, s.notches[0].copies[0].mode))
+                    s.notches[0].copies.first().map(|c| (s.rev, c.mode))
                 } else {
                     None
                 }

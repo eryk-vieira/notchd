@@ -18,6 +18,9 @@ use serde_json::{Value, json};
 pub struct Inputs<'a> {
     pub config: &'a Value,
     pub notches: &'a [NotchSpec],
+    /// The notches' ids in the spatial order (`spatial::order`): the sidebar
+    /// lists their pages in it; ids it leaves out come last, in config order.
+    pub order: &'a [String],
     /// The notch the window edits (`settingsNotch`), by index.
     pub settings_notch: usize,
     /// The screens' names.
@@ -126,14 +129,14 @@ fn core_fields(i: &Inputs) -> Vec<Value> {
         "min": 0, "max": 1, "step": 0.01,
         "help": "Where on the edge: 0 % is its left (or top) end, 50 % the middle."}));
     if i.screens.len() > 1 {
-        let mut options = vec![
-            json!({"value": "", "label": "Follow focus"}),
-            json!({"value": "all", "label": "Every screen"}),
-        ];
-        options.extend(i.screens.iter().map(|s| json!({"value": s, "label": s})));
+        let options: Vec<Value> = i
+            .screens
+            .iter()
+            .map(|s| json!({"value": s, "label": s}))
+            .collect();
         out.push(json!({"page": own, "section": "Position", "key": key("position.screen"), "type": "choice",
-            "label": "Screen", "default": inherited("position.screen", json!("")),
-            "help": "Where the notch stays. Following focus, it moves to the screen you work on. On a screen of its own, it stays there, peeks included; on a screen without a notch that shows it, a peek appears at the top. On every screen, each screen has its own copy, and a peek shows on the focused one.",
+            "label": "Screen", "default": inherited("position.screen", json!(i.screens[0])),
+            "help": "The screen the notch stays on, peeks included; on a screen without a notch that shows it, a peek appears at the top. Unplugged, it shows on the first screen left until the screen is back. A list of names in the config puts a copy on each.",
             "options": options}));
     }
     out.push(json!({"page": own, "section": "Position", "key": key("draggable"), "type": "boolean",
@@ -268,8 +271,15 @@ pub fn build(i: &Inputs) -> Schema {
                 "icon": char::from_u32(*icon).map(String::from).unwrap_or_default()})
         })
         .collect();
+    let mut in_order: Vec<&NotchSpec> = i.notches.iter().collect();
+    in_order.sort_by_key(|n| {
+        i.order
+            .iter()
+            .position(|id| *id == n.id)
+            .unwrap_or(usize::MAX)
+    });
     pages.extend(
-        i.notches
+        in_order
             .iter()
             .map(|n| json!({"id": settings::notch_page_id(n.index as u64), "label": n.id})),
     );
@@ -320,6 +330,7 @@ mod tests {
         build(&Inputs {
             config: &cfg,
             notches: &notches,
+            order: &[],
             settings_notch: 0,
             screens: &screens,
             supports_workspaces: false,
@@ -344,6 +355,7 @@ mod tests {
         let schema = build(&Inputs {
             config: &cfg,
             notches: &notches,
+            order: &[],
             settings_notch: 0,
             screens: &[],
             supports_workspaces: true,
@@ -408,10 +420,8 @@ mod tests {
             .iter()
             .map(|o| o.value.clone())
             .collect();
-        assert_eq!(
-            values,
-            [json!(""), json!("all"), json!("DP-1"), json!("DP-2")]
-        );
+        assert_eq!(values, [json!("DP-1"), json!("DP-2")]);
+        assert_eq!(f.default, json!("DP-1"), "the first screen of the layout");
     }
 
     #[test]

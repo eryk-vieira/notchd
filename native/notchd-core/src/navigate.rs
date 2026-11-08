@@ -1,8 +1,13 @@
 //! Port of `core/Navigate.js`: navigation mode. A shortcut highlights every
-//! notch, numbered in config order, and the keyboard picks one; the selected
+//! notch, numbered in spatial order (`spatial.rs`), and the keyboard picks one;
+//! the selected
 //! notch opens as a preview, Tab walks its tabs, Enter pins it, Escape leaves.
 //! Keys also act on the selected notch: settings, removing it (asked twice)
-//! and moving it (arrows for the edge, Shift to slide, Tab for the monitor).
+//! moving it (arrows for the edge, Shift to slide, Tab for the monitor) and
+//! creating one (`n`, which goes straight into moving it).
+//!
+//! `step` and `start` work on places in the spatial order; the store maps
+//! them to notch ids.
 
 use crate::js;
 use serde::{Deserialize, Serialize};
@@ -25,6 +30,7 @@ mod key {
     pub const K: u32 = 0x4b;
     pub const L: u32 = 0x4c;
     pub const M: u32 = 0x4d;
+    pub const N: u32 = 0x4e;
     pub const S: u32 = 0x53;
     pub const X: u32 = 0x58;
 }
@@ -66,6 +72,8 @@ pub enum KeyName {
     Settings,
     /// x.
     Remove,
+    /// n.
+    New,
     /// A key navigation doesn't use (`""`), or any unknown name.
     Other,
 }
@@ -87,6 +95,7 @@ impl From<KeyName> for String {
             KeyName::Move => "move",
             KeyName::Settings => "settings",
             KeyName::Remove => "remove",
+            KeyName::New => "new",
             KeyName::Other => "",
         }
         .to_string()
@@ -109,6 +118,7 @@ impl From<String> for KeyName {
             "move" => KeyName::Move,
             "settings" => KeyName::Settings,
             "remove" => KeyName::Remove,
+            "new" => KeyName::New,
             d if d.len() == 1 && matches!(d.as_bytes()[0], b'1'..=b'9') => {
                 KeyName::Notch(d.as_bytes()[0] - b'0')
             }
@@ -151,6 +161,7 @@ pub fn key_name(key_code: u32, modifiers: u32) -> KeyName {
         key::M => KeyName::Move,
         key::S => KeyName::Settings,
         key::X => KeyName::Remove,
+        key::N => KeyName::New,
         _ => KeyName::Other,
     }
 }
@@ -165,8 +176,8 @@ pub struct NotchInfo {
     pub screens: Vec<String>,
 }
 
-/// `start`: the notch selected as navigation starts, by index in `notches`
-/// (config order, nulls allowed): the first open one, else the first on the
+/// `start`: the notch selected as navigation starts, by its place in
+/// `notches` (the spatial order): the first open one, else the first on the
 /// focused screen, else the first; None (JS -1) for no notch.
 pub fn start(notches: &[Option<NotchInfo>], focused: &str) -> Option<usize> {
     if notches.is_empty() {
@@ -219,6 +230,8 @@ pub enum Action {
     Leave,
     /// End navigation, open the selected notch's settings.
     Settings,
+    /// Create a notch and start moving it (`mode` is [`NavMode::Move`]).
+    New,
     /// Remove the selected notch (`selected` is the one after).
     Remove,
     /// Remember where the selected notch is.
@@ -259,7 +272,7 @@ pub struct Move {
 #[serde(default)]
 pub struct StepState {
     pub mode: NavMode,
-    /// The selected notch's index.
+    /// The selected notch's place in the spatial order.
     pub selected: i64,
     /// How many notches there are.
     pub count: i64,
@@ -357,6 +370,7 @@ pub fn step(s: &StepState, key: KeyName) -> StepResult {
         KeyName::Open => act(NavMode::Select, Action::Open),
         KeyName::Settings => act(NavMode::Select, Action::Settings),
         KeyName::Move => act(NavMode::Move, Action::MoveStart),
+        KeyName::New => act(NavMode::Move, Action::New),
         KeyName::Remove => keep(if count > 1 {
             NavMode::Remove
         } else {
@@ -405,7 +419,7 @@ pub struct Position {
     pub edge: Edge,
     /// 0 to 1 along the edge.
     pub offset: f64,
-    /// A screen name; "" follows focus, "all" is every screen.
+    /// The screen the copy being moved is on.
     pub screen: String,
 }
 
@@ -479,19 +493,10 @@ pub fn hint(mode: NavMode, count: i64, tabs: bool, screens: i64) -> Vec<String> 
             join(vec![
                 s("m move"),
                 s("s settings"),
+                s("n new"),
                 if count > 1 { s("x remove") } else { s("") },
             ]),
         ],
-    }
-}
-
-/// `number`: the number a notch shows in navigation: its place in config
-/// order, 1 to 9; 0 (no number, reached with the arrows) past that or outside it.
-pub fn number(index: i64) -> u32 {
-    if (0..9).contains(&index) {
-        index as u32 + 1
-    } else {
-        0
     }
 }
 
@@ -506,7 +511,7 @@ mod tests {
     const ALT: u32 = 0x0800_0000;
     const META: u32 = 0x1000_0000;
     const DIGIT0: u32 = 0x30;
-    const N: u32 = 0x4e;
+    const N: u32 = key::N;
     const Q: u32 = 0x51;
 
     // keyName: digits, arrows and hjkl, tabs, Enter and Escape
@@ -532,10 +537,13 @@ mod tests {
         assert_eq!(key_name(Q, 0), KeyName::Other);
     }
 
-    // keyName: m, s and x act on the selected notch; n does nothing
+    // keyName: m, s and x act on the selected notch; n creates one
     #[test]
-    fn key_name_m_s_and_x_act_on_the_selected_notch_n_does_nothing() {
-        assert_eq!(key_name(N, 0), KeyName::Other);
+    fn key_name_m_s_and_x_act_on_the_selected_notch_n_creates_one() {
+        assert_eq!(key_name(N, 0), KeyName::New);
+        assert_eq!(key_name(N, SHIFT), KeyName::Other);
+        assert_eq!(String::from(KeyName::New), "new");
+        assert_eq!(KeyName::from("new".to_string()), KeyName::New);
         assert_eq!(key_name(key::M, 0), KeyName::Move);
         assert_eq!(key_name(key::S, 0), KeyName::Settings);
         assert_eq!(key_name(key::X, 0), KeyName::Remove);
@@ -952,6 +960,24 @@ mod tests {
         );
     }
 
+    // step: n creates a notch and goes straight into moving it; only while selecting
+    #[test]
+    fn step_n_creates_a_notch_and_starts_moving_it_only_while_selecting() {
+        let r = step(&at(1), KeyName::New);
+        assert_eq!(pick(&r), (NavMode::Move, 1, "", Action::New));
+        let moving = StepState {
+            mode: NavMode::Move,
+            ..at(1)
+        };
+        assert_eq!(step(&moving, KeyName::New).action, Action::None);
+        let asking = StepState {
+            mode: NavMode::Remove,
+            ..at(1)
+        };
+        assert_eq!(pick(&step(&asking, KeyName::New)).0, NavMode::Select);
+        assert_eq!(step(&asking, KeyName::New).action, Action::None);
+    }
+
     // hint: the keys the label lists, by mode
     #[test]
     fn hint_the_keys_the_label_lists_by_mode() {
@@ -959,13 +985,13 @@ mod tests {
             hint(NavMode::Select, 3, true, 2),
             [
                 "1-3 ←→   Tab   ↵ open   Esc",
-                "m move   s settings   x remove"
+                "m move   s settings   n new   x remove"
             ]
         );
         // One notch: no numbers, nothing to remove; no tabs.
         assert_eq!(
             hint(NavMode::Select, 1, false, 1),
-            ["↵ open   Esc", "m move   s settings"]
+            ["↵ open   Esc", "m move   s settings   n new"]
         );
         assert_eq!(
             hint(NavMode::Move, 3, false, 2),
@@ -976,14 +1002,5 @@ mod tests {
             ["←↑↓→ edge   ⇧ slide", "↵ done   Esc undo"]
         );
         assert_eq!(hint(NavMode::Remove, 3, false, 1), ["x remove   Esc keep"]);
-    }
-
-    // number: 1 to 9 in config order, none past that
-    #[test]
-    fn number_1_to_9_in_config_order_none_past_that() {
-        assert_eq!(number(0), 1);
-        assert_eq!(number(8), 9);
-        assert_eq!(number(9), 0);
-        assert_eq!(number(-1), 0);
     }
 }
