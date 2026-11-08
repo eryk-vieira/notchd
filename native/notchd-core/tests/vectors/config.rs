@@ -100,25 +100,6 @@ pub fn call(f: &str, a: &[Value]) -> Option<Value> {
             let ws = arg(a, 1);
             or_null(c::with_workspace(list.map(Vec::as_slice), Some(ws)).map(Value::Array))
         }
-        "terminals" => {
-            let taken = strs(arg(a, 1));
-            let taken: Vec<&str> = taken.iter().map(String::as_str).collect();
-            let t = c::terminals(cfg, &taken);
-            let list: Vec<Value> = t
-                .list
-                .iter()
-                .map(|x| json!({ "id": x.id, "title": x.title, "command": x.command }))
-                .collect();
-            json!({ "list": list, "errors": t.errors })
-        }
-        "withTerminalAdded" => {
-            let taken = strs(arg(a, 1));
-            let taken: Vec<&str> = taken.iter().map(String::as_str).collect();
-            let t = c::with_terminal_added(cfg, &taken);
-            json!({ "config": t.config, "id": t.id })
-        }
-        "withoutTerminal" => c::without_terminal(cfg, &text(a, 1)),
-        "reservedKeys" => json!(c::reserved_keys()),
         _ => return None,
     })
 }

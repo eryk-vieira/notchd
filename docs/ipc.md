@@ -21,7 +21,9 @@ An agent or shell launched in a notchd terminal also receives `NOTCHD_BIN` (the 
 | `openNotch <id>`, `closeNotch <id>`, `toggleNotch <id>` | the same for one notch, by its `id` (`main`, `notch-2`...), its Name in settings: renaming it breaks a shortcut that names it |
 | `agent <id> <command>` | an agent (`claude`, `codex`) by its id: `toggle` opens or closes its notch, `new` starts a new session, `"ask <question>"` opens it and types the question in ([below](#agents)) |
 | `claude <command>`, `codex <command>` | the same as `agent claude <command>`, `agent codex <command>` |
-| `terminal <id> <command>` | a terminal of your own (the config's `terminals`) by its id, with the same commands as an agent ([below](#terminals)) |
+| `terminal <id> <command>` | the terminal of a custom module by its id, with the same commands as an agent ([below](#terminals)) |
+| `terminal add [<id> <command> [--directory <dir>] [--title <title>]]` | make a custom module of a terminal alone: its folder, in `~/.config/notchd/modules/` ([below](#terminals)) |
+| `module remove <id>` | delete a custom module: its folder, its settings and its place in every notch, at once ([below](#terminals)) |
 | `timer <command>` | the `timer` module: start, pause or stop a countdown or a pomodoro (below) |
 | `navigate` | start or leave navigation: every notch highlighted and numbered, the keyboard picks one ([below](#navigation)) |
 | `settings` | open or close the settings window |
@@ -144,7 +146,7 @@ It answers `ok`, `no UI connected draws a terminal`, the usage, `<id> module not
 
 ## Terminals
 
-A terminal of your own (an entry of the config's `terminals`) takes the same commands by its id: `terminal <id> toggle`, `terminal <id> new` (its command starts again), `terminal <id> "ask <text>"` (the text typed in, then Enter: a command for a shell, say).
+The terminal of a custom module (a folder of `~/.config/notchd/modules/` whose `module.json` has a `terminal`, [modules.md](modules.md#custom-modules)) takes the same commands by the module's id: `terminal <id> toggle`, `terminal <id> new` (its command starts again), `terminal <id> "ask <text>"` (the text typed in, then Enter: a command for a shell, say). It works for any custom module that has a terminal, with or without a program of its own.
 
 ```sh
 bind = SUPER ALT, B, exec, omarchy-shell eryk.notchd terminal btop toggle
@@ -152,3 +154,17 @@ omarchy-shell eryk.notchd terminal shell "ask git status"
 ```
 
 It answers as `agent` does, with `no terminal <id>` and the terminals there are for an unknown one. A terminal's program also lives in the daemon and survives a shell reload; `notchd attach term:<id>` shows it on your terminal, which is how the notch's view is made on Linux ([architecture.md](architecture.md#free-surface-tier-3)).
+
+Making and deleting custom modules is the daemon's too, so only `notchd ipc` has it (the shell's own target cannot wait for the daemon, and does not carry these):
+
+| Command | |
+|---|---|
+| `terminal add <id> <command> [--directory <dir>] [--title <title>]` | writes `~/.config/notchd/modules/<id>/module.json` for a terminal alone (`title`, `terminal.command`); `--directory` is the `directory` setting under the id. The id is letters, digits, `-` and `_`, and not a config key, a built-in module or another folder. Answers `ok`, or why not |
+| `terminal add` | the same for a terminal running `$SHELL`, under the first free id (`terminal`, `terminal-2`...) and the title `Terminal`, `Terminal 2`...; the answer is the id. What Settings' Add terminal does |
+| `module remove <id>` | deletes the folder of custom module `<id>` (a program, a terminal or both), its settings and its place in every notch's `modules`. At once, with no confirmation, like removing a notch: a script cannot confirm twice. Answers `ok`, or `no custom module <id>` (a built-in module is not one) |
+
+```sh
+notchd ipc terminal add btop btop --title System
+notchd ipc terminal add dev "cd ~/app && npm run dev" --directory ~/app
+notchd ipc module remove dev
+```

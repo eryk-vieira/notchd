@@ -1,10 +1,12 @@
-# Herdr user module
+# Herdr module
 
-This module shows a summary of a local Herdr session in any notch that lists
-`herdr`: agent states, workspace and pane counts. It uses Herdr's snapshot and
-event socket; it starts no agents. Its icon is bundled as `herdr.svg`. It runs
-as a user module with an existing notchd installation; no daemon release or
-rebuild is needed. The `herdr` CLI must be on `PATH`.
+This module is a program and a terminal in one custom module. The program shows
+a summary of a local Herdr session in any notch that lists `herdr`: agent
+states, workspace and pane counts; it uses Herdr's snapshot and event socket and
+starts no agents. The terminal (`"terminal": { "command": "herdr" }` in
+`module.json`) runs Herdr's own interface below that summary. Its icon is
+bundled as `herdr.svg`. It works with an existing notchd installation; no daemon
+release or rebuild is needed. The `herdr` CLI must be on `PATH`.
 The logo is adapted from Herdr's Apache-2.0-licensed artwork; see
 [LICENSE-HERDR](LICENSE-HERDR) and the repository's [NOTICE](../../../../NOTICE).
 
@@ -26,27 +28,20 @@ The module treats `working → idle` as a completed task too. Herdr can report
 status events are handled immediately, and periodic snapshots reconcile the
 counts if an event is missed.
 
-To show Herdr's terminal interface below the summary, add a terminal in
-**Modules › Terminals** with command `herdr` and a separate id such as
-`herdr-terminal`. Put `herdr` and `herdr-terminal` in the same notch, in that
-order, and disable tabs for that notch. The two expanded views then stack:
-metrics above, terminal below. Set the terminal's width to 760 px to align
-both views. The terminal starts when the notch is opened; the summary and
-notifications continue to work while it is closed.
+Closed, the notch shows the summary's compact view; open, the summary's metrics
+sit above Herdr's terminal, which fills the rest. The terminal starts when the
+notch is opened and keeps running while it is closed; the summary and
+notifications continue to work meanwhile. The terminal's own settings (the
+`directory` it starts in, its `command`, `width`, `height`, `font` and
+`idleMinutes`) are on the module's settings page, under the module's id in the
+config; `terminal herdr toggle` over IPC opens or closes it. Its width defaults
+to 760 px, which aligns both views.
 
-Equivalent config entries (merge them into your existing config):
-
-```json
-{
-  "terminals": {
-    "herdr-terminal": { "title": "Herdr terminal", "command": "herdr" }
-  },
-  "herdr-terminal": { "width": 760, "height": 480 },
-  "notches": [
-    { "id": "Herdr", "modules": ["herdr", "herdr-terminal"], "tabs": false }
-  ]
-}
-```
+A config from before the module had its own terminal glued two modules in a
+notch with `tabs: false`: `herdr` and a terminal with the command `herdr`
+(`herdr-terminal`). That still works, but the two are not merged for you: list
+only `herdr` in the notch, and delete the extra terminal (Modules › Yours, the
+trash can, or `notchd ipc module remove herdr-terminal`).
 
 The settings apply to this module wherever it appears. If several notches list
 it, notchd's ordinary peek routing shows the same alert in each. Herdr's

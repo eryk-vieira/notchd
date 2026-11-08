@@ -161,3 +161,16 @@ fn greeting_has_a_settings_page_and_hears_an_edit() {
     r.set("greeting.size", "\"heading\"");
     r.view("greeting", Slot::Expanded, "\"size\":\"heading\"");
 }
+
+#[test]
+fn the_herdr_example_is_one_module_with_a_program_and_a_terminal() {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/modules/herdr/module.json");
+    let text = fs::read_to_string(path).unwrap();
+    let manifest: notchd_proto::Manifest = notchd_proto::parse(&text).expect("a valid module.json");
+    assert!(manifest.has_process());
+    assert_eq!(
+        manifest.terminal.as_ref().map(|t| t.command.as_str()),
+        Some("herdr")
+    );
+}

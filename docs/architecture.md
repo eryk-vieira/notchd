@@ -34,7 +34,8 @@ Decided, not up for debate here:
         | webview / native view            v                              v
         | (free surface)             user module                    portable-pty
         |                            processes                      (claude, codex,
-        |                            (any language)                 user terminals)
+        |                            (any language, a terminal            custom terminals)
+        |                            or both)
    * screens/focus: reported by the UI in v1 (see Providers)
 ```
 
@@ -54,7 +55,7 @@ Where each rule file went. "Core" is the Rust daemon. "UI" means the file stays 
 
 | File | Goes to | Why |
 |---|---|---|
-| `Config.js` (`parse`, `valueAt`, `withValue`, `DEFAULTS`, `resolve`, `delay`, `notches`, `withNotchAdded/withoutNotch`, `terminals`, `with*Terminal`, `workspaceList`, `withWorkspace`, `moduleLoadList`...) | core | The file's rules are the invariant "a missing key means its default"; the core owns the file now (`native/notchd-core/src/config.rs`, same functions, same cases). The JS file stays for the optimistic copy of an edit (`withValue`) and the notch list the QML still reads (`notches`, `moduleLoadList`, `withWorkspace`...); the daemon's answer replaces what it computes |
+| `Config.js` (`parse`, `valueAt`, `withValue`, `DEFAULTS`, `resolve`, `delay`, `notches`, `withNotchAdded/withoutNotch`, `workspaceList`, `withWorkspace`, `moduleLoadList`...) | core | The file's rules are the invariant "a missing key means its default"; the core owns the file now (`native/notchd-core/src/config.rs`, same functions, same cases). The JS file stays for the optimistic copy of an edit (`withValue`) and the notch list the QML still reads (`notches`, `moduleLoadList`, `withWorkspace`...); the daemon's answer replaces what it computes |
 | `State.js` (deleted in 3.2): `activeModules`, `compactModule(s)`, `hasIcon`, `attentionPeek`, `canPeek`, `mode`, `shownModules`, `wantsKeyboard`, `keyboardFocus/Change`, `reservedSpace`, `reserveStep`, `workspaceAllowed`, `notchScreen`, `reserveScreens`, `peekCopy`, `needsVisitor`, `focusedPeek`, `reserveZones` | core | `native/notchd-core/src/state.rs`, `peek.rs`, `store.rs`; the UI binds `state`. |
 | `Navigate.js` (deleted in 3.2) | core | The navigation state machine, `native/notchd-core/src/navigate.rs`. The UI sends a normalized key (`Protocol.wireKey`, `"Escape"`, `"Tab"`, `"h"`, `"1"` plus modifiers) and draws `state.navigation`; the hint texts are the UI's. |
 | `Position.js`: `resolve`, `configValue`, `isEdge`, `isVertical`, `EDGES`, defaults | core | The config's `position` value and its fallbacks are config rules |
@@ -93,7 +94,7 @@ Where each rule file went. "Core" is the Rust daemon. "UI" means the file stays 
 | `media` | 1 | `row`, `column`, `text`, `image` (cover, rounded, glyph fallback), `progress` (with `anchor` and `seek`), `button`, `equalizer`. Provider `media` |
 | `claude`, `codex` | 3 (native) | `terminal` free surface for the expanded view; compact and peek in tier 1 (`row`, `icon`, `text`). Providers `pty`, `usage`. Title-driven: the core reads the terminal title the PTY reports |
 | `osd` (Omarchy) | 1 | `row`, `icon`, `text`, `progress`; a peek only |
-| user terminals (`terminals` in the config) | 3 (native) | `terminal` |
+| the terminal of a custom module (`module.json`'s `terminal`) | 3 (native) | `terminal` |
 
 What v1 does not need, and so does not have: text input (no built-in module types into a field; `tests/qml/fixtures` does, and keeps its QML-side test), sparkline, image grids. They are the first growth items.
 
@@ -217,7 +218,7 @@ Sent on hello and on any change. This is the adapter contract of `GenericComposi
 - `facts`: what the modules the UI loads itself say of themselves (`id`, `priority`, `active`, `compact`, `peek`, `icon`, `expanded`, `attention`, `urgentPeek`, `peekOnFocusedScreen`); replaces the last list (a user module's facts come from its process). Sent when they change and to a new daemon. The UI sends pending facts, screens and config edits before an input that depends on them.
 - `peek`, `peek-dismiss`: `NotchModule.requestPeek` and `dismissPeek` (`ms` and `module` optional). The core routes a peek: to every notch that shows the module (on the focused screen's copy for a notch on several screens), to the visitor when none peeks there. `catalog` may also carry `defaultNotches`, the notches the host declares (`{ id, decoration, modules, position }` each): one exists unless the config's `removedNotches` lists its id, a notch of the config with the same `id` overrides the keys it gives, and a config from before (`"osd": { "enabled", "position" }`) is migrated into that. Nothing of a declared notch is written while it keeps its defaults.
 - `module-notch`: a module acts on the notches that show it: `open` (the first one opens on the module's tab), `close`, `keyboard` (every copy open on it pins).
-- `catalog`: the modules of the host that the daemon cannot know (the Omarchy `osd`, a terminal of the config), each `{ moduleId, title, settings, agent, terminal }` as the host parsed its JSON file, sent on hello and whenever the list changes; it replaces the last. A UI that has none sends `"modules": []` (or no `catalog` at all, when it has no `defaultModules` either). The built-in modules are the daemon's own: it embeds their JSON files (`native/notchd-modules/modules/<id>.json`, the same ones the modules read their defaults from, so there is one source) and builds their settings pages and defaults itself, so no UI ships or sends them; a host's or a user module's entry with the same id wins. `defaultModules` (optional) is the host's list for a notch whose config lists none (the daemon's own pair, `media` and `activities`, when absent). The daemon builds the schema parts that depend on them: the lists of the Modules page, what a notch's module list says, a page per module. `coreDir` is deprecated and ignored (accepted within proto 1): a UI omits it. The UI learns every module (built-in, host's, user's) from `schema`'s optional `modules`, the list the pages were built from, in the shape of a `catalog` entry: it is how a UI that ships no JSON files knows their titles, kinds and setting defaults.
+- `catalog`: the modules of the host that the daemon cannot know (the Omarchy `osd`), each `{ moduleId, title, settings, agent }` as the host parsed its JSON file, sent on hello and whenever the list changes; it replaces the last. A UI that has none sends `"modules": []` (or no `catalog` at all, when it has no `defaultModules` either). The built-in modules are the daemon's own: it embeds their JSON files (`native/notchd-modules/modules/<id>.json`, the same ones the modules read their defaults from, so there is one source) and builds their settings pages and defaults itself, so no UI ships or sends them; a host's or a custom module's entry with the same id wins. `defaultModules` (optional) is the host's list for a notch whose config lists none (the daemon's own pair, `media` and `activities`, when absent). The daemon builds the schema parts that depend on them: the lists of the Modules page, what a notch's module list says, a page per module. `coreDir` is deprecated and ignored (accepted within proto 1): a UI omits it. The UI learns every module (built-in, host's, user's) from `schema`'s optional `modules`, the list the pages were built from, in the shape of a `catalog` entry: it is how a UI that ships no JSON files knows their titles, kinds and setting defaults.
 - `drag`: `start` when the card is picked up (the copy stays closed, nothing opens it, what it reserves holds still), then `drop` with the `position` or `cancel`. The UI computes the drop (`Position.dragTarget`, `screenAt`); the core stores `position` and the workspace the target screen shows (config edit, never writes a default). The motion in between is the UI's own preview.
 - `key`: while a notch holds the keyboard. `key` is a normalized name (`"a"`, `"Escape"`, `"Tab"`, `"Left"`, `"Return"`, `"1"`); `mods` from `shift|ctrl|alt|meta`. In navigation and while a module with a text field is focused the core replies by changing `state`; keys the core does not use come back as nothing.
 - `event`: a primitive's `action` fired. `value` is always present: `null`, a number (a `progress` seek, as a fraction), a string, or a boolean; never an object or array.
@@ -246,7 +247,7 @@ Sent on hello and on any change. This is the adapter contract of `GenericComposi
 
 ### Settings
 
-The schema is core-built; the settings window is a UI. It also carries `modules` (optional), the catalog the pages were made from: the built-in modules' (the daemon's own), the host's and the user modules' `{ moduleId, title, settings, agent, terminal }`.
+The schema is core-built; the settings window is a UI. It also carries `modules` (optional), the catalog the pages were made from: the built-in modules' (the daemon's own), the host's and the custom modules': `{ moduleId, title, settings, agent, origin }` each, `origin` being `builtin` or `user` (what the daemon ships and the UIs report, or a folder of the user's). A custom module's entry also has `process` and `terminal` (what its `module.json` has), `dir` (its folder, absent for a module that lives only in the daemon) and `permissions`.
 
 ```json
 {"t":"schema","rev":3,
@@ -256,7 +257,7 @@ The schema is core-built; the settings window is a UI. It also carries `modules`
             "min":0,"max":2000,"step":20,"unit":"ms","default":120,"value":120,"visible":true}]}
 ```
 
-Field types are the existing ones ([settings.md](settings.md); each is one control plus one case in `SettingRow.qml`): `choice`, `integer`, `number`, `boolean`, `string`, `color`, `modules`, `workspaces`, `notches`, `moduleCatalog` and `note`. The `schema` is sent after `config` and again whenever the config, the screens or a module's page change it; it holds the pages with a field (the core's, a page per notch, and a user module's own from its `module.json` `settings`) and the fields with their current `value` and `visible`. A `moduleCatalog` field carries `part` (`notch`, `agent` or `terminal`), the list of the Modules page it stands for. (The built-in modules' pages come from the `catalog`.) A field also carries, when set, `help`, `options` (`[{value,label,preview?}]`, including compositor-reported choices for workspaces), `display` (`cards|chips|percent`), `when` (`{key,is}`); `key` is absent on a `note`. A `null` `default` or `value` is left out. `value` is current, `default` from the schema, `visible` is `shown_fields`'s answer (`settings.rs`). The UI sends `set` or `edit` and waits for the next `schema`.
+Field types are the existing ones ([settings.md](settings.md); each is one control plus one case in `SettingRow.qml`): `choice`, `integer`, `number`, `boolean`, `string`, `color`, `modules`, `workspaces`, `notches`, `moduleCatalog` and `note`. The `schema` is sent after `config` and again whenever the config, the screens or a module's page change it; it holds the pages with a field (the core's, a page per notch, and a user module's own from its `module.json` `settings`) and the fields with their current `value` and `visible`. A `moduleCatalog` field carries `part` (`notch`, `agent` or `user`), the list of the Modules page it stands for, and its `section` (`Built-in` for the first two, `Yours` for `user`: every custom module, grouped by origin before kind). (The built-in modules' pages come from the `catalog`.) A field also carries, when set, `help`, `options` (`[{value,label,preview?}]`, including compositor-reported choices for workspaces), `display` (`cards|chips|percent`), `when` (`{key,is}`); `key` is absent on a `note`. A `null` `default` or `value` is left out. `value` is current, `default` from the schema, `visible` is `shown_fields`'s answer (`settings.rs`). The UI sends `set` or `edit` and waits for the next `schema`.
 
 Theme is **not** in the protocol. Each UI maps the token set to its own source and applies it (`Theme.provider` today).
 
@@ -311,7 +312,7 @@ A `surface` is a rectangle the UI hands to something that draws itself.
 
 | `kind` | For | Lifecycle |
 |---|---|---|
-| `terminal` | official modules (`claude`, `codex`, user terminals) | The **PTY lives in the core** (`portable-pty`, `notchd-providers/src/pty.rs`): the program starts when the first view attaches, lives as long as the module is loaded (or until `idleMinutes`) and survives the notch closing, the shell reloading (`make restart`) and any UI going away. The **daemon also emulates the terminal** (Ghostty's libghostty-vt, [Terminals](#terminals-the-grid)) and the UI only draws the screen it sends, with text, rectangles and pictures: every UI the same grid, nothing to install |
+| `terminal` | official modules (`claude`, `codex`) and the terminal of a custom module | The **PTY lives in the core** (`portable-pty`, `notchd-providers/src/pty.rs`): the program starts when the first view attaches, lives as long as the module is loaded (or until `idleMinutes`) and survives the notch closing, the shell reloading (`make restart`) and any UI going away. The **daemon also emulates the terminal** (Ghostty's libghostty-vt, [Terminals](#terminals-the-grid)) and the UI only draws the screen it sends, with text, rectangles and pictures: every UI the same grid, nothing to install |
 | `webview` | user modules that need their own HTML (the escape hatch; a module needing it signals a missing primitive) | The UI opens a sandboxed webview, no network by default, no file access, loading the module's `index.html` from its folder through a custom scheme; the module sends/receives JSON through a `postMessage` bridge the daemon relays as `surface` messages to the module process |
 
 ```json
@@ -383,21 +384,27 @@ The folder name is the id. An id may not be a config key (`modules`, `position`,
   "settings": [
     { "key": "city", "type": "text", "label": "City", "default": "Berlin" }
   ],
+  "terminal": { "command": "htop" },
   "subscribe": ["resources"],
 }
 ```
 
+A module has a process (`command`), a terminal (`terminal`) or both; one of them is required (`Manifest::validate`). To the UIs it is one module: the closed slots are the process's, else the terminal's; the `expanded` view is the process's tree above the terminal's (a `column`), the terminal filling the rest. A view's `event` whose `action` is `typed`, `leave`, `keyboard` or `close` (or `restart`, outside the error row) is the terminal's and goes to the daemon's module; every other goes to the process. The daemon builds the module from the manifest alone (`ModEvent::Loaded` carries an optional `dir`), so a module need not have a folder.
+
 | Field | Meaning |
 |---|---|
 | `title` | shown in settings and the tab. Defaults to the id |
-| `command` | argv array, run with the module's folder as cwd; `${config}` and `${cache}` expand to the module's own config and cache dirs. Required |
+| `command` | argv array, run with the module's folder as cwd; `${config}` and `${cache}` expand to the module's own config and cache dirs. Optional (no process), but a module needs it or a `terminal` |
+| `terminal` | `{ "command": "<shell command line>" }`: a live terminal the daemon owns (a module of the daemon of the same id, `terminal.rs`), the command being the default of the `command` setting. Its fields (`directory`, `command`, `idleMinutes`, `width`, `height`, `font`) are settings under the module's id; the id may not be a config key or a built-in id |
 | `priority`, `icon`, `expandedWidth`, `urgentPeek`, `peekOnFocusedScreen` | the `NotchModule` properties of the same name; module can change the live ones in `set` (below) |
 | `settings` | the same field format as built-in module JSON (`modules.md`, "Settings"): `key`, `type`, `label`, `default`, `help`...; the same page appears in the settings window; values live under the module's id in the config file |
 | `subscribe` | provider names the module wants pushed to it (below) |
 | `permissions` | `network`, `files`, `exec`, ...: documentation only |
 | `env` | extra environment variables, a string map |
 
-`module.json` is read by the core whether the module runs or not, so its settings page shows, as today.
+`module.json` is read by the core whether the module runs or not, so its settings page shows, as today. A folder with a `terminal` and no `command` runs no process; the daemon loads its terminal module when a notch lists it.
+
+**Making and deleting.** The folder is the module, so the daemon writes and deletes it: the `ipc` methods `terminal add [<id> <command> [--directory <dir>] [--title <title>]]` (a terminal-only folder: `title`, `terminal.command`; with no arguments, a shell under the first free id, answered) and `module remove <id>` (the folder, the settings under the id and the id in every notch's `modules`, at once with no confirmation). The old config key `terminals` (`{ "<id>": { "title", "command" } }`) is read once at start and each valid entry becomes a folder (`custom::migrate_terminals`); `terminals` leaves the config only after every folder is written, and an entry whose id clashes with another folder stays and is logged.
 
 ### Messages
 

@@ -586,7 +586,12 @@ impl Hub {
         // `restart` (the error row's button) restarts it.
         if let ToDaemon::Event(e) = msg {
             let now = self.clock.now();
-            if g.core.has(&e.module) {
+            // A custom module with a process and a terminal takes the
+            // terminal's own actions in the daemon, the rest in its process.
+            let own = g.core.has(&e.module)
+                && (!g.mods.has_process(&e.module)
+                    || g.mods.is_terminal_action(&e.module, &e.action));
+            if own {
                 let Inner {
                     core, store, mods, ..
                 } = &mut *g;
@@ -602,7 +607,9 @@ impl Hub {
         // A method of a module of the daemon (`timer`, `push`, `clear`,
         // `osd`, the test hooks): its answer, after the state it made.
         if let ToDaemon::Ipc(r) = msg
-            && let Some(answer) = self.core_ipc(&mut g, &r.method, &r.args)
+            && let Some(answer) = self
+                .modules_ipc(&mut g, &r.method, &r.args)
+                .or_else(|| self.core_ipc(&mut g, &r.method, &r.args))
         {
             let reply = router::ok(r.id, Some(answer));
             let _ = self.publish(&mut g);
@@ -634,6 +641,75 @@ impl Hub {
         }
         drop(g);
         self.wake.notify_all();
+    }
+
+    /// Where the custom modules' folders are: `modules/` next to the config.
+    fn modules_dir(&self) -> PathBuf {
+        crate::server::modules_dir(&self.config_path)
+    }
+
+    /// `terminal add ...` and `module remove <id>`: the custom modules the
+    /// user makes and deletes (the folder, its settings, its place in every
+    /// notch). `None`: not one of these.
+    fn modules_ipc(&self, g: &mut Inner, method: &str, args: &[String]) -> Option<String> {
+        let dir = self.modules_dir();
+        let cfg = g.store.config().clone();
+        let answer = match (method, args.first().map(String::as_str)) {
+            ("terminal", Some("add")) => {
+                let taken = g.store.catalog_ids();
+                match crate::custom::add_terminal(&dir, &cfg, &taken, &args[1..]) {
+                    Ok(added) => {
+                        if let Some(d) = &added.directory {
+                            let key = format!("{}.directory", added.id);
+                            g.store.set_value(&key, Some(&Value::String(d.clone())));
+                        }
+                        // Without arguments, the answer is the new id.
+                        if args.len() == 1 {
+                            added.id
+                        } else {
+                            "ok".into()
+                        }
+                    }
+                    Err(e) => e,
+                }
+            }
+            ("module", Some("remove")) => {
+                let Some(id) = args.get(1) else {
+                    return Some("usage: module remove <id>".into());
+                };
+                match crate::custom::remove_module(&dir, id, &g.store.shipped_ids()) {
+                    Ok(()) => {
+                        let next = notchd_core::config::without_module(&cfg, id);
+                        if next != cfg {
+                            g.store.replace_config(next);
+                        }
+                        "ok".into()
+                    }
+                    Err(e) => e,
+                }
+            }
+            _ => return None,
+        };
+        // The host notices the folder at its next look; the UIs are waiting.
+        if let Some(host) = self.host() {
+            host.rescan();
+        }
+        Some(answer)
+    }
+
+    /// Moves the config's old `terminals` into module folders, once: the
+    /// folders first, the config after (`custom::migrate_terminals`).
+    fn migrate_terminals(&self, modules_dir: &Path) {
+        let mut g = self.lock();
+        let cfg = g.store.config().clone();
+        let m = crate::custom::migrate_terminals(modules_dir, &cfg);
+        for note in &m.notes {
+            eprintln!("notchd: {note}");
+        }
+        if let Some(next) = m.next {
+            g.store.replace_config(next);
+            let _ = self.publish(&mut g);
+        }
     }
 
     /// An `ipc` method one of the daemon's own modules answers, or a test
@@ -802,6 +878,7 @@ impl Hub {
     /// Their events apply under the hub's lock; stop them with
     /// [`Hub::stop_modules`].
     pub fn start_modules(self: &Arc<Hub>, modules_dir: &Path, log_dir: &Path) {
+        self.migrate_terminals(modules_dir);
         let (tx, rx) = channel::<ModEvent>();
         let host = Arc::new(ModHost::new(modules_dir, log_dir, move |e| {
             let _ = tx.send(e);
@@ -835,6 +912,8 @@ impl Hub {
             g.broadcast(m);
         }
         self.sync_host(&mut g);
+        // A module that came, changed or went may have a terminal.
+        self.sync_core(&mut g);
         let _ = self.publish(&mut g);
         drop(g);
         self.wake.notify_all();

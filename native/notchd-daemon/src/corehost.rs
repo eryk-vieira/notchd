@@ -83,6 +83,9 @@ pub struct CoreHost {
     terminal_ui: bool,
     /// What the notches showed of each module last.
     shown_seen: BTreeMap<&'static str, Shown>,
+    /// The loaded modules that are the terminal of a custom module (its
+    /// `module.json`'s `terminal`), not a module of the daemon's own.
+    terminal_ids: BTreeSet<&'static str>,
 }
 
 impl Default for CoreHost {
@@ -112,6 +115,7 @@ impl CoreHost {
             http: Arc::new(Curl),
             terminal_ui: false,
             shown_seen: BTreeMap::new(),
+            terminal_ids: BTreeSet::new(),
         }
     }
 
@@ -272,11 +276,13 @@ impl CoreHost {
             .flat_map(|n| n.module_ids)
             .collect();
         let mut out = Vec::new();
-        // The modules of the daemon, and a terminal for each entry of the
-        // config's `terminals`; one that left the config is unloaded.
-        let dynamic: Vec<&'static str> = notchd_modules::terminal::ids(&cfg)
+        // The modules of the daemon, and a terminal for each custom module
+        // that has one (whatever its folder, if any); one that left is
+        // unloaded.
+        let terminals = mods.terminal_defs();
+        let dynamic: Vec<&'static str> = terminals
             .iter()
-            .map(|i| notchd_modules::terminal::intern(i))
+            .map(|(i, ..)| notchd_modules::terminal::intern(i))
             .collect();
         let mut candidates: BTreeSet<&'static str> = notchd_modules::IDS.iter().copied().collect();
         candidates.extend(dynamic.iter().copied());
@@ -293,6 +299,9 @@ impl CoreHost {
             let wanted = known && listed.iter().any(|l| l == id);
             if wanted && !self.loaded.contains_key(id) {
                 if let Some(m) = make(id) {
+                    if dynamic.contains(&id) {
+                        self.terminal_ids.insert(id);
+                    }
                     self.loaded.insert(id, m);
                     if id == "media" {
                         // It wants the players as they are now.
@@ -305,16 +314,24 @@ impl CoreHost {
                 self.ptys.stop(id);
                 self.shown_seen.remove(id);
                 store.set_module_extra(id, None);
-                out.extend(mods.apply(
-                    store,
-                    crate::modhost::ModEvent::Removed { module: id.into() },
-                    now,
-                ));
+                if self.terminal_ids.remove(id) {
+                    // The module goes on with its process, if it has one.
+                    out.extend(mods.clear_terminal(store, id));
+                } else {
+                    out.extend(mods.apply(
+                        store,
+                        crate::modhost::ModEvent::Removed { module: id.into() },
+                        now,
+                    ));
+                }
             }
         }
         let ids: Vec<&'static str> = self.loaded.keys().copied().collect();
         for id in ids {
             if let Some(m) = self.loaded.get_mut(id) {
+                if let Some((_, title, command)) = terminals.iter().find(|(t, ..)| t == id) {
+                    m.define(title, command);
+                }
                 m.config(&cfg, now);
             }
             out.extend(self.settle(store, mods, id, now));
@@ -345,7 +362,11 @@ impl CoreHost {
             .title()
             .unwrap_or_else(|| notchd_modules::title(id).to_string());
         store.set_module_extra(id, m.state_extra());
-        let out = mods.set_builtin(store, id, &title, &facts, views);
+        let out = if self.terminal_ids.contains(id) {
+            mods.set_terminal(store, id, &facts, views)
+        } else {
+            mods.set_builtin(store, id, &title, &facts, views)
+        };
         for e in effects {
             match e {
                 Effect::Peek(ms) => store.request_peek(id, Some(f64::from(ms)), now),
@@ -475,7 +496,11 @@ impl CoreHost {
             }
             "terminal" => {
                 let want = args.first().map_or("", String::as_str);
-                let list = notchd_modules::terminal::ids(store.config());
+                let list: Vec<String> = mods
+                    .terminal_defs()
+                    .into_iter()
+                    .map(|(id, ..)| id)
+                    .collect();
                 if !list.iter().any(|t| t == want) {
                     let named = if list.is_empty() {
                         String::new()

@@ -170,17 +170,16 @@ fn core_fields(i: &Inputs) -> Vec<Value> {
         },
         "default": default_of("hoverCloseDelay"), "min": 0, "max": 2000, "step": 10, "unit": "ms"}),
     );
-    out.push(json!({"page": "modules", "type": "moduleCatalog", "part": "notch", "label": "Notch modules",
+    let has = |kind: &str| i.catalog.iter().any(|m| settings::module_kind(m) == kind);
+    // Grouped by origin first: what notchd ships, then what is yours.
+    out.push(json!({"page": "modules", "section": "Built-in", "type": "moduleCatalog", "part": "notch", "label": "Modules",
         "help": "Shown by notches: which ones a notch shows is set on its page, under Notches. The gear opens a module's own settings."}));
-    if i.catalog
-        .iter()
-        .any(|m| settings::module_kind(m) == "agent")
-    {
-        out.push(json!({"page": "modules", "type": "moduleCatalog", "part": "agent", "label": "Agents",
+    if has("agent") {
+        out.push(json!({"page": "modules", "section": "Built-in", "type": "moduleCatalog", "part": "agent", "label": "Agents",
             "help": "Coding agents, each in its own terminal. Notches show them like any module; a notch of their own suits them best. The gear opens an agent's folder, command and size. A shortcut opens one with agent <id> toggle."}));
     }
-    out.push(json!({"page": "modules", "type": "moduleCatalog", "part": "terminal", "label": "Terminals",
-        "help": "Commands of your own, each in a terminal: btop, a dev server, a shell. Add terminal makes one running your shell; its gear changes its command, folder and size. A notch shows it once the notch's page lists it. A shortcut opens one with terminal <id> toggle."}));
+    out.push(json!({"page": "modules", "section": "Yours", "type": "moduleCatalog", "part": "user", "label": "Custom modules",
+        "help": "Folders in ~/.config/notchd/modules, each a program that draws a view, a terminal, or both (docs/modules.md). Add terminal makes one running your shell; the trash can deletes a module's folder and settings. A notch shows it once the notch's page lists it. A shortcut opens a terminal with terminal <id> toggle."}));
     out
 }
 

@@ -2186,6 +2186,25 @@ impl Store {
         }
     }
 
+    /// The ids of the modules notchd and the UIs ship (not folders).
+    pub fn shipped_ids(&self) -> Vec<&str> {
+        self.builtin_defs
+            .iter()
+            .chain(self.ui_defs.iter())
+            .filter_map(|d| d.get("moduleId").and_then(Value::as_str))
+            .collect()
+    }
+
+    /// The ids of every module the settings know of: the shipped ones and the
+    /// custom ones. What a new module's id must not be.
+    pub fn catalog_ids(&self) -> Vec<String> {
+        self.shipped_ids()
+            .into_iter()
+            .map(str::to_owned)
+            .chain(self.module_defs.keys().cloned())
+            .collect()
+    }
+
     /// The modules a notch lists when the config lists none.
     pub fn default_refs(&self) -> Vec<&str> {
         match &self.default_modules {
@@ -2212,6 +2231,13 @@ impl Store {
             .iter()
             .filter_map(|d| d.get("moduleId").and_then(Value::as_str))
             .collect();
+        // Every entry says where it comes from (`origin`): what the daemon and
+        // the UIs ship is "builtin", a folder of the user's is "user".
+        let tagged = |d: &Value, origin: &str| {
+            let mut d = d.clone();
+            d["origin"] = json!(origin);
+            d
+        };
         let mut catalog: Vec<Value> = self
             .builtin_defs
             .iter()
@@ -2225,20 +2251,9 @@ impl Store {
                     .and_then(Value::as_str)
                     .is_some_and(|id| !self.module_defs.contains_key(id))
             }))
-            .cloned()
+            .map(|d| tagged(d, "builtin"))
             .collect();
-        catalog.extend(self.module_defs.values().cloned());
-        // Config-defined terminals have no JSON manifest. Give each the
-        // settings descriptor that the QML host used to synthesize locally,
-        // so every UI receives its page through the daemon's schema.
-        for terminal in config::terminals(&self.config, config::TERMINAL_MODULE_IDS).list {
-            let info = settings::terminal_info(&json!({
-                "id": terminal.id, "title": terminal.title, "command": terminal.command,
-            }));
-            let mut def = json!(info);
-            def["moduleId"] = json!(terminal.id);
-            catalog.push(def);
-        }
+        catalog.extend(self.module_defs.values().map(|d| tagged(d, "user")));
         let screens: Vec<String> = self.screen_names();
         schema::build(&schema::Inputs {
             config: &self.config,

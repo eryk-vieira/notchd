@@ -268,6 +268,18 @@ def center(c):
     return c["x"] + c["w"] / 2, c["y"] + max(c["h"], 1) / 2
 
 
+def terminal_modules(**terminals):
+    """A folder of custom modules for the daemon, one terminal-only module
+    each (`id=(title, command)`: a module.json with `terminal`), in a temp dir
+    that the shell's scratch copy takes (`modules`)."""
+    root = tempfile.mkdtemp(prefix="notchd-gnome-modules.")
+    for ident, (title, command) in terminals.items():
+        os.mkdir(os.path.join(root, ident))
+        with open(os.path.join(root, ident, "module.json"), "w") as f:
+            json.dump({"title": title, "terminal": {"command": command}}, f)
+    return root
+
+
 class ShellCase(unittest.TestCase):
     tier = "gnome"
     config = {"modules": ["timer", "resources"], "reserveSpace": True}
@@ -729,8 +741,8 @@ class Canvas(ShellCase):
     its working dot in the closed notch) drawn with Cairo, not a
     placeholder."""
 
-    config = {"modules": ["timer", "shell"], "reserveSpace": True,
-              "terminals": {"shell": {"command": "exec sh", "title": "Shell"}}}
+    config = {"modules": ["timer", "shell"], "reserveSpace": True}
+    modules = terminal_modules(shell=("Shell", "exec sh"))
 
     def test_a_terminals_mark_draws_as_a_canvas(self):
         s = self.shell.until(lambda s: main_copy(s)["canvases"], 3, "a canvas in the closed notch")
@@ -771,8 +783,8 @@ class Terminal(ShellCase):
     """The daemon's grid is rendered by a Shell actor inside the notch."""
 
     config = {"modules": ["timer", "shell"], "reserveSpace": True,
-              "shell": {"font": "DejaVu Sans Mono"},
-              "terminals": {"shell": {"command": "exec sh", "title": "Shell"}}}
+              "shell": {"font": "DejaVu Sans Mono"}}
+    modules = terminal_modules(shell=("Shell", "exec sh"))
     env = {"NOTCHD_GNOME_FRACTIONAL": "1"}
 
     def tearDown(self):
@@ -923,9 +935,10 @@ class Terminal(ShellCase):
 
 
 class TerminalImage(ShellCase):
-    config = {"modules": ["image-term"], "terminals": {"image-term": {
-        "command": "python3 " + shlex.quote(os.path.join(ROOT, "tests", "gnome", "kitty_image.py")),
-        "title": "Image terminal"}}}
+    config = {"modules": ["image-term"]}
+    modules = terminal_modules(**{"image-term": (
+        "Image terminal",
+        "python3 " + shlex.quote(os.path.join(ROOT, "tests", "gnome", "kitty_image.py")))})
 
     def test_a_kitty_png_is_decoded_and_placed_inside_the_terminal(self):
         sh = self.shell

@@ -395,10 +395,11 @@ fn a_user_module_no_notch_lists_is_in_the_schema_to_turn_on_and_follows_its_fold
         "#!/bin/sh\nread -r init\nwhile read -r l; do :; done\n",
     );
     let got = ui
-        .wait_for(
-            START_WAIT,
-            |m| matches!(m, ToUi::Schema(s) if s.pages.iter().any(|p| p.id == "modules/clock")),
-        )
+        .wait_for(START_WAIT, |m| {
+            matches!(m, ToUi::Schema(s) if s.pages.iter().any(|p| p.id == "modules/clock")
+                && s.modules.as_ref().is_some_and(|m| m.iter().any(|d| d["moduleId"] == "clock"
+                    && d["origin"] == "user")))
+        })
         .is_some();
     assert!(got, "a folder added later brings its page");
     std::fs::remove_dir_all(r.modules_dir().join("weather")).unwrap();
@@ -652,5 +653,168 @@ fn the_timer_activities_and_osd_live_in_the_daemon_and_answer_their_ipc() {
     assert_eq!(
         answer(&mut ui, "timer", &["5m"]).unwrap(),
         "timer module not loaded"
+    );
+}
+
+// ------------------------------------------------------- custom modules
+
+/// The schema's entry for module `id`, once it has one.
+fn catalog_entry(ui: &mut FakeUi, id: &str, want: bool) -> Option<serde_json::Value> {
+    let wanted = id.to_string();
+    let found = ui.wait_for(START_WAIT, move |m| {
+        matches!(m, ToUi::Schema(s) if s.modules.as_ref()
+            .is_some_and(|l| l.iter().any(|d| d["moduleId"] == wanted.as_str()) == want))
+    })?;
+    let ToUi::Schema(s) = found else { return None };
+    s.modules?.into_iter().find(|d| d["moduleId"] == id)
+}
+
+#[test]
+fn a_terminal_added_over_ipc_is_a_custom_module_and_module_remove_takes_all_of_it() {
+    let r = rig("addterm", r#"{"modules":["media"]}"#);
+    r.start_modules();
+    let mut ui = r.ui();
+    assert_eq!(
+        answer(
+            &mut ui,
+            "terminal",
+            &[
+                "add",
+                "btop",
+                "btop",
+                "--directory",
+                "~/x",
+                "--title",
+                "System"
+            ]
+        ),
+        Ok("ok".to_string())
+    );
+    let folder = r.modules_dir().join("btop/module.json");
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&folder).unwrap()).unwrap();
+    assert_eq!(
+        manifest,
+        serde_json::json!({"title": "System", "terminal": {"command": "btop"}})
+    );
+    let entry = catalog_entry(&mut ui, "btop", true).expect("listed once its folder is read");
+    assert_eq!(
+        (
+            &entry["origin"],
+            &entry["terminal"],
+            &entry["process"],
+            &entry["title"]
+        ),
+        (
+            &serde_json::json!("user"),
+            &serde_json::json!(true),
+            &serde_json::json!(false),
+            &serde_json::json!("System")
+        )
+    );
+    assert!(entry["dir"].as_str().unwrap().ends_with("modules/btop"));
+    // Its directory is a setting under its id.
+    let dir = r.hub.update(|s, _| s.config()["btop"]["directory"].clone());
+    assert_eq!(dir, "~/x");
+    // An id that is taken (a folder, a built-in, a config key) or a usage slip says so.
+    for bad in [
+        vec!["add", "btop", "x"],
+        vec!["add", "media", "x"],
+        vec!["add", "position", "x"],
+        vec!["add", "only-an-id"],
+    ] {
+        let said = answer(&mut ui, "terminal", &bad).unwrap_or_else(|e| e);
+        assert!(said != "ok" && said.contains(' '), "{bad:?}: {said}");
+        assert!(
+            !r.modules_dir().join(bad[1]).exists() || bad[1] == "btop",
+            "{bad:?}"
+        );
+    }
+    // No arguments: a shell under the first free id, which is the answer.
+    assert_eq!(
+        answer(&mut ui, "terminal", &["add"]),
+        Ok("terminal".to_string())
+    );
+    // `terminal` is a free id like any: the module loads (it was once reserved).
+    assert!(catalog_entry(&mut ui, "terminal", true).is_some());
+    // A notch lists it; removing it takes its folder, settings and place.
+    r.hub.update(|s, _| {
+        s.set_value("modules", Some(&serde_json::json!(["media", "btop"])));
+    });
+    assert_eq!(
+        answer(&mut ui, "module", &["remove", "btop"]),
+        Ok("ok".to_string())
+    );
+    assert!(!r.modules_dir().join("btop").exists());
+    let cfg = r.hub.update(|s, _| s.config().clone());
+    assert_eq!(cfg["modules"], serde_json::json!(["media"]));
+    assert!(cfg.get("btop").is_none(), "its settings went: {cfg}");
+    assert!(catalog_entry(&mut ui, "btop", false).is_none());
+    // Not a custom module: refused, nothing deleted.
+    for id in ["btop", "media", "..", "position"] {
+        let a = answer(&mut ui, "module", &["remove", id]);
+        assert_eq!(a, Ok(format!("no custom module {id}")), "{id}");
+    }
+    assert_eq!(
+        answer(&mut ui, "module", &["remove"]),
+        Ok("usage: module remove <id>".to_string())
+    );
+    assert!(r.modules_dir().join("terminal").is_dir());
+}
+
+#[test]
+fn module_remove_deletes_a_module_with_a_process_too() {
+    let r = rig("rmproc", r#"{"modules":["good"],"good":{"x":1}}"#);
+    install(&r.modules_dir(), "good", "good");
+    r.start_modules();
+    let mut ui = r.ui();
+    view_where(&mut ui, "good", Slot::Compact, "hello").expect("running");
+    assert_eq!(
+        answer(&mut ui, "module", &["remove", "good"]),
+        Ok("ok".to_string())
+    );
+    assert!(!r.modules_dir().join("good").exists());
+    let cfg = r.hub.update(|s, _| s.config().clone());
+    assert_eq!(cfg["modules"], serde_json::json!([]));
+    assert!(cfg.get("good").is_none());
+    assert!(catalog_entry(&mut ui, "good", false).is_none());
+}
+
+#[test]
+fn a_module_with_a_process_and_a_terminal_is_one_module_with_both_views() {
+    let r = rig("both", r#"{"modules":["herdr"]}"#);
+    let dir = r.modules_dir();
+    write(
+        &dir,
+        "herdr",
+        r#"{"title":"Herdr","command":["./run.sh"],"terminal":{"command":"cat"}}"#,
+        &notchd_testkit::fake_module::viewer_script("3 agents"),
+    );
+    r.start_modules();
+    let mut ui = r.ui();
+    // Closed: the process's view, not the terminal's title.
+    view_where(&mut ui, "herdr", Slot::Compact, "3 agents").expect("the process's compact view");
+    // Open: the terminal's surface is in the expanded view.
+    let v = view_where(&mut ui, "herdr", Slot::Expanded, "term:herdr");
+    assert!(v.is_some(), "the terminal fills the expanded view");
+    // Its settings are the terminal's, the command defaulting to the manifest's.
+    let schema = ui
+        .wait_for(START_WAIT, |m| {
+            matches!(m, ToUi::Schema(s) if s.fields.iter().any(|f| f.key.as_deref() == Some("herdr.command")))
+        })
+        .expect("the terminal's fields");
+    let ToUi::Schema(s) = schema else {
+        unreachable!()
+    };
+    let f = s
+        .fields
+        .iter()
+        .find(|f| f.key.as_deref() == Some("herdr.command"))
+        .unwrap();
+    assert_eq!(f.default, "cat");
+    // `terminal herdr ...` reaches the terminal part.
+    assert_ne!(
+        answer(&mut ui, "terminal", &["herdr", "usage?"]),
+        Ok("herdr module not loaded".to_string())
     );
 }

@@ -28,7 +28,7 @@ pub mod version;
 
 pub use canvas::{Cmd, Color};
 pub use common::{Align, Edge, Mode, Slot, TextSize, Token, Tone};
-pub use module::{FromModule, Manifest, ToModule};
+pub use module::{FromModule, Manifest, TerminalDef, ToModule};
 pub use num::Num;
 pub use request::{EditOp, EventValue};
 pub use tree::Node;

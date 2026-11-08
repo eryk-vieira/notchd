@@ -1,7 +1,7 @@
 # User module examples
 
 Each folder is a user module you can copy into `~/.config/notchd/modules/`.
-The [user module guide](../../modules.md#user-modules) explains the manifest,
+The [custom module guide](../../modules.md#custom-modules) explains the manifest,
 JSON messages and view primitives. Saving a module reloads it; no daemon build
 is needed.
 

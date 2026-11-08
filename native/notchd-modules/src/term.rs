@@ -53,8 +53,8 @@ pub struct Kind {
     pub ipc: &'static str,
     /// Where its plan usage comes from (`claude`, `codex`).
     pub usage: Option<&'static str>,
-    /// A terminal of the config: its command and title are its entry's
-    /// (`terminals.<id>`).
+    /// The terminal of a custom module (`module.json`'s `terminal`): its
+    /// title and default command are the module's (`define`).
     pub custom: bool,
 }
 
@@ -647,25 +647,20 @@ impl CoreModule for TermModule {
         }))
     }
 
-    fn config(&mut self, cfg: &Value, now: u64) {
-        self.cfg = cfg.clone();
+    fn define(&mut self, title: &str, command: &str) {
         if self.kind.custom {
-            let entry = cfg.get("terminals").and_then(|t| t.get(self.kind.id));
-            let text = |k: &str| {
-                entry
-                    .and_then(|e| e.get(k))
-                    .and_then(Value::as_str)
-                    .map(|s| js::trim(s).to_string())
-                    .unwrap_or_default()
-            };
-            let title = text("title");
+            let title = js::trim(title);
             self.kind.app = if title.is_empty() {
                 self.kind.id.to_string()
             } else {
-                title
+                title.to_string()
             };
-            self.kind.default_command = text("command");
+            self.kind.default_command = js::trim(command).to_string();
         }
+    }
+
+    fn config(&mut self, cfg: &Value, now: u64) {
+        self.cfg = cfg.clone();
         let enabled = self.setting("usage") != Some(&Value::Bool(false));
         let warn = self.number("usageWarn", 80.0);
         self.plan.configure(enabled, warn, now);
@@ -1296,13 +1291,10 @@ mod tests {
     }
 
     #[test]
-    fn a_terminal_of_your_own_takes_its_title_and_command_from_its_entry() {
+    fn a_terminal_of_your_own_takes_its_title_and_command_from_its_module() {
         let mut m = crate::terminal::new("mine");
-        m.config(
-            &json!({"terminals": {"mine": {"title": "Mine", "command": "cd ~/app && npm run dev"}},
-                    "mine": {"directory": "~/app"}}),
-            0,
-        );
+        m.define("Mine", "cd ~/app && npm run dev");
+        m.config(&json!({"mine": {"directory": "~/app"}}), 0);
         assert_eq!(m.title().as_deref(), Some("Mine"));
         feed(&mut m, json!({"id": "mine", "event": "views", "n": 1}), 1);
         let s = start_effect(&mut m);
@@ -1325,8 +1317,10 @@ mod tests {
                 .unwrap(),
             "usage: terminal mine toggle | new | \"ask <question>\""
         );
-        // Without a title, its id.
-        m.config(&json!({"terminals": {"mine": {"command": "x"}}}), 3);
+        // Without a title, its id; the `command` setting beats the manifest's.
+        m.define("", "x");
         assert_eq!(m.title().as_deref(), Some("mine"));
+        m.config(&json!({"mine": {"command": "htop"}}), 3);
+        assert_eq!(m.command_line(), "htop");
     }
 }

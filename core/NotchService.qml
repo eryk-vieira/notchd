@@ -101,14 +101,14 @@ Item {
   // title and settings fields are in it (osd.json), read whether it loads or
   // not (moduleInfo).
   readonly property var fileModuleIds: Object.keys(svc.hostModules || {})
-  // The modules the daemon lists in its schema: the built-ins and the user
-  // modules, each `{ moduleId, title, settings, agent }`.
-  // (The host's and the terminals' entries, which this service reported, come
+  // The modules the daemon lists in its schema: the built-ins and the user's
+  // custom modules, each `{ moduleId, title, settings, agent, origin, ... }`.
+  // (The host's entries, which this service reported, come
   // back in it too: ownModuleIds leaves them out.)
   readonly property var daemonCatalog: svc.daemonSchema && svc.daemonSchema.modules ? svc.daemonSchema.modules : []
-  // The modules this host knows of itself: those, then the config's terminals.
-  readonly property var ownModuleIds: svc.fileModuleIds.concat(svc.terminalSpecs.map(function(t) { return t.id }))
-  // The daemon's own modules: the built-ins and the user modules (folders of
+  // The modules this host knows of itself.
+  readonly property var ownModuleIds: svc.fileModuleIds
+  // The daemon's own modules: the built-ins and the custom modules (folders of
   // `modules/` in the config dir), from its schema and what it announced
   // (`module`). Not the host's to report in `catalog`.
   readonly property var daemonOwnedIds: {
@@ -119,69 +119,58 @@ Item {
   // Every module this host can load.
   readonly property var availableModuleIds: svc.daemonOwnedIds.concat(svc.ownModuleIds)
 
-  // Terminals of your own, from the config's `terminals` (Config.terminals):
-  // [{ id, title, command }]. Each is a module of the daemon (a terminal), its
-  // info made from its entry (Settings.terminalInfo) instead of read from a file.
-  property var terminalSpecs: []
+  // A custom module with a terminal, from the daemon's catalog.
   function isTerminal(id) {
-    return svc.terminalSpecs.some(function(t) { return t.id === id })
+    return svc.daemonCatalog.some(function(m) { return m.moduleId === id && !!m.terminal })
   }
-  function terminalCommandLine(id) {
-    var t = svc.terminalSpecs.filter(function(s) { return s.id === id })[0]
-    return t ? t.command : ""
+  // A new terminal running your shell: the daemon writes its folder
+  // (`terminal add`, docs/ipc.md) and answers with its id, which `done`
+  // gets (its page opens from there).
+  function addTerminal(done) {
+    svc.client.ipc("terminal", ["add"], function(reply) {
+      if (reply && reply.t === "ok" && done) done(reply.result)
+    })
   }
-  // A new terminal, running your shell (Config.withTerminalAdded): its id.
-  function addTerminal() {
-    var r = Config.withTerminalAdded(svc.config, svc.takenIds())
-    svc.replaceConfig(r.config)
-    return r.id
-  }
-  // A terminal out of the config, its settings and the notches that list
-  // it (Config.withoutTerminal).
-  function removeTerminal(id) { svc.replaceConfig(Config.withoutTerminal(svc.config, id)) }
-  // The ids a terminal can't take: the modules' and the config keys the
-  // settings window writes (the host's included), by their first part.
-  function takenIds() {
-    var keys = svc.hostSettingsSchema.map(function(f) { return String(f.key || "").split(".")[0] })
-    return svc.daemonOwnedIds.concat(svc.fileModuleIds, keys.filter(function(k) { return k !== "" }))
-  }
-  property string terminalErrors: ""
+  // A custom module's folder, its settings and its place in every notch go
+  // (`module remove`): the daemon does it all, and the schema follows.
+  function removeModule(id) { svc.notchIpc("module", ["remove", id]) }
 
-  // id -> { title, settings, agent, terminal }: the host's
-  // modules from their JSON files (Settings.parseModuleInfo; a module without
-  // one has none of them), each terminal's entry, and the daemon's catalog.
+  // id -> { title, settings, agent, origin, process, terminal, dir,
+  // permissions }: the host's modules from their JSON files
+  // (Settings.parseModuleInfo; a module without one has none of them) and the
+  // daemon's catalog.
   property var fileModuleInfo: ({})
   readonly property var moduleInfo: {
     var out = Object.assign({}, svc.fileModuleInfo)
-    svc.terminalSpecs.forEach(function(t) { out[t.id] = Settings.terminalInfo(t) })
     svc.daemonOwnedIds.forEach(function(id) {
       var e = svc.daemonCatalog.filter(function(m) { return m.moduleId === id })[0]
       var m = svc.client.modules[id]
-      out[id] = e ? { title: e.title, settings: e.settings || [], agent: !!e.agent, terminal: !!e.terminal }
+      out[id] = e ? { title: e.title, settings: e.settings || [], agent: !!e.agent,
+                      origin: e.origin || "builtin", process: !!e.process,
+                      terminal: !!e.terminal, dir: e.dir || "", permissions: e.permissions || [] }
                   : { title: m ? m.title : "", settings: [] }
     })
     return out
   }
   // Every host module has its file read (or found missing) and the daemon
-  // has said its catalog: modules load only then. A terminal's
-  // info comes with its entry: counting terminals, a new id made it false
-  // for a moment, which emptied the list of modules and made them all
-  // again, an agent's session with them.
+  // has said its catalog: modules load only then.
   readonly property bool moduleInfoReady: svc.daemonSchema !== null && svc.fileModuleIds.every(function(id) {
     return svc.fileModuleInfo[id] !== undefined
   })
   onModuleInfoReadyChanged: if (svc.moduleInfoReady) svc.refreshModuleIds()
   onConfigResolvedChanged: svc.refreshModuleIds()
   // Every module with its title and fields: [{ moduleId, title, settings,
-  // agent, terminal }].
+  // agent, origin, process, terminal, dir, permissions }].
   function catalogEntry(id) {
     var info = svc.moduleInfo[id] || {}
     return { moduleId: id, title: Settings.moduleTitle(id, info), settings: info.settings || [],
-             agent: !!info.agent, terminal: !!info.terminal }
+             agent: !!info.agent, origin: info.origin || "builtin",
+             process: !!info.process, terminal: !!info.terminal, dir: info.dir || "",
+             permissions: info.permissions || [] }
   }
   readonly property var moduleCatalog: svc.availableModuleIds.map(svc.catalogEntry)
-  // What the daemon is told (`catalog`): the host's modules and the
-  // terminals, not the built-ins and user modules, which it knows itself.
+  // What the daemon is told (`catalog`): the host's modules, not the built-ins
+  // and custom modules, which it knows itself.
   readonly property var reportedCatalog: svc.ownModuleIds.map(svc.catalogEntry)
   // Agents (`"agent"` in their file): coding agents in a terminal, modules
   // of the daemon (native/notchd-modules/src/{claude,codex}.rs), with the
@@ -210,10 +199,10 @@ Item {
     }
     return svc.moduleById(id) ? svc.daemonIpc("agent", [id, command], "ok") : id + " module not loaded"
   }
-  // The same for a terminal of your own (`terminals`).
+  // The same for the terminal of a custom module.
   function terminalCommand(id, command) {
     if (!svc.isTerminal(id)) {
-      var ids = svc.terminalSpecs.map(function(t) { return t.id })
+      var ids = svc.daemonCatalog.filter(function(m) { return !!m.terminal }).map(function(m) { return m.moduleId })
       return "no terminal " + id + (ids.length > 0 ? "; terminals: " + ids.join(", ") : "")
     }
     return svc.moduleById(id) ? svc.daemonIpc("terminal", [id, command], "ok") : id + " module not loaded"
@@ -286,11 +275,6 @@ Item {
   function applyConfig(cfg, resolved) {
     var r = resolved || Config.resolve(cfg)
     var specs = Config.notches(cfg, svc.defaultModules, svc.defaultNotches)
-    var terminals = Config.terminals(cfg, svc.takenIds())
-    var errors = terminals.errors.join("; ")
-    if (errors !== "" && errors !== svc.terminalErrors) console.warn(svc.logName + ": skipping terminals: " + errors)
-    svc.terminalErrors = errors
-    if (!svc.sameList(terminals.list, svc.terminalSpecs)) svc.terminalSpecs = terminals.list
     svc.config = cfg
     svc.hoverOpenDelay = r.hoverOpenDelay
     svc.hoverCloseDelay = r.hoverCloseDelay

@@ -23,9 +23,14 @@ ln -s -- "$root/core" "$scratch/config/core"
 ln -s -- "$root/hosts" "$scratch/config/hosts"
 ln -s -- "$root/tests/visual/shell.qml" "$scratch/config/shell.qml"
 cp -- "$root/tests/qml/TestService.qml" "$scratch/config/TestService.qml"
-# A user module for the settings window's daemon (its config dir is shots/).
-mkdir -- "$scratch/shots/modules"
+# Custom modules for the settings window's daemon (its config dir is shots/):
+# a program (tests/modules/flex), two terminals alone and one with both (the
+# Herdr example).
+mkdir -- "$scratch/shots/modules" "$scratch/shots/modules/btop" "$scratch/shots/modules/dev"
 cp -r -- "$root/tests/modules/flex" "$scratch/shots/modules/flex"
+cp -r -- "$root/docs/examples/modules/herdr" "$scratch/shots/modules/herdr"
+printf '%s\n' '{ "title": "System", "terminal": { "command": "btop" } }' > "$scratch/shots/modules/btop/module.json"
+printf '%s\n' '{ "terminal": { "command": "cd ~/app && npm run dev" } }' > "$scratch/shots/modules/dev/module.json"
 
 # Cut off from the session, so nothing here touches its sockets, with the
 # demo player as the only MPRIS player (with-demo-player.sh).

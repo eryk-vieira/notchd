@@ -1099,25 +1099,50 @@ fn showing_a_notchs_page_picks_the_notch_the_schema_edits() {
 }
 
 #[test]
-fn config_terminal_has_a_settings_page_in_the_daemons_schema() {
-    let s = store(json!({
+fn every_catalog_entry_says_where_it_comes_from_and_a_custom_module_has_a_page() {
+    let mut s = store(json!({
         "modules": ["btop"],
-        "terminals": {"btop": {"title": "System", "command": "btop"}},
         "btop": {"font": "Mono"},
     }));
+    s.set_builtin_catalog(vec![
+        json!({"moduleId": "media", "title": "Now playing", "settings": []}),
+    ]);
+    s.set_ui_catalog(
+        vec![json!({"moduleId": "osd", "title": "OSD", "settings": []})],
+        None,
+        None,
+    );
+    // A UI's own claim of a module the user also made loses to the user's.
+    s.set_module_def(
+        json!({"moduleId": "btop", "title": "System", "terminal": true, "origin": "builtin",
+        "settings": [{"key": "font", "type": "string", "label": "Font", "default": ""}]}),
+    );
     let schema = s.compute_schema();
-    assert!(schema.pages.iter().any(|p| p.id == "modules/btop"));
-    let field = |key| schema.fields.iter().find(|f| f.key.as_deref() == Some(key));
-    assert!(field("terminals.btop.title").is_some());
-    assert!(field("terminals.btop.command").is_some());
-    assert_eq!(field("btop.font").unwrap().value, json!("Mono"));
-    assert!(
+    let origin = |id: &str| {
         schema
             .modules
+            .as_ref()
             .unwrap()
             .iter()
-            .any(|m| { m["moduleId"] == "btop" && m["terminal"] == true })
-    );
+            .find(|m| m["moduleId"] == id)
+            .map(|m| m["origin"].clone())
+    };
+    assert_eq!(origin("media"), Some(json!("builtin")));
+    assert_eq!(origin("osd"), Some(json!("builtin")));
+    assert_eq!(origin("btop"), Some(json!("user")));
+    assert!(schema.pages.iter().any(|p| p.id == "modules/btop"));
+    let field = |key| schema.fields.iter().find(|f| f.key.as_deref() == Some(key));
+    assert_eq!(field("btop.font").unwrap().value, json!("Mono"));
+    // The Modules page lists the built-in ones and yours apart.
+    let parts: Vec<(&str, &str)> = schema
+        .fields
+        .iter()
+        .filter(|f| f.part.is_some())
+        .map(|f| (f.part.as_deref().unwrap(), f.section.as_str()))
+        .collect();
+    assert_eq!(parts, [("notch", "Built-in"), ("user", "Yours")]);
+    assert_eq!(s.shipped_ids(), ["media", "osd"]);
+    assert_eq!(s.catalog_ids(), ["media", "osd", "btop"]);
 }
 
 // ---------------------------------------------------------------- 3.2: the

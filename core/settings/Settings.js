@@ -182,29 +182,6 @@ function terminalFields(command, name, emptyDir, idle) {
   ]
 }
 
-// The module info of a terminal of your own (Config.terminals' { id,
-// title, command }), as parseModuleInfo gives a module's file: its title
-// and the fields of a program in a terminal, `terminal` set. Its title and
-// command are its entry's, edited there (`absolute` keys): the command is
-// `required`, since an entry without one is no terminal.
-function terminalInfo(t) {
-  var name = t.title || t.id
-  var entry = "terminals." + t.id + "."
-  var later = "Applies the next time it starts (the restart button)."
-  var own = [
-    { key: entry + "title", absolute: true, type: "string", label: "Title", "default": "",
-      help: "Its name, in the notch and here; empty is its id, " + t.id + "." },
-    { key: entry + "command", absolute: true, required: true, type: "string", label: "Command",
-      help: "The command line it runs, in a shell: \"btop\", \"cd ~/app && npm run dev\". " + later }
-  ]
-  var fields = terminalFields(t.command, name, "Empty is your home.",
-    "Closed this long, " + name + " stops; the next time the notch opens, it starts again. 0 keeps it running.")
-  return {
-    title: t.title, terminal: true,
-    settings: own.concat(fields.filter(function(f) { return f.key !== "command" }))
-  }
-}
-
 // The JSON file of the module at `url` (its .qml): the same path, .json.
 // Quickshell names files under the shell's folder `qs:@/qs/<path>`, which
 // resolve against `shellDir`, and others `qs:///<absolute path>` (the
@@ -256,11 +233,12 @@ function moduleTitle(id, module) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-// Which list of the Modules page a module is in: "agent" (a coding agent),
-// "terminal" (one of the config's `terminals`), else "notch".
+// Which list of the Modules page a module is in: "user" (a custom module,
+// tagged `origin: "user"` by the daemon), "agent" (a coding agent), else
+// "notch".
 function moduleKind(m) {
+  if (m && m.origin === "user") return "user"
   if (m && m.agent) return "agent"
-  if (m && m.terminal) return "terminal"
   return "notch"
 }
 

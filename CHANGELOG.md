@@ -13,6 +13,10 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 - A notch can have no decoration: `"decoration": false` (Settings › Notches › the notch › Show at rest). It shows nothing at rest and appears only while one of its modules peeks, over the notches it overlaps; without a monitor it is on every monitor and the peek shows on the one you work on. Any module can be in one; navigation lists it like any notch, as a dashed outline.
 - A host can declare default notches that exist without config; the Omarchy host declares one for the OSD (no decoration, top center). Removing one writes `"removedNotches": ["osd"]` to the config; moving it or changing its modules writes only what differs.
 
+- A custom module is one kind now: a folder `~/.config/notchd/modules/<id>/` with a `module.json` that has a program (`command`), a live terminal (`terminal`: `{ "command": ... }`) or both. A terminal alone needs no code; with both, the program's compact view shows closed and its expanded view sits above the terminal. The terminal's fields (`directory`, `command`, `idleMinutes`, `width`, `height`, `font`) stay under the module's id in the config; `module.json` gives their defaults. The [Herdr example](docs/examples/modules/herdr/) is one module so, no longer two glued in the config.
+- Settings › Modules groups by origin: "Built-in" (modules, agents) and "Yours" (every custom module), each custom module with badges for its program and terminal, its folder (and a button that opens it), the permissions it declares and its error. Its trash can asks twice, then deletes the module's folder, its settings and its place in every notch.
+- `notchd ipc terminal add <id> <command> [--directory <dir>] [--title <title>]` makes a terminal-only module and `notchd ipc module remove <id>` deletes any custom module, at once and with no confirmation; the notchd agent skill uses them. `terminal <id> toggle | new | ask` works for any custom module with a terminal.
+
 ### Changed
 
 - A notch stays on its monitor: it no longer follows focus. Without `position.screen` it hangs on the first monitor of the layout; dragging a notch or creating one always writes its monitor. A notch whose monitor is unplugged shows on the first monitor left until it is back, without touching the config.
@@ -20,6 +24,8 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 - `recenter` puts each notch back at the top middle of the monitor it is on, instead of removing its `position` and with it the monitor.
 - `"all"` is no longer offered in Settings (the screen choice lists the monitors); in a config it still means every connected monitor.
 - The README and `docs/ipc.md` present `openNotch`, `agent … toggle` and the like as IPC reference rather than keys to bind.
+- Terminals of your own are custom modules: Settings' Add terminal writes a folder with a minimal `module.json` instead of an entry of the config's `terminals`, whose entries become folders the first time the daemon starts (the key leaves the config once every folder is written; an id that clashes with another folder stays in `terminals` and is logged). A terminal's title is its `module.json`'s `title`, no longer a setting; its command is the `command` setting, defaulting to `terminal.command`.
+- The module id `terminal` is free for a module (it was reserved), and `terminals` is a config key a folder cannot take.
 
 ### Removed
 

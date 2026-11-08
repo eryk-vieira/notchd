@@ -98,8 +98,43 @@ fn rig(label: &str, config: impl FnOnce(&Rig) -> Value, offline: bool) -> Rig {
     )
     .expect("bind");
     r.hub = server.hub();
+    // The custom modules: the folders of `modules/` next to the config (the
+    // config's old `terminals` become some of them as the host starts).
+    let modules = notchd_daemon::server::modules_dir(&r.env.config);
+    let mut ids: Vec<String> = cfg
+        .get("terminals")
+        .and_then(Value::as_object)
+        .map(|t| t.keys().cloned().collect())
+        .unwrap_or_default();
+    ids.extend(
+        std::fs::read_dir(&modules)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned()),
+    );
+    server.start_modules(&modules, &r.scratch.join("logs"));
     thread::spawn(move || server.serve());
+    let limit = Instant::now() + WAIT;
+    while Instant::now() < limit
+        && !ids
+            .iter()
+            .all(|id| r.hub.update(|s, _| s.module(id).is_some()))
+    {
+        thread::sleep(Duration::from_millis(20));
+    }
     r
+}
+
+/// A custom module of a terminal alone: its folder, before the rig starts.
+fn terminal_folder(r: &Rig, id: &str, title: &str, command: &str) {
+    let dir = notchd_daemon::server::modules_dir(&r.env.config).join(id);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut manifest = json!({"terminal": {"command": command}});
+    if !title.is_empty() {
+        manifest["title"] = json!(title);
+    }
+    std::fs::write(dir.join("module.json"), manifest.to_string()).unwrap();
 }
 
 impl Rig {
@@ -428,7 +463,7 @@ fn toggle_opens_the_notch_and_closes_it_while_a_view_shows_the_agent() {
 }
 
 #[test]
-fn a_terminal_of_your_own_runs_its_command_in_its_folder_and_has_a_pty() {
+fn a_terminal_of_the_old_config_is_a_folder_now_and_runs_its_command_in_a_pty() {
     let r = rig(
         "own",
         |r| {
@@ -473,7 +508,24 @@ fn a_terminal_of_your_own_runs_its_command_in_its_folder_and_has_a_pty() {
         r.ipc(&mut ui, "agent", &["mine", "toggle"]),
         "no agent mine; agents: claude, codex"
     );
-    // Removed from the config, its program stops.
+    // The config's `terminals` became a folder and went from the config.
+    let folder = notchd_daemon::server::modules_dir(&r.env.config).join("mine/module.json");
+    let manifest: Value = serde_json::from_str(&std::fs::read_to_string(folder).unwrap()).unwrap();
+    assert_eq!(manifest["title"], "Mine");
+    assert!(
+        manifest["terminal"]["command"]
+            .as_str()
+            .unwrap()
+            .contains("exec cat")
+    );
+    assert!(r.hub.update(|s, _| s.config().get("terminals").is_none()));
+    assert!(
+        !std::fs::read_to_string(&r.env.config)
+            .unwrap()
+            .contains("terminals"),
+        "the file lost it too"
+    );
+    // Unlisted by every notch, its program stops.
     let mut v2 = Client::connect(&r.socket(), "term:mine", 90, 20).unwrap();
     v2.resize(100, 33).unwrap();
     r.hub
@@ -492,11 +544,16 @@ fn a_hosted_terminal_inherits_its_daemon_cli_context() {
         "terminal-context",
         |r| {
             let output = r.scratch.join("terminal-env");
-            json!({"modules": ["mine"],
-            "terminals": {"mine": {"command": format!(
-                "printf '%s\\n' \"$NOTCHD_INSTANCE\" \"$NOTCHD_SOCKET\" \"$NOTCHD_BIN\" \"$NOTCHD_TERMINAL_ID\" > {}; echo ready; exec cat",
-                output.display()
-            )}}})
+            terminal_folder(
+                r,
+                "mine",
+                "",
+                &format!(
+                    "printf '%s\\n' \"$NOTCHD_INSTANCE\" \"$NOTCHD_SOCKET\" \"$NOTCHD_BIN\" \"$NOTCHD_TERMINAL_ID\" > {}; echo ready; exec cat",
+                    output.display()
+                ),
+            );
+            json!({"modules": ["mine"]})
         },
         true,
     );
@@ -665,7 +722,15 @@ fn the_plan_usage_is_asked_with_the_login_shown_and_never_when_offline() {
 fn a_flood_of_output_reaches_the_view_whole_and_fast_enough() {
     let r = rig(
         "flood",
-        |_| json!({"modules": ["mine"], "terminals": {"mine": {"command": "head -c 20000000 /dev/zero | tr '\\0' x; echo; echo flood-end"}}}),
+        |r| {
+            terminal_folder(
+                r,
+                "mine",
+                "",
+                "head -c 20000000 /dev/zero | tr '\\0' x; echo; echo flood-end",
+            );
+            json!({"modules": ["mine"]})
+        },
         true,
     );
     let _ui = r.ui();
@@ -829,10 +894,14 @@ fn grid_until(
 fn a_grid_view_gets_the_screen_as_styled_rows_and_its_keys_follow_the_kitty_protocol() {
     let r = rig(
         "grid",
-        |_| {
-            json!({"modules": ["mine"],
-                "terminals": {"mine": {"title": "Mine", "command":
-                    "printf '\\033[1;32mgreen\\033[0m %s\\n' \"$(stty size)\"; printf '\\033[>1u'; exec cat"}}})
+        |r| {
+            terminal_folder(
+                r,
+                "mine",
+                "Mine",
+                "printf '\\033[1;32mgreen\\033[0m %s\\n' \"$(stty size)\"; printf '\\033[>1u'; exec cat",
+            );
+            json!({"modules": ["mine"]})
         },
         true,
     );
