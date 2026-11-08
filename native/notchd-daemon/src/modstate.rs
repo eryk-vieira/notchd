@@ -116,6 +116,10 @@ impl ModState {
 #[derive(Debug, Default)]
 pub struct Mods {
     mods: BTreeMap<String, ModState>,
+    /// The last `rev` and view `rev` sent for a module that was removed. A
+    /// UI drops a message whose `rev` is not above the one it holds, so a
+    /// module loaded again goes on from these instead of starting over.
+    retired: BTreeMap<String, (u64, u64)>,
 }
 
 /// `{ moduleId, title, settings, standalone }`: what the schema builds a
@@ -258,6 +262,10 @@ impl Mods {
             ModEvent::Loaded { module, manifest } => {
                 let old = self.mods.remove(&module);
                 let mut m = ModState::from_manifest(&module, &manifest);
+                if let Some((rev, view_rev)) = self.retired.remove(&module) {
+                    m.rev = rev;
+                    m.view_rev = view_rev;
+                }
                 if let Some(old) = old {
                     // A save: the module's own state carries over until it
                     // sends again.
@@ -280,6 +288,8 @@ impl Mods {
                 };
                 store.remove_module(&module);
                 store.remove_module_def(&module);
+                let view_rev = old.view_rev + 1;
+                self.retired.insert(module.clone(), (old.rev, view_rev));
                 // The slots it had go empty.
                 old.sent_views
                     .iter()
@@ -287,7 +297,7 @@ impl Mods {
                         ToUi::View(View {
                             module: module.clone(),
                             slot: *slot,
-                            rev: old.view_rev + 1,
+                            rev: view_rev,
                             tree: None,
                         })
                     })
@@ -340,8 +350,18 @@ impl Mods {
         }
     }
 
+    /// A module's state, made on its first word: a module removed before
+    /// goes on from its last revs.
     fn entry(&mut self, id: &str) -> &mut ModState {
-        self.mods.entry(id.to_string()).or_default()
+        let retired = &mut self.retired;
+        self.mods.entry(id.to_string()).or_insert_with(|| {
+            let (rev, view_rev) = retired.remove(id).unwrap_or_default();
+            ModState {
+                rev,
+                view_rev,
+                ..ModState::default()
+            }
+        })
     }
 
     /// Puts a module's facts in the store and returns what changed for the
@@ -675,5 +695,113 @@ mod tests {
                 .iter()
                 .any(|p| p.id == "modules/weather")
         );
+    }
+
+    /// What a UI keeps of the messages, as `Protocol.apply` does: a message
+    /// whose `rev` is not above the one held for its entity is dropped.
+    #[derive(Default)]
+    struct Ui {
+        revs: BTreeMap<String, u64>,
+        modules: BTreeMap<String, ModuleInfo>,
+        views: BTreeMap<String, Option<Node>>,
+    }
+
+    impl Ui {
+        fn take(&mut self, out: Vec<ToUi>) {
+            for msg in out {
+                let (key, rev) = match &msg {
+                    ToUi::Module(m) => (format!("module:{}", m.id), m.rev),
+                    ToUi::View(v) => (format!("view:{}/{:?}", v.module, v.slot), v.rev),
+                    _ => continue,
+                };
+                if self.revs.get(&key).is_some_and(|held| rev <= *held) {
+                    continue;
+                }
+                self.revs.insert(key, rev);
+                match msg {
+                    ToUi::Module(m) => {
+                        self.modules.insert(m.id.clone(), m);
+                    }
+                    ToUi::View(v) => {
+                        self.views
+                            .insert(format!("{}/{:?}", v.module, v.slot), v.tree);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        fn view(&self, module: &str, slot: Slot) -> Option<&Node> {
+            self.views.get(&format!("{module}/{slot:?}"))?.as_ref()
+        }
+    }
+
+    #[test]
+    fn a_module_loaded_again_reaches_a_ui_that_saw_it_before() {
+        // A module of the daemon (an agent added to a notch at runtime after
+        // it was in one before), however many revs it went through first.
+        let mut mods = Mods::new();
+        let mut store = Store::new();
+        store.set_config(json!({"modules": ["codex"]}));
+        let mut ui = Ui::default();
+        let facts = notchd_modules::Facts::default();
+        for n in 0..5 {
+            let views = vec![
+                (Slot::Compact, Some(text(&format!("title {n}")))),
+                (Slot::Expanded, Some(text(&format!("terminal {n}")))),
+            ];
+            let out = mods.set_builtin(
+                &mut store,
+                "codex",
+                &format!("Codex {n}"),
+                false,
+                &facts,
+                views,
+            );
+            ui.take(out);
+        }
+        ui.take(mods.apply(
+            &mut store,
+            ModEvent::Removed {
+                module: "codex".into(),
+            },
+            0,
+        ));
+        assert!(ui.view("codex", Slot::Expanded).is_none());
+        let views = vec![(Slot::Expanded, Some(text("terminal again")))];
+        let out = mods.set_builtin(&mut store, "codex", "Codex", false, &facts, views);
+        ui.take(out);
+        assert_eq!(
+            ui.view("codex", Slot::Expanded),
+            Some(&text("terminal again"))
+        );
+        assert_eq!(ui.modules["codex"].title, "Codex");
+
+        // A user module the host loads again.
+        let (mut mods, mut store) = loaded();
+        let mut ui = Ui::default();
+        for n in 0..5 {
+            ui.take(mods.apply(&mut store, view(Slot::Expanded, &format!("{n}")), 0));
+        }
+        ui.take(mods.apply(
+            &mut store,
+            ModEvent::Removed {
+                module: "weather".into(),
+            },
+            0,
+        ));
+        let mut m2 = manifest();
+        m2.title = Some("Weather again".into());
+        ui.take(mods.apply(
+            &mut store,
+            ModEvent::Loaded {
+                module: "weather".into(),
+                manifest: Box::new(m2),
+            },
+            0,
+        ));
+        ui.take(mods.apply(&mut store, view(Slot::Expanded, "back"), 0));
+        assert_eq!(ui.view("weather", Slot::Expanded), Some(&text("back")));
+        assert_eq!(ui.modules["weather"].title, "Weather again");
     }
 }

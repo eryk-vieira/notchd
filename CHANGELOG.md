@@ -4,6 +4,10 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+### Fixed
+
+- A module added to a notch again at runtime (an agent such as `codex` moved back into a notch with `set notches` or the settings) draws at once: its tab stayed empty, no program started and `agent <id> toggle` closed the notch until the UI reloaded. The daemon now keeps a module's message revisions across an unload, so the UI no longer drops its views as stale.
+
 ## [0.7.2] — 2026-11-04
 
 ### Added
