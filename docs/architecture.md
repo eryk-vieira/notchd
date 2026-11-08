@@ -134,6 +134,8 @@ What v1 does not need, and so does not have: text input (no built-in module type
 
 Decision: the daemon sends **whole replacements of one entity**, keyed, each with a monotonically increasing `rev`. No JSON patch.
 
+A UI drops a message whose `rev` is not above the one it holds for that entity, so a `rev` never goes back for the life of the daemon: a module unloaded (no notch lists it) and loaded again goes on from the `module` and `view` revs it had (`modstate.rs`), and a UI that saw it before draws it at once.
+
 Why: the data is small (a notch list and a handful of view trees, a few KB); the socket is local; and a diff protocol must be implemented identically in QML, Swift and C# with a bug surface bigger than the bandwidth it saves. Replacing per entity keeps each message independent (a UI that drops one recovers on the next), and per-entity granularity means a clock tick resends only one module's tree, not the whole state. Fast-changing values do not stream: a progress carries an `anchor` the UI interpolates, and an `equalizer` animates locally.
 
 Entities and their messages:

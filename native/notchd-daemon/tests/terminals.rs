@@ -549,6 +549,54 @@ fn codex_shows_its_thread_title_from_the_terminal_title() {
     );
 }
 
+/// Sets the notches, waits for the answer (sent after what the change
+/// broadcast) and says whether a UI keeping every view as `Protocol.apply`
+/// does (a `rev` not above the one held is dropped) now holds a tree for the
+/// codex `expanded` slot.
+fn codex_expanded_after(ui: &mut FakeUi, id: u64, notches: Value) -> bool {
+    let set = json!({"t": "set", "id": id, "key": "notches", "value": notches});
+    ui.send_raw(&set.to_string());
+    assert!(
+        ui.wait_for(WAIT, |m| matches!(m, ToUi::Ok(o) if o.id == id))
+            .is_some()
+    );
+    let mut held: Option<(u64, bool)> = None;
+    for m in &ui.messages {
+        if let ToUi::View(v) = m
+            && v.module == "codex"
+            && v.slot == Slot::Expanded
+            && held.is_none_or(|(rev, _)| v.rev > rev)
+        {
+            held = Some((v.rev, v.tree.is_some()));
+        }
+    }
+    held.is_some_and(|(_, tree)| tree)
+}
+
+#[test]
+fn an_agent_added_to_a_notch_at_runtime_again_reaches_the_ui_with_a_newer_rev() {
+    // Issue #17: a module unloaded and loaded again started its revs over,
+    // and a UI holding the higher ones dropped its views as stale.
+    let r = rig(
+        "codex-runtime",
+        |r| {
+            json!({"notches": [{"id": "FLEX", "modules": ["timer"], "tabs": true}],
+            "codex": {"command": r.fake("codex"),
+            "directory": r.scratch.display().to_string(), "usage": false}})
+        },
+        true,
+    );
+    let mut ui = r.ui();
+    let with = json!([{"id": "FLEX", "modules": ["timer", "codex"], "tabs": true}]);
+    let without = json!([{"id": "FLEX", "modules": ["timer"], "tabs": true}]);
+    assert!(codex_expanded_after(&mut ui, 1, with.clone()), "added");
+    assert!(!codex_expanded_after(&mut ui, 2, without), "removed");
+    assert!(
+        codex_expanded_after(&mut ui, 3, with),
+        "added again: its views were dropped as stale"
+    );
+}
+
 #[test]
 fn the_plan_usage_is_asked_with_the_login_shown_and_never_when_offline() {
     let r = rig(
