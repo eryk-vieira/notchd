@@ -11,7 +11,7 @@
 //! it does not repeat them.
 
 use crate::state::{
-    self, ModuleInfo, PeekContext, PeekKind, PeekNotch, attention_peek, focused_peek, needs_visitor,
+    self, ModuleInfo, PeekContext, PeekNotch, attention_peek, focused_peek, needs_visitor,
 };
 
 /// The shortest a peek stays (`Math.max(400, ...)`).
@@ -95,8 +95,6 @@ pub fn route(places: &[PeekNotch], focused: &str, on_focused_screen: bool) -> Ro
 /// hangs on, which are never the focused one's to follow.
 pub fn place(screens: &[String]) -> PeekNotch {
     PeekNotch {
-        kind: PeekKind::Homed,
-        screen: screens.first().cloned(),
         screens: screens.to_vec(),
     }
 }
@@ -218,17 +216,15 @@ mod tests {
         assert!(!hover_dismisses(true, None));
     }
 
-    fn at(kind: PeekKind, screen: &str) -> PeekNotch {
+    fn at(screen: &str) -> PeekNotch {
         PeekNotch {
-            kind,
-            screen: Some(screen.into()),
-            screens: Vec::new(),
+            screens: vec![screen.into()],
         }
     }
 
     #[test]
     fn a_peek_goes_to_every_notch_and_the_visitor_when_none_is_on_the_focused_screen() {
-        let places = [at(PeekKind::Homed, "DP-2"), at(PeekKind::Homed, "DP-3")];
+        let places = [at("DP-2"), at("DP-3")];
         let r = route(&places, "DP-1", false);
         assert_eq!(r.notches, vec![0, 1]);
         assert!(r.visitor);
@@ -241,16 +237,12 @@ mod tests {
     #[test]
     fn a_focused_screen_peek_goes_once() {
         let places = [
-            at(PeekKind::Homed, "DP-2"),
+            at("DP-2"),
             PeekNotch {
-                kind: PeekKind::Follow,
-                screen: None,
-                screens: Vec::new(),
+                screens: vec!["DP-1".into(), "DP-2".into()],
             },
             PeekNotch {
-                kind: PeekKind::All,
-                screen: None,
-                screens: Vec::new(),
+                screens: vec!["DP-1".into()],
             },
         ];
         let r = route(&places, "DP-1", true);
@@ -261,7 +253,7 @@ mod tests {
                 visitor: false
             }
         );
-        let only_away = [at(PeekKind::Homed, "DP-2")];
+        let only_away = [at("DP-2")];
         let r = route(&only_away, "DP-1", true);
         assert_eq!(
             r,
@@ -275,10 +267,7 @@ mod tests {
     #[test]
     fn place_says_which_screens_a_notch_hangs_on() {
         let p = place(&["DP-2".to_string()]);
-        assert_eq!(
-            (p.kind, p.screen.as_deref()),
-            (PeekKind::Homed, Some("DP-2"))
-        );
+        assert_eq!(p.screens, ["DP-2"]);
         // On several, it peeks on each; on none, nowhere.
         let two = place(&["DP-1".to_string(), "DP-2".to_string()]);
         assert_eq!(route(&[two], "DP-2", true).notches, vec![0]);

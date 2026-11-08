@@ -414,38 +414,17 @@ pub fn peek_copy<'a>(copies: &'a [String], focused: &str) -> Option<&'a str> {
     }
 }
 
-/// How a notch that shows a module hangs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PeekKind {
-    /// A copy on every screen.
-    All,
-    /// It moves to the focused screen.
-    Follow,
-    /// Kept on a screen.
-    Homed,
-    /// Any other kind: like the JS, anything but `homed` peeks everywhere.
-    #[serde(other)]
-    Other,
-}
-
-/// A notch that shows a module, for `needsVisitor` and `focusedPeek`.
+/// A notch that shows a module, for `needsVisitor` and `focusedPeek`: the
+/// screens it hangs on.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PeekNotch {
-    pub kind: PeekKind,
-    /// Where a `Homed` notch hangs.
-    #[serde(default)]
-    pub screen: Option<String>,
-    /// The other screens it hangs on, when it hangs on several.
     #[serde(default)]
     pub screens: Vec<String>,
 }
 
 impl PeekNotch {
     fn peeks_on(&self, focused: &str) -> bool {
-        self.kind != PeekKind::Homed
-            || self.screen.as_deref() == Some(focused)
-            || self.screens.iter().any(|s| s == focused)
+        self.screens.iter().any(|s| s == focused)
     }
 }
 
@@ -513,17 +492,7 @@ mod tests {
 
     fn homed(screen: &str) -> PeekNotch {
         PeekNotch {
-            kind: PeekKind::Homed,
-            screen: Some(screen.into()),
-            screens: Vec::new(),
-        }
-    }
-
-    fn kind(kind: PeekKind) -> PeekNotch {
-        PeekNotch {
-            kind,
-            screen: None,
-            screens: Vec::new(),
+            screens: vec![screen.into()],
         }
     }
 
@@ -1127,8 +1096,10 @@ mod tests {
         assert!(needs_visitor(&[dp.clone(), homed("HDMI-A-1")], "eDP-1"));
         assert!(!needs_visitor(std::slice::from_ref(&dp), "DP-1"));
         assert!(!needs_visitor(&[dp.clone(), homed("eDP-1")], "eDP-1"));
-        assert!(!needs_visitor(&[dp, kind(PeekKind::Follow)], "eDP-1"));
-        assert!(!needs_visitor(&[kind(PeekKind::All)], "eDP-1"));
+        let both = PeekNotch {
+            screens: vec!["DP-1".into(), "eDP-1".into()],
+        };
+        assert!(!needs_visitor(&[dp, both], "eDP-1"));
         assert!(needs_visitor(&[], "eDP-1"));
         assert!(!needs_visitor(&[homed("DP-1")], ""));
     }
@@ -1140,14 +1111,6 @@ mod tests {
         let edp = homed("eDP-1");
         assert_eq!(
             focused_peek(&[dp.clone(), edp.clone(), homed("eDP-1")], "eDP-1"),
-            Some(1)
-        );
-        assert_eq!(
-            focused_peek(&[dp.clone(), kind(PeekKind::All)], "eDP-1"),
-            Some(1)
-        );
-        assert_eq!(
-            focused_peek(&[dp.clone(), kind(PeekKind::Follow), edp.clone()], "eDP-1"),
             Some(1)
         );
         assert_eq!(focused_peek(std::slice::from_ref(&dp), "eDP-1"), None);
