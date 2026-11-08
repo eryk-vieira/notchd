@@ -94,6 +94,44 @@ pub fn plain_title(raw: Option<&str>) -> PlainTitle {
     }
 }
 
+/// The variables a session host (a multiplexer, a terminal emulator, an
+/// agent's shell) gives the programs it runs: `HERDR_*`, `CLAUDECODE`,
+/// `CLAUDE_CODE_*`, `TMUX`, `ZELLIJ*`, `KITTY_*`… A terminal of a notch is
+/// none of those, so its program must not see them, whatever shell started
+/// the daemon: `herdr` takes itself for nested and does not start, `tmux`
+/// refuses to, an agent thinks it runs inside another. Everything else of
+/// the daemon's environment (the user's own `PATH`, `CLAUDE_CONFIG_DIR`…)
+/// stays.
+pub fn is_session_host_var(name: &str) -> bool {
+    const EXACT: &[&str] = &[
+        "CLAUDECODE",
+        "CLAUDE_PID",
+        "TMUX",
+        "TMUX_PANE",
+        "STY",
+        "ZELLIJ",
+        "TERM_PROGRAM",
+        "TERM_PROGRAM_VERSION",
+        "VTE_VERSION",
+        "WT_SESSION",
+        "WT_PROFILE_ID",
+        "NVIM",
+        "NVIM_LISTEN_ADDRESS",
+    ];
+    const PREFIX: &[&str] = &[
+        "HERDR_",
+        "CLAUDE_CODE_",
+        "ZELLIJ_",
+        "KITTY_",
+        "WEZTERM_",
+        "ALACRITTY_",
+        "GHOSTTY_",
+        "KONSOLE_",
+        "VSCODE_",
+    ];
+    EXACT.contains(&name) || PREFIX.iter().any(|p| name.starts_with(p))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -284,5 +322,43 @@ mod tests {
         let script = shell_args("cd ~/app && npm run dev", &s(&["--x"]), false, true);
         assert!(!script[1].contains("exec"));
         assert_eq!(script.len(), 4);
+    }
+
+    // (added) Not from Terminal.js: the daemon's environment a terminal's
+    // program must not inherit (issue #22).
+    #[test]
+    fn the_variables_of_a_session_host_are_not_a_terminals() {
+        for name in [
+            "HERDR_ENV",
+            "HERDR_PANE_ID",
+            "HERDR_SOCKET_PATH",
+            "CLAUDECODE",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_SESSION_ID",
+            "TMUX",
+            "TMUX_PANE",
+            "ZELLIJ",
+            "ZELLIJ_SESSION_NAME",
+            "KITTY_WINDOW_ID",
+            "WEZTERM_PANE",
+            "TERM_PROGRAM",
+        ] {
+            assert!(is_session_host_var(name), "{name}");
+        }
+        for name in [
+            "PATH",
+            "HOME",
+            "TERM",
+            "LANG",
+            "CLAUDE_CONFIG_DIR",
+            "NOTCHD_SOCKET",
+            "XDG_RUNTIME_DIR",
+            "WAYLAND_DISPLAY",
+            "HERDR",
+            "TMUXINATOR_CONFIG",
+            "MY_HERDR_ENV",
+        ] {
+            assert!(!is_session_host_var(name), "{name}");
+        }
     }
 }

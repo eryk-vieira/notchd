@@ -11,7 +11,7 @@ use crate::modstate::Mods;
 use crate::ptyhost::{Note, PtyHost, Session};
 use crate::sidecars::Sidecars;
 use notchd_core::store::Store;
-use notchd_modules::module::{Bridge, PtyCmd, Shown, SidecarCmd};
+use notchd_modules::module::{Bridge, PtyCmd, PtyStart, Shown, SidecarCmd};
 use notchd_modules::plan::Ask;
 use notchd_modules::{CoreModule, Ctx, Effect};
 use notchd_proto::common::Mode;
@@ -55,6 +55,8 @@ const COMPONENT_POLL_MS: u64 = 1000;
 /// How the daemon reads its environment: a closure, so tests give it their
 /// own (a scratch `HOME`, no real login).
 pub type Env = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
+/// The names in the daemon's environment.
+pub type EnvNames = Arc<dyn Fn() -> Vec<String> + Send + Sync>;
 
 /// The module that owns an IPC method.
 pub fn owner(method: &str) -> Option<&'static str> {
@@ -83,6 +85,7 @@ pub struct CoreHost {
     ptys: PtyHost,
     notes: Option<Sender<Note>>,
     env: Env,
+    env_names: EnvNames,
     /// The daemon that owns terminal programs, independent of inherited CLI env.
     terminal_instance: Option<(String, PathBuf, Option<PathBuf>)>,
     /// The sidecars written out of the binary (`assets`), on first use.
@@ -118,6 +121,11 @@ impl CoreHost {
             ptys: PtyHost::default(),
             notes: None,
             env: Arc::new(|k| std::env::var(k).ok()),
+            env_names: Arc::new(|| {
+                std::env::vars_os()
+                    .filter_map(|(k, _)| k.into_string().ok())
+                    .collect()
+            }),
             terminal_instance: None,
             embedded: std::sync::OnceLock::new(),
             http: Arc::new(Curl),
@@ -147,6 +155,13 @@ impl CoreHost {
     /// (`HOME`, `CLAUDE_CONFIG_DIR`, `NOTCHD_OFFLINE`).
     pub fn with_env(mut self, env: Env) -> CoreHost {
         self.env = env;
+        self
+    }
+
+    /// The names of the environment `with_env` reads, for what a terminal's
+    /// program must not inherit of it.
+    pub fn with_env_names(mut self, names: EnvNames) -> CoreHost {
+        self.env_names = names;
         self
     }
 
@@ -584,33 +599,50 @@ impl CoreHost {
     fn pty_command(&mut self, id: &str, cmd: PtyCmd) {
         match cmd {
             PtyCmd::Start(s) => {
-                let home = (self.env)("HOME").unwrap_or_default();
-                let mut env = vec![("TERM".into(), "xterm-256color".into())];
-                if let Some((name, socket, bin)) = &self.terminal_instance {
-                    env.extend([
-                        ("NOTCHD_INSTANCE".into(), name.clone()),
-                        (
-                            "NOTCHD_SOCKET".into(),
-                            socket.to_string_lossy().into_owned(),
-                        ),
-                        ("NOTCHD_TERMINAL_ID".into(), id.into()),
-                    ]);
-                    if let Some(bin) = bin {
-                        env.push(("NOTCHD_BIN".into(), bin.to_string_lossy().into_owned()));
-                    }
-                }
-                let spec = PtySpec {
-                    program: s.program,
-                    args: s.args,
-                    cwd: Some(notchd_core::terminal::expand_home(Some(&s.dir), &home)),
-                    env,
-                    cols: 0,
-                    rows: 0,
-                };
-                self.ptys.start(id, s.run, spec);
+                let run = s.run;
+                let spec = self.terminal_spec(id, s);
+                self.ptys.start(id, run, spec);
             }
             PtyCmd::Stop => self.ptys.stop(id),
             PtyCmd::Write(bytes) => self.ptys.write(id, &bytes),
+        }
+    }
+
+    /// How a terminal module's program runs: in its folder, with `TERM` and
+    /// the daemon's `NOTCHD_*` on top of the daemon's environment, less what
+    /// a session host the daemon was started from gave it
+    /// (`terminal::is_session_host_var`): a notch terminal is the same
+    /// wherever the daemon started.
+    fn terminal_spec(&self, id: &str, s: PtyStart) -> PtySpec {
+        let home = (self.env)("HOME").unwrap_or_default();
+        let mut env = vec![("TERM".into(), "xterm-256color".into())];
+        if let Some((name, socket, bin)) = &self.terminal_instance {
+            env.extend([
+                ("NOTCHD_INSTANCE".into(), name.clone()),
+                (
+                    "NOTCHD_SOCKET".into(),
+                    socket.to_string_lossy().into_owned(),
+                ),
+                ("NOTCHD_TERMINAL_ID".into(), id.into()),
+            ]);
+            if let Some(bin) = bin {
+                env.push(("NOTCHD_BIN".into(), bin.to_string_lossy().into_owned()));
+            }
+        }
+        let mut unset: Vec<String> = (self.env_names)()
+            .into_iter()
+            .filter(|k| notchd_core::terminal::is_session_host_var(k))
+            .collect();
+        unset.sort();
+        unset.dedup();
+        PtySpec {
+            program: s.program,
+            args: s.args,
+            cwd: Some(notchd_core::terminal::expand_home(Some(&s.dir), &home)),
+            unset,
+            env,
+            cols: 0,
+            rows: 0,
         }
     }
 
@@ -865,6 +897,53 @@ mod tests {
     ) -> String {
         let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
         h.command(s, m, method, &args, now).expect("an owner").0
+    }
+
+    #[test]
+    fn a_terminal_does_not_inherit_the_session_host_that_started_the_daemon() {
+        // Issue #22: a daemon started from a Herdr pane inside Claude Code
+        // gave `herdr` in a notch terminal HERDR_ENV, and it took itself for nested.
+        let names = || -> Vec<String> {
+            [
+                "PATH",
+                "HOME",
+                "HERDR_ENV",
+                "HERDR_PANE_ID",
+                "CLAUDECODE",
+                "TMUX",
+                "CLAUDE_CONFIG_DIR",
+            ]
+            .iter()
+            .map(|k| k.to_string())
+            .collect()
+        };
+        let h = CoreHost::new(None)
+            .with_env(Arc::new(|k| (k == "HOME").then(|| "/h".to_string())))
+            .with_env_names(Arc::new(names));
+        let spec = h.terminal_spec(
+            "herdr-terminal",
+            PtyStart {
+                run: 1,
+                program: "/bin/sh".into(),
+                args: vec!["-c".into(), "herdr".into()],
+                dir: "~/x".into(),
+            },
+        );
+        assert_eq!(
+            spec.unset,
+            ["CLAUDECODE", "HERDR_ENV", "HERDR_PANE_ID", "TMUX"]
+        );
+        assert_eq!(spec.cwd.as_deref(), Some("/h/x"));
+        assert!(
+            spec.env
+                .iter()
+                .any(|(k, v)| k == "TERM" && v == "xterm-256color")
+        );
+        assert!(
+            spec.env
+                .iter()
+                .all(|(k, _)| !notchd_core::terminal::is_session_host_var(k))
+        );
     }
 
     #[test]
