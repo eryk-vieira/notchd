@@ -24,6 +24,8 @@ pub struct PtySpec {
     pub args: Vec<String>,
     /// `None`: the daemon's own folder.
     pub cwd: Option<String>,
+    /// Taken out of the daemon's environment.
+    pub unset: Vec<String>,
     /// Set on top of the daemon's environment.
     pub env: Vec<(String, String)>,
     pub cols: u16,
@@ -75,6 +77,9 @@ impl Pty {
         cmd.args(&spec.args);
         if let Some(dir) = &spec.cwd {
             cmd.cwd(dir);
+        }
+        for k in &spec.unset {
+            cmd.env_remove(k);
         }
         for (k, v) in &spec.env {
             cmd.env(k, v);
@@ -230,6 +235,7 @@ mod tests {
             program: "/bin/sh".into(),
             args: vec!["-c".into(), script.into()],
             cwd: None,
+            unset: Vec::new(),
             env: vec![("TERM".into(), "xterm-256color".into())],
             cols: 80,
             rows: 24,
@@ -289,6 +295,23 @@ mod tests {
         let (_pty, rx) = start(&sh("printf '\\033]0;a title\\007'; echo done"));
         let text = until(&rx, String::new(), |t| t.contains("done"));
         assert!(text.contains("\u{1b}]0;a title\u{7}"), "{text:?}");
+        exit_of(&rx);
+    }
+
+    #[test]
+    fn what_is_unset_of_the_daemons_environment_the_program_does_not_see() {
+        // HOME is in every test's environment: the program sees it, unless unset.
+        let (_pty, rx) = start(&sh("echo home:${HOME:+set}:end"));
+        let text = until(&rx, String::new(), |t| t.contains(":end"));
+        assert!(text.contains("home:set:end"), "{text:?}");
+        exit_of(&rx);
+        let spec = PtySpec {
+            unset: vec!["HOME".into()],
+            ..sh("echo home:${HOME:+set}:end")
+        };
+        let (_pty, rx) = start(&spec);
+        let text = until(&rx, String::new(), |t| t.contains(":end"));
+        assert!(text.contains("home::end"), "{text:?}");
         exit_of(&rx);
     }
 
