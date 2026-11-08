@@ -6,6 +6,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Fixed
 
+- Settings: a page whose `choice` has long option labels (a user module's, say) no longer grows wider than the window and cuts off every control at its right edge; segments that don't fit beside the field's text show as chips that wrap under it, and no row is wider than the page.
 - A module added to a notch again at runtime (an agent such as `codex` moved back into a notch with `set notches` or the settings) draws at once: its tab stayed empty, no program started and `agent <id> toggle` closed the notch until the UI reloaded. The daemon now keeps a module's message revisions across an unload, so the UI no longer drops its views as stale.
 - An updated plugin now gets the daemon of its own version: the daemon downloaded into `~/.local/share/notchd/bin` stayed at the version first installed, so a running daemon was never replaced after an update. A daemon of another version is replaced at the shell's next start (its terminals end); offline, or with no release for the version, the one already there keeps running. A `notchd` of your own (`NOTCHD_BIN`, on `PATH`) is still used as it is. When the download fails with nothing installed, the error now says why.
 - A notch terminal's program no longer sees the variables of the session the daemon was started from (`HERDR_*`, `CLAUDECODE`, `CLAUDE_CODE_*`, `TMUX`, `ZELLIJ*`, `KITTY_*`…): a daemon started from a Herdr pane made `herdr` in a notch terminal think it was nested and not start.

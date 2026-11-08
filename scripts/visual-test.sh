@@ -23,6 +23,9 @@ ln -s -- "$root/core" "$scratch/config/core"
 ln -s -- "$root/hosts" "$scratch/config/hosts"
 ln -s -- "$root/tests/visual/shell.qml" "$scratch/config/shell.qml"
 cp -- "$root/tests/qml/TestService.qml" "$scratch/config/TestService.qml"
+# A user module for the settings window's daemon (its config dir is shots/).
+mkdir -- "$scratch/shots/modules"
+cp -r -- "$root/tests/modules/flex" "$scratch/shots/modules/flex"
 
 # Cut off from the session, so nothing here touches its sockets, with the
 # demo player as the only MPRIS player (with-demo-player.sh).

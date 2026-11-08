@@ -33,7 +33,7 @@ The window reads the config for the value of a field (`NotchService.config`, the
 
 | Type | Control |
 |---|---|
-| `choice` | `SegmentedControl`, `CardChoice` with `display: "cards"`, or `ChipChoice` with `display: "chips"` |
+| `choice` | `SegmentedControl`, `CardChoice` with `display: "cards"`, or `ChipChoice` with `display: "chips"`; segments that don't fit beside the title and help (long option labels, a narrow page) show as chips under them |
 | `integer`, `number` | `SliderControl` |
 | `boolean` | `Toggle` |
 | `string`, `color` | `TextControl` (a color adds a swatch and is validated) |
