@@ -216,7 +216,31 @@ export default class NotchdExtension extends Extension {
         const seen = new Set();
         const notches = state.notches ?? [];
         const nav = state.navigation;
+        // A guest (docs/architecture.md, `state`): the visitor at the top, and
+        // a notch without decoration, where its position says; a copy per
+        // screen, unseen until it peeks. A guest's actor exists only while it
+        // shows something or fades out: closed and faded, it goes (fewer
+        // actors and JS objects; GNOME 46's JS engine crashed more often with
+        // every guest kept).
+        const guest = (key, wireId, notch, copy) => {
+            let actor = this._copies.get(key);
+            const showing = copy.mode === 'peek' || copy.mode === 'expanded';
+            if (!showing && (!actor || !actor.seenOrFading))
+                return;
+            seen.add(key);
+            if (!actor) {
+                actor = new NotchCopy(this._host, wireId, {guest: true});
+                this._copies.set(key, actor);
+            }
+            actor.update(notch, copy, null);
+        };
         notches.forEach((notch, index) => {
+            if (notch.decoration === false) {
+                const own = {...notch, draggable: false};
+                for (const copy of notch.copies ?? [])
+                    guest(`${notch.id}@${copy.screen}`, notch.id, own, copy);
+                return;
+            }
             // While navigating, what this notch's highlight says.
             const highlight = nav ? {
                 number: notch.number ?? 0, selected: nav.notch === notch.id, mode: nav.mode,
@@ -233,31 +257,6 @@ export default class NotchdExtension extends Extension {
                 actor.update(notch, copy, highlight);
             }
         });
-        // The guests (docs/architecture.md, `state`): each standalone
-        // module's own notch, where its `<id>.position` says, and the
-        // visitor at the top; a copy per screen, unseen until it peeks.
-        // A guest's actor exists only while it shows something or fades
-        // out: closed and faded, it goes (fewer actors and JS objects; GNOME
-        // 46's JS engine crashed more often with every guest kept).
-        const guest = (key, wireId, notch, copy) => {
-            let actor = this._copies.get(key);
-            const showing = copy.mode === 'peek' || copy.mode === 'expanded';
-            if (!showing && (!actor || !actor.seenOrFading))
-                return;
-            seen.add(key);
-            if (!actor) {
-                actor = new NotchCopy(this._host, wireId, {guest: true});
-                this._copies.set(key, actor);
-            }
-            actor.update(notch, copy, null);
-        };
-        const cfg = store.config?.cfg ?? {};
-        for (const g of state.standalone ?? []) {
-            const pos = cfg[g.id]?.position ?? {};
-            const notch = {id: g.id, edge: pos.edge ?? 'top', offset: pos.offset ?? 0.5, screen: '', draggable: false};
-            for (const copy of g.copies ?? [])
-                guest(`standalone:${g.id}@${copy.screen}`, g.id, notch, copy);
-        }
         for (const copy of state.visitor ?? [])
             guest(`visitor@${copy.screen}`, '', {id: '', edge: 'top', offset: 0.5, screen: '', draggable: false}, copy);
         for (const [id, actor] of this._copies) {
@@ -337,7 +336,7 @@ export default class NotchdExtension extends Extension {
     }
 
     // A guest that shows covers the notches of the config it overlaps on
-    // its edge of its monitor (Position.coveredByStandalone): they hide
+    // its edge of its monitor (Position.coveredByUndecorated): they hide
     // while it shows, unless they are open themselves.
     _cover() {
         const copies = [...this._copies.values()];

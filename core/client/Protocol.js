@@ -50,8 +50,7 @@ function key(notch, screen, name, mods, text) {
   return { t: "key", notch: notch, screen: screen, key: name, mods: mods || [], text: text || "" }
 }
 
-// A copy of a notch is named by its notch's id (a standalone module's by its
-// module id, the visitor's by "") and its screen ("" for the one that moves).
+// A copy of a notch is named by its notch's id (the visitor's by "") and its screen ("" for the one that moves).
 // Input facts, no reply (docs/architecture.md, "UI to core").
 function pin(notch, screen, on) { return { t: "pin", notch: notch, screen: screen, on: !!on } }
 function focus(notch, screen, active) { return { t: "focus", notch: notch, screen: screen, active: !!active } }
@@ -71,7 +70,7 @@ function measure(notch, screen, rest, compact, baseline) {
 
 // What the modules the UI loads say of themselves, `modules` a list of
 // { id, priority, active, compact, peek, icon, expanded, attention, urgentPeek,
-// peekOnFocusedScreen, standalone }.
+// peekOnFocusedScreen }.
 function facts(modules) { return { t: "facts", modules: modules } }
 
 // A module asks to peek (`ms` optional) or drops its peek (`module` optional: every peek).

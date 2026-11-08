@@ -44,7 +44,7 @@ The timer, activities, resources, media, OSD, the agents (`claude`, `codex`) and
 
 - Its facts (`title`, `priority`, `active`, `icon`, `attention`, `urgentPeek`, `peekOnFocusedScreen`, `expandedWidth`) are the daemon's `module` message, bound as properties (`daemonOwned` is true, so the service never reports facts for it).
 - Each slot (`compact`, `verticalCompact`, `peek`, `verticalPeek`, `expanded`) is a stable `Component` that draws `client.view(id, slot)` with `ViewTree`, or `null` while the daemon sends no tree for it. A press in a view goes back as the client's `event(module, slot, action, value)`.
-- `NotchService` makes one for every module the daemon announces that has no QML file (`loadUrl`) and that some notch lists (or that is standalone and on); a built-in has its JSON file in `native/notchd-modules/modules/`, embedded in the daemon, which gives its settings page and defaults and which the daemon lists back to the UI in `schema.modules` (no UI reads or reports it). A host module that only owns an IPC target (the Omarchy `osd`) is a `CoreModule` with the `IpcHandler` inside.
+- `NotchService` makes one for every module the daemon announces that has no QML file (`loadUrl`) and that some notch lists; a built-in has its JSON file in `native/notchd-modules/modules/`, embedded in the daemon, which gives its settings page and defaults and which the daemon lists back to the UI in `schema.modules` (no UI reads or reports it). A host module that only owns an IPC target (the Omarchy `osd`) is a `CoreModule` with the `IpcHandler` inside.
 
 To move a module to the daemon: write `native/notchd-modules/src/<id>.rs` implementing `CoreModule` (`facts`, `view(slot, now)`, and as needed `config`, `command` for IPC, `event`, `tick`/`next_due`, `feed` for a provider's data, `take_effects` for peeks and notifications), add it to `IDS` and `create` in `lib.rs` and, if it has IPC methods, to `METHODS` in `notchd-daemon/src/corehost.rs`; add its JSON file to `native/notchd-modules/modules/` and to `INFO` in `notchd-modules/src/lib.rs` (no QML file, no UI list to edit). Settings defaults are read from that JSON file (`tree::Settings`). Test it as values in Rust (every slot builds a valid tree), and the QML behaviour with the helpers `root.ask`, `root.texts` of `tests/qml/shell.qml`. A module that needs demo data offscreen implements `demo` (the test hook `test-<id>`, only with `NOTCHD_TEST_HOOKS=1`).
 
@@ -63,7 +63,7 @@ A module of your own, in any language: a folder in the config dir whose program 
 ```
 
 1. `cp -r docs/examples/modules/counter ~/.config/notchd/modules/`
-2. Turn it on: Settings, Notches, your notch, Loaded modules, Counter (a module that says `standalone` is switched on from its own page under Modules instead), or put its id in a notch's `modules` list in the config. The daemon finds a new folder by itself; Modules lists it, with a gear to its page when its manifest has `settings`. A module no notch lists is not started.
+2. Turn it on: Settings, Notches, your notch, Loaded modules, Counter or put its id in a notch's `modules` list in the config. The daemon finds a new folder by itself; Modules lists it, with a gear to its page when its manifest has `settings`. A module no notch lists is not started.
 3. Edit `run.sh` and save: the module restarts by itself (reload on save). Any file in its folder counts; hidden files, `__pycache__`, `node_modules` and `target` do not.
 
 The [Herdr example](examples/modules/herdr/) uses the same user-module protocol to
@@ -92,7 +92,7 @@ The folder name is the id: letters, digits, `-` and `_`, and not a config key or
 |---|---|
 | `command` | required: the argv, run with the module's folder as its working directory. `${config}` and `${cache}` become folders of its own (`<config dir>/module-config/<id>` and `module-cache/<id>`), made for it. `NOTCHD_MODULE_ID` and `NOTCHD_MODULE_DIR` are in its environment |
 | `title` | the tab and the settings page; the id by default |
-| `priority`, `icon`, `expandedWidth`, `urgentPeek`, `peekOnFocusedScreen`, `standalone` | the properties of a `NotchModule` of the same name (see the top of this page) |
+| `priority`, `icon`, `expandedWidth`, `urgentPeek`, `peekOnFocusedScreen` | the properties of a `NotchModule` of the same name (see the top of this page) |
 | `settings` | fields of its settings page, below |
 | `subscribe` | providers it wants, below |
 | `env` | extra environment variables (a string map; `${config}`, `${cache}` expand) |
@@ -136,7 +136,7 @@ From the module:
 
 ### Settings
 
-`settings` uses the [settings schema's fields](settings.md#fields) (`string`, `boolean`, `integer`, `number`, `choice`, `color`...), `key` relative to the module. They appear on its page (Settings, Modules, its gear); the values are stored in notchd's config under the module's id (`"weather": { "city": "Paris" }`), and only when they differ from the `default`. The module gets them as `init.config` and, after every change, as a `config` message, always with the defaults filled in for what was never touched: it never reads the config file. Do not name a field `enabled` or `position`: standalone modules own them.
+`settings` uses the [settings schema's fields](settings.md#fields) (`string`, `boolean`, `integer`, `number`, `choice`, `color`...), `key` relative to the module. They appear on its page (Settings, Modules, its gear); the values are stored in notchd's config under the module's id (`"weather": { "city": "Paris" }`), and only when they differ from the `default`. The module gets them as `init.config` and, after every change, as a `config` message, always with the defaults filled in for what was never touched: it never reads the config file.
 
 ### Providers
 
@@ -161,7 +161,7 @@ A module that does not read its input is not waited for: provider data beyond a 
 
 ## Settings
 
-A built-in module's title, settings fields and whether it is standalone or an [agent](#agents) are in a JSON file named after it (`native/notchd-modules/modules/resources.json`, embedded in the daemon; a host's in its own folder, `hosts/omarchy/modules/osd.json`, which the host reports in `catalog`). The daemon reads it whether the module loads or not, so the module has its page in the settings window (Modules, then its gear) even while no notch shows it. `settings` uses the settings schema's format (see [settings.md](settings.md)) with `key` relative to the module; values are stored under the module's id, and the module reads them with its config: the value, else the field's default (`tree::Settings`; a QML module uses `setting(key)`). A field that names another `page` shows there, under the module's title. Without a `title`, the title is the id. A user module's `module.json` is the same format.
+A built-in module's title, settings fields and whether it is an [agent](#agents) are in a JSON file named after it (`native/notchd-modules/modules/resources.json`, embedded in the daemon; a host's in its own folder, `hosts/omarchy/modules/osd.json`, which the host reports in `catalog`). The daemon reads it whether the module loads or not, so the module has its page in the settings window (Modules, then its gear) even while no notch shows it. `settings` uses the settings schema's format (see [settings.md](settings.md)) with `key` relative to the module; values are stored under the module's id, and the module reads them with its config: the value, else the field's default (`tree::Settings`; a QML module uses `setting(key)`). A field that names another `page` shows there, under the module's title. Without a `title`, the title is the id. A user module's `module.json` is the same format.
 
 ```json
 {
@@ -177,17 +177,17 @@ A module reads it as `compact` (config: `"resources": { "compact": "short" }`).
 
 A module's settings apply to every notch, since it loads once. Pick an id that isn't a config key (`modules`, `position`, `theme`...).
 
-## Standalone modules
+## Notches without decoration
 
-A module with a fixed job and a place of its own, the way an OSD always shows volume and brightness in the same spot, sets `"standalone": true` in its JSON file (the Omarchy `osd` does). Then:
+Any module can be in a notch that shows nothing at rest, the way an OSD only shows when volume or brightness changes. A notch says `"decoration": false` (Settings, Notches, its page: Show at rest):
 
-- No notch shows it, even one whose `modules` list it; the settings window leaves it out of a notch's module list.
-- It loads on its own, unless the config switches it off: `"<id>": { "enabled": false }`.
-- The service gives it a notch of its own (`NotchService.standaloneNotch(id)`), a copy on every screen, hidden until the module peeks; the peek shows on the focused screen. `"<id>": { "position": { "edge", "offset" } }` places it, top center by default; there is no `screen`, since it follows focus.
-- It draws over the notches it overlaps there, which hide while it shows (`Position.coveredByStandalone`, the UI's geometry), and stays out of the side-by-side packing.
-- Its page in the settings window starts with an Enabled switch and its position (`standalone_fields` in `native/notchd-core/src/settings.rs`), then its own fields. `enabled` and `position` are taken: don't name a field of its own after them.
+- At rest it shows nothing: no lip, no closed row, no space kept clear, nothing to hover.
+- It appears only while one of its modules peeks (or, in navigation, as a dashed outline to say where it is), and goes away when the peek ends.
+- It draws over the decorated notches it overlaps on that spot while it shows (`Position.coveredByUndecorated`, the UI's geometry), which hide until it goes, and stays out of the side-by-side packing.
+- With no `position.screen` it is on every connected screen; the peek shows on the copy on the focused screen, like any notch on several screens.
+- Navigation lists it like any notch: numbered, moved, opened in Settings, removed.
 
-Give it a `peek` view (and a `verticalPeek` for a side edge); it has no closed or expanded state of its own to show.
+A host can declare notches that exist without any config (`defaultNotches` in its `catalog`): the Omarchy host declares one with `osd`, undecorated, top center. A declared notch exists unless the config's `removedNotches` lists its id (removing it, in navigation or Settings, writes that); moving it or changing its modules writes an entry in `notches` with its `id` and only what differs. Give a module meant for such a notch a `peek` view (and a `verticalPeek` for a side edge).
 
 ## Typing
 
@@ -246,7 +246,7 @@ A module **shows** state, it does not **own** it. A notifications module mirrors
 | `compact` | the module is the highest-priority active one with a compact view |
 | `verticalCompact` | as `compact`, with the notch on a side edge, and in a vertical bar: narrow and tall. Without one the notch shows a dot there |
 | `verticalPeek` | as `peek`, on a side edge: narrow and tall. Without one, `peek` shows there |
-| `peek` | the module called `requestPeek(ms)` and won: a pinned notch never peeks, hover only lets `urgentPeek` modules through, and a peek on screen is not cut short by a lower-priority one. It shows in every notch that lists the module (on the focused monitor for a notch on every monitor), and at the top of the focused monitor when no notch with the module is there. With `peekOnFocusedScreen` it shows once, on the focused monitor only: in the first notch there that lists the module, else at the top. A standalone module's peek shows in its own notch, on the focused monitor (see [Standalone modules](#standalone-modules)) |
+| `peek` | the module called `requestPeek(ms)` and won: a pinned notch never peeks, hover only lets `urgentPeek` modules through, and a peek on screen is not cut short by a lower-priority one. It shows in every notch that lists the module (on the focused monitor for a notch on every monitor), and at the top of the focused monitor when no notch with the module is there. With `peekOnFocusedScreen` it shows once, on the focused monitor only: in the first notch there that lists the module, else at the top. A notch without decoration shows its peek on the copy on the focused monitor (see [Notches without decoration](#notches-without-decoration)) |
 | `expanded` | the notch is expanded and the module is active; every active module's view stacks, highest priority first |
 
 The daemon decides which view shows (`native/notchd-core/src/state.rs` and `peek.rs`, tested in Rust and by the QML scenarios in `tests/qml/scenarios.qml`): modules report their facts (active, priority, which views they have, attention) and their `requestPeek`/`dismissPeek` to it, and the UI shows what its `state` says.

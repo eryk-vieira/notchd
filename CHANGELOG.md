@@ -10,6 +10,8 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 - `n` in navigation creates a notch at the top of the focused monitor, in the first free spot near the middle, and starts moving it: `Enter` keeps it and opens its page in settings, to name it and pick its modules; `Esc` takes it away again.
 - `notchd ipc notch add [--screen <name>] [--edge <edge>] [--modules a,b]` and `notch remove <id>` (on the Omarchy and standalone targets: `notch add "<options>"`, `notch remove <id>`). Settings' Add notch uses the same rule, now the daemon's.
 - `position.screen` takes a list of monitor names: a copy of the notch on each.
+- A notch can have no decoration: `"decoration": false` (Settings › Notches › the notch › Show at rest). It shows nothing at rest and appears only while one of its modules peeks, over the notches it overlaps; without a monitor it is on every monitor and the peek shows on the one you work on. Any module can be in one; navigation lists it like any notch, as a dashed outline.
+- A host can declare default notches that exist without config; the Omarchy host declares one for the OSD (no decoration, top center). Removing one writes `"removedNotches": ["osd"]` to the config; moving it or changing its modules writes only what differs.
 
 ### Changed
 
@@ -21,6 +23,7 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ### Removed
 
+- Standalone modules: `"standalone"` in a module's JSON or manifest, `"<id>": { "enabled", "position" }`, the Standalone list in Settings › Modules, and the rule that no notch shows such a module. The OSD is in a notch the Omarchy host declares now; a config with `"osd": { "enabled": false }` keeps it off and `"osd": { "position": … }` moves that notch, and both keys are removed from the file on the next start.
 - The voice modules (`codex-live` and `local-live`) and the optional components (the Components page of the settings, and the `live` and `component` IPC methods) are gone; voice will come back redesigned. Keys left in your config for them (`codex-live`, `local-live`, `voiceModel`...) and their ids in a notch's `modules` are ignored like any unknown one, and nothing is rewritten. What the components installed stays on disk and can be deleted by hand: `$XDG_DATA_HOME/notchd/` (usually `~/.local/share/notchd/`), for example its `localai` folder (LocalAI and the voices), and the installer's state under `$XDG_STATE_HOME/notchd/components/`.
 - Following focus: the Screen choice's "Follow focus" and "Every screen" options.
 

@@ -1,5 +1,5 @@
 //! The `osd` module: volume, brightness, mic and keyboard light, as a peek.
-//! Standalone: a notch of its own. The Omarchy host owns the `osd` IPC target
+//! The Omarchy host owns the `osd` IPC target
 //! (every `omarchy osd` call arrives as `omarchy-shell osd show <json>`) and
 //! forwards it here as the IPC method `osd` with the arguments `show <json>`,
 //! `close`, `state` or `ping`; the answers are the target's own.
@@ -203,10 +203,6 @@ impl Osd {
 impl CoreModule for Osd {
     fn id(&self) -> &'static str {
         "osd"
-    }
-
-    fn standalone(&self) -> bool {
-        true
     }
 
     fn facts(&self, _now: u64) -> Facts {
@@ -418,6 +414,6 @@ mod tests {
                 .starts_with("unknown osd method")
         );
         assert!(m.command(&Ctx::default(), "timer", &[], 0).is_none());
-        assert!(m.standalone() && m.facts(0).urgent_peek && m.facts(0).priority == 100);
+        assert!(m.facts(0).urgent_peek && m.facts(0).priority == 100);
     }
 }

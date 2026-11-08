@@ -890,9 +890,8 @@ impl Hub {
     }
 
     /// Tells the host what each known module should do: run when a notch
-    /// lists it (a standalone one: unless switched off) and the config does
-    /// not disable it (`"<id>": {"enabled": false}`), and its settings'
-    /// values (the config's `"<id>"` object). Only what changed is sent.
+    /// lists it, and its settings' values (the config's `"<id>"` object).
+    /// Only what changed is sent.
     fn sync_host(&self, g: &mut Inner) {
         let Some(host) = self.host() else { return };
         let cfg = g.store.config().clone();
@@ -903,9 +902,7 @@ impl Hub {
             .flat_map(|n| n.module_ids)
             .collect();
         for id in g.mods.ids() {
-            let off = notchd_core::config::value_at(&cfg, &format!("{id}.enabled"))
-                == Some(&Value::Bool(false));
-            let enabled = !off && (g.mods.standalone(&id) || listed.contains(&id));
+            let enabled = listed.contains(&id);
             let stored = match notchd_core::config::value_at(&cfg, &id) {
                 Some(v @ Value::Object(_)) => v.clone(),
                 _ => json!({}),

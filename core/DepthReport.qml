@@ -7,7 +7,7 @@ import QtQuick
 // collapsing), but only the card knows how deep it is: its depths go out as
 // `measure` whenever one changes, and again to a daemon that came back.
 // NotchSurface turns what the daemon answers into the space windows keep
-// clear. A guest copy (the visitor, a standalone module) reserves nothing and
+// clear. A hidden copy (the visitor, an undecorated notch) reserves nothing and
 // reports nothing.
 Item {
   id: report
@@ -29,7 +29,7 @@ Item {
 
   function send() {
     var c = report.copy
-    if (!c || c.guest || !c.daemon) return
+    if (!c || c.hiddenAtRest || !c.daemon) return
     var d = JSON.parse(report.depths)
     c.daemon.measure(c.wireNotch, c.fixedScreen, d[0], d[1], d[2])
   }

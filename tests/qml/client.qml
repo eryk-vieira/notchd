@@ -179,7 +179,7 @@ ShellRoot {
   }
 
   function staleState(rev, mode) {
-    return { t: "state", rev: rev, navigation: null, settingsOpen: false, notches: [], reserve: [], standalone: [], marker: mode }
+    return { t: "state", rev: rev, navigation: null, settingsOpen: false, notches: [], reserve: [], marker: mode }
   }
 
   // Bug it guards: an update that arrives late (an older rev) replacing a

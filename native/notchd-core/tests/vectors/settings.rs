@@ -43,7 +43,7 @@ pub fn call(f: &str, a: &[Value]) -> Option<Value> {
         "terminalInfo" => info(&s::terminal_info(arg(a, 0))),
         "moduleInfoPath" => json!(s::module_info_path(&text(a, 0), &text(a, 1))),
         "settingDefault" => or_undef(s::setting_default(&list(a, 0), &text(a, 1))),
-        "moduleFields" => json!(s::module_fields(&list(a, 0), &text(a, 1))),
+        "moduleFields" => json!(s::module_fields(&list(a, 0))),
         "modulePages" => json!(s::module_pages(&list(a, 0))),
         "moduleTitle" => json!(s::module_title(
             &text(a, 0),
@@ -51,12 +51,7 @@ pub fn call(f: &str, a: &[Value]) -> Option<Value> {
         )),
         "moduleKind" => json!(s::module_kind(arg(a, 0))),
         "catalogPart" => json!(s::catalog_part(&list(a, 0), arg(a, 1).as_str())),
-        "moduleStatus" => json!(s::module_status(
-            &text(a, 0),
-            &list(a, 1),
-            arg(a, 2).as_bool().unwrap_or(false),
-            arg(a, 3).as_bool()
-        )),
+        "moduleStatus" => json!(s::module_status(&text(a, 0), &list(a, 1))),
         "indexIn" => json!(s::index_in(opt(a, 0), &text(a, 1)).map_or(-1, |i| i as i64)),
         "notchPageId" => json!(s::notch_page_id(int(a, 0) as u64)),
         "notchIndexOfPage" => json!(s::notch_index_of_page(&text(a, 0))),

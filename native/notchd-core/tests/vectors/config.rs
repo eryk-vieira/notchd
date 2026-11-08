@@ -12,8 +12,11 @@ fn spec(v: &Value) -> c::NotchSpec {
         draggable: true,
         tabs: true,
         idle_icons: true,
+        decoration: true,
         workspaces: None,
         position: None,
+        declared: false,
+        in_config: true,
     }
 }
 
@@ -27,6 +30,11 @@ fn notch_json(s: &c::NotchSpec) -> Value {
     m.insert("draggable".into(), json!(s.draggable));
     m.insert("tabs".into(), json!(s.tabs));
     m.insert("idleIcons".into(), json!(s.idle_icons));
+    m.insert("decoration".into(), json!(s.decoration));
+    if s.declared {
+        m.insert("declared".into(), json!(true));
+        m.insert("inConfig".into(), json!(s.in_config));
+    }
     m.insert(
         "workspaces".into(),
         s.workspaces.clone().map_or(Value::Null, Value::Array),
@@ -59,7 +67,13 @@ pub fn call(f: &str, a: &[Value]) -> Option<Value> {
         "notches" => {
             let defaults = strs(arg(a, 1));
             let defaults: Vec<&str> = defaults.iter().map(String::as_str).collect();
-            Value::Array(c::notches(cfg, &defaults).iter().map(notch_json).collect())
+            let declared: Vec<Value> = arg(a, 2).as_array().cloned().unwrap_or_default();
+            Value::Array(
+                c::notches_with(cfg, &defaults, &declared)
+                    .iter()
+                    .map(notch_json)
+                    .collect(),
+            )
         }
         "moduleUnion" => {
             let specs: Vec<_> = list(a, 0).iter().map(spec).collect();
@@ -73,13 +87,6 @@ pub fn call(f: &str, a: &[Value]) -> Option<Value> {
                 .unwrap_or_default();
             let extra: Vec<&str> = extra.iter().map(String::as_str).collect();
             json!(c::module_union(&specs, &extra))
-        }
-        "moduleLoadList" => {
-            let specs: Vec<_> = list(a, 0).iter().map(spec).collect();
-            let (standalone, enabled) = (strs(arg(a, 1)), strs(arg(a, 2)));
-            let standalone: Vec<&str> = standalone.iter().map(String::as_str).collect();
-            let enabled: Vec<&str> = enabled.iter().map(String::as_str).collect();
-            json!(c::module_load_list(&specs, &standalone, &enabled))
         }
         "freeNotchId" => {
             let ids = strs(arg(a, 0));

@@ -25,9 +25,9 @@ Scope {
   property string layerNamespace: "notchd"
 
   readonly property var notch: root.copy ? root.copy.owner : null
-  // A standalone module's card: it keeps its own place, out of the packing,
+  // An undecorated notch's card: it keeps its own place, out of the packing,
   // and the notches it overlaps hide while it shows (`coverItem`).
-  readonly property bool standalone: !!root.notch && root.notch.standaloneId !== ""
+  readonly property bool undecorated: !!root.copy && root.copy.undecorated
   readonly property var compositor: root.copy ? root.copy.compositor : null
 
   // What the notch shows (NotchCard.mode): the copy's mode.
@@ -65,8 +65,8 @@ Scope {
   // peeks and the open notch show; while navigating, every notch does.
   readonly property bool hidden: (root.fullscreenOnScreen || root.offWorkspace)
     && (root.mode === "rest" || root.mode === "compact") && !(root.copy && root.copy.navShown)
-  // Also hidden while another notch on its edge is open over it, or a
-  // standalone card shows over it (`covered`).
+  // Also hidden while another notch on its edge is open over it, or an
+  // undecorated card shows over it (`covered`).
   readonly property bool concealed: root.hidden || (root.covered && !root.cardOpen)
   readonly property bool pinned: !!root.copy && root.copy.pinned
 
@@ -127,18 +127,18 @@ Scope {
     end: root.stretch.end,
     snap: card.snap,
     open: root.cardOpen,
-    skip: root.hidden || !!root.dragPlacement || root.windowScreenName === "" || root.standalone
+    skip: root.hidden || !!root.dragPlacement || root.windowScreenName === "" || root.undecorated
   })
-  // Its span along the edge where it shows, for Position.coveredByStandalone:
-  // a standalone card that shows covers the notches it overlaps.
+  // Its span along the edge where it shows, for Position.coveredByUndecorated:
+  // an undecorated card that shows covers the notches it overlaps.
   readonly property var coverItem: {
-    var middle = root.standalone ? root.wishCenter : root.wishCenter + root.packShift
+    var middle = root.undecorated ? root.wishCenter : root.wishCenter + root.packShift
     return {
       group: root.windowScreenName + "|" + card.edge,
       start: middle - card.along / 2,
       end: middle + card.along / 2,
-      cover: root.standalone,
-      shown: root.standalone && root.cardOpen && !root.hidden && root.windowScreenName !== ""
+      cover: root.undecorated,
+      shown: root.undecorated && root.cardOpen && !root.hidden && root.windowScreenName !== ""
     }
   }
   // The offset the card is placed at: the configured one, moved by the

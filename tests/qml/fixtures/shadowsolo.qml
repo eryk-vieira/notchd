@@ -1,8 +1,7 @@
 import QtQuick
 import "../core"
 
-// A standalone module (shadowsolo.json) for the shadow test: its own notch,
-// never in one of the config's.
+// The module of the undecorated notch the shadow test declares (`solo`).
 NotchModule {
   id: m
   title: "Solo"

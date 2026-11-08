@@ -3,7 +3,7 @@
 notchd as an Omarchy shell plugin. The repository root is the plugin folder: `manifest.json` there points at the QML in this directory. It adds three things to the core:
 
 - **Bar button** (`BarIndicator.qml`): the notchd icon in the bar, tinted with the theme. A click opens its panel: every notch, where it is and what it shows; clicking a notch opens it on the monitor you work on (or closes it), its gear opens that notch's settings, and Settings opens the settings window. A right click on the icon opens the settings window straight away.
-- **`osd` module** (`modules/osd.qml`): volume, brightness, mic and keyboard light. Standalone: no notch shows it; it has a place of its own on the monitor you work on, top center by default, over any notch there (`"osd": { "position": { "edge", "offset" } }`, or `"enabled": false` to switch it off; settings: Modules › OSD). On a side edge its bar stands up. The module itself lives in the daemon (`native/notchd-modules/src/osd.rs`); `modules/osd.qml` only owns the `osd` IPC target that every `omarchy osd` call uses, forwarding each call to it, so the stock OSD must stay disabled: `omarchy plugin disable omarchy.osd`. Undo it with `omarchy plugin enable omarchy.osd`.
+- **`osd` module** (`modules/osd.qml`): volume, brightness, mic and keyboard light. The host declares a notch for it, `osd`: no decoration (it shows nothing at rest and appears for a change), top center, on every monitor, the peek on the one you work on, over any notch there. It exists unless the config says otherwise: removing it (navigation `x x`, Settings, Notches) writes `"removedNotches": ["osd"]`; moving it or giving it more modules writes an entry in `notches` with `"id": "osd"` and only what differs; the notch's page is under Settings › Notches. (A config from before, `"osd": { "enabled": false }` or `"osd": { "position": ... }`, is migrated into that and the old keys go.) On a side edge its bar stands up. The module itself lives in the daemon (`native/notchd-modules/src/osd.rs`); `modules/osd.qml` only owns the `osd` IPC target that every `omarchy osd` call uses, forwarding each call to it, so the stock OSD must stay disabled: `omarchy plugin disable omarchy.osd`. Undo it with `omarchy plugin enable omarchy.osd`.
 - **Omarchy's theme**: `Service.qml` maps `qs.Commons` `Color`/`Style` onto the core's `Theme`, so the notch follows theme switches and `[font] base-size`.
 
 ## Install
@@ -27,7 +27,7 @@ After changing QML, run `omarchy restart shell`, because the hot reload keeps se
 
 ## Config
 
-`~/.config/notchd/config.json`, edited by hand, through the settings window (the notchd button in the bar) or with `omarchy-shell eryk.notchd set`. It takes the core keys (see the [README](../../README.md#config)); the OSD is standalone, so it is in no notch's `modules`.
+`~/.config/notchd/config.json`, edited by hand, through the settings window (the notchd button in the bar) or with `omarchy-shell eryk.notchd set`. It takes the core keys (see the [README](../../README.md#config)); the OSD is in the notch the host declares (above).
 
 ## IPC
 

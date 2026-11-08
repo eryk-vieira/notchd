@@ -225,7 +225,7 @@ pub struct Schema {
     pub pages: Vec<Page>,
     pub fields: Vec<Field>,
     /// The modules the settings pages are made of, built-in, host's and
-    /// user's alike: `{ moduleId, title, settings, standalone, agent,
+    /// user's alike: `{ moduleId, title, settings, agent,
     /// terminal }` each (the shape of a `catalog` entry). It is how a UI that
     /// does not ship the built-ins' JSON files learns their titles, kinds and
     /// setting defaults.
@@ -390,8 +390,6 @@ pub struct ModuleFacts {
     pub attention: bool,
     pub urgent_peek: bool,
     pub peek_on_focused_screen: bool,
-    /// Has a notch of its own.
-    pub standalone: bool,
 }
 
 /// The facts of every module the UI loads itself (a user module's come from
@@ -490,7 +488,7 @@ pub struct SettingsPage {
 }
 
 /// The modules of the host that the daemon cannot know (the Omarchy `osd`,
-/// a terminal of the config): `{ moduleId, title, settings, standalone, agent,
+/// a terminal of the config): `{ moduleId, title, settings, agent,
 /// terminal }` each, free-form like a module's settings fields. The
 /// built-in modules are the daemon's own (their JSON files are embedded), so a
 /// UI does not send them; one that does wins on the same id. The daemon
@@ -506,6 +504,13 @@ pub struct Catalog {
     /// when absent).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_modules: Option<Vec<String>>,
+    /// The notches the host declares (the Omarchy host's undecorated `osd`
+    /// notch): `{ id, decoration, modules, position }` each, the keys of a
+    /// notch of the config. One exists unless the config says otherwise (its
+    /// `removedNotches` lists the id); a notch of the config with the same
+    /// `id` overrides the keys it gives.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_notches: Option<Vec<Value>>,
     /// Deprecated and ignored, still accepted within proto 1: a folder with
     /// sidecars, which the daemon no longer runs. A UI omits it.
     #[serde(default, skip_serializing_if = "Option::is_none")]

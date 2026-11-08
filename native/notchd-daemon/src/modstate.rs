@@ -35,7 +35,6 @@ struct ModState {
     expanded_width: u32,
     urgent_peek: bool,
     peek_on_focused_screen: bool,
-    standalone: bool,
     /// The providers its manifest subscribes to.
     subscribe: Vec<String>,
     /// Its settings' defaults, as a config object (a key with a dot nests).
@@ -62,7 +61,6 @@ impl ModState {
             expanded_width: m.expanded_width.unwrap_or(DEFAULT_EXPANDED_WIDTH),
             urgent_peek: m.urgent_peek.unwrap_or(false),
             peek_on_focused_screen: m.peek_on_focused_screen.unwrap_or(false),
-            standalone: m.standalone.unwrap_or(false),
             subscribe: m.subscribe.clone(),
             defaults: settings_defaults(m),
             ..ModState::default()
@@ -90,7 +88,6 @@ impl ModState {
         f.info.urgent_peek = self.urgent_peek;
         f.expanded = self.effective(Slot::Expanded).is_some();
         f.peek_on_focused_screen = self.peek_on_focused_screen;
-        f.standalone = self.standalone;
         f
     }
 
@@ -122,14 +119,13 @@ pub struct Mods {
     retired: BTreeMap<String, (u64, u64)>,
 }
 
-/// `{ moduleId, title, settings, standalone }`: what the schema builds a
+/// `{ moduleId, title, settings }`: what the schema builds a
 /// module's page from (`Settings.moduleFields`).
 fn settings_def(id: &str, m: &Manifest) -> Value {
     json!({
         "moduleId": id,
         "title": m.title.clone().unwrap_or_else(|| id.to_string()),
         "settings": serde_json::to_value(&m.settings).unwrap_or_else(|_| json!([])),
-        "standalone": m.standalone.unwrap_or(false),
     })
 }
 
@@ -212,14 +208,12 @@ impl Mods {
         store: &mut Store,
         id: &str,
         title: &str,
-        standalone: bool,
         facts: &notchd_modules::Facts,
         views: Vec<(Slot, Option<Node>)>,
     ) -> Vec<ToUi> {
         let m = self.entry(id);
         m.builtin = true;
         m.title = title.to_string();
-        m.standalone = standalone;
         m.priority = facts.priority;
         m.active = facts.active;
         m.icon = facts.icon.clone();
@@ -249,10 +243,6 @@ impl Mods {
             .get(id)
             .map_or(Value::Null, |m| m.defaults.clone());
         with_defaults(&defaults, stored)
-    }
-
-    pub fn standalone(&self, id: &str) -> bool {
-        self.mods.get(id).is_some_and(|m| m.standalone)
     }
 
     /// Applies an event from the host: the store follows, and the `module`
@@ -750,14 +740,7 @@ mod tests {
                 (Slot::Compact, Some(text(&format!("title {n}")))),
                 (Slot::Expanded, Some(text(&format!("terminal {n}")))),
             ];
-            let out = mods.set_builtin(
-                &mut store,
-                "codex",
-                &format!("Codex {n}"),
-                false,
-                &facts,
-                views,
-            );
+            let out = mods.set_builtin(&mut store, "codex", &format!("Codex {n}"), &facts, views);
             ui.take(out);
         }
         ui.take(mods.apply(
@@ -769,7 +752,7 @@ mod tests {
         ));
         assert!(ui.view("codex", Slot::Expanded).is_none());
         let views = vec![(Slot::Expanded, Some(text("terminal again")))];
-        let out = mods.set_builtin(&mut store, "codex", "Codex", false, &facts, views);
+        let out = mods.set_builtin(&mut store, "codex", "Codex", &facts, views);
         ui.take(out);
         assert_eq!(
             ui.view("codex", Slot::Expanded),

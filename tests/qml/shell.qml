@@ -198,7 +198,7 @@ ShellRoot {
       { name: "adding a notch and removing it gives the config back", run: root.addAndRemoveNotch },
       { name: "a notch kept on a screen stays there and a peek also shows where you work", run: root.peekBesideHomedNotch },
       { name: "an OSD peek shows once, on the focused screen only", run: root.osdPeekOnFocusedScreen },
-      { name: "a standalone module shows in its own place, never in a notch", run: root.standaloneOwnPlace },
+      { name: "the host's undecorated notch shows its module's peeks, on the focused screen, over the notches", run: root.undecoratedHostNotch },
       { name: "a notch's settings all sit on its own page, under the Notches list", run: root.notchSettingsOnOnePage },
       { name: "a module no notch loads still has its settings page and title", run: root.unloadedModuleSettings },
       { name: "resources read the system", run: root.resourcesRead },
@@ -270,7 +270,7 @@ ShellRoot {
     onTriggered: root.until(root.daemonsReady, root.next, 15000)
   }
   function daemonsReady() {
-    var services = [service, multi, standaloneSvc, resourced, timed, played, typer, dropSvc, codexSvc, claudeSvc, codexMissingSvc,
+    var services = [service, multi, hostNotchSvc, resourced, timed, played, typer, dropSvc, codexSvc, claudeSvc, codexMissingSvc,
                     ownTermSvc, reconnectSvc, tallSvc, tabsSvc, idleSvc]
     return services.every(function(s) { return s.daemonReady })
   }
@@ -1094,68 +1094,86 @@ ShellRoot {
     })
   }
 
-  // Standalone modules (the OSD) are never in a notch, even one whose
-  // `modules` list them: they load on their own (unless switched off) and
-  // peek in a notch of their own, on the focused screen, where
-  // "<id>.position" says.
+  // The host declares a notch with no decoration (the Omarchy OSD): it exists
+  // without any config, on every screen, shows nothing at rest and peeks on
+  // the focused screen; the config moves it, or removes it.
   TestService {
-    id: standaloneSvc
-    ipcTarget: "notchd-qmltest-standalone"
-    configPath: root.dir + "/standalone.json"
+    id: hostNotchSvc
+    ipcTarget: "notchd-qmltest-hostnotch"
+    configPath: root.dir + "/hostnotch.json"
     compositor: twoScreens
     screens: [{ name: "A" }, { name: "B" }]
     defaultModules: ["activities"]
+    defaultNotches: [{ id: "osd", decoration: false, modules: ["osd"], position: { edge: "top", offset: 0.5 } }]
     hostModules: ({ osd: Qt.resolvedUrl("hosts/omarchy/modules/osd.qml") })
   }
 
-  function standaloneOwnPlace() {
-    var svc = standaloneSvc
-    function own() { return svc.standaloneNotch("osd") }
+  function undecoratedHostNotch() {
+    var svc = hostNotchSvc
+    function own() { return svc.notchById("osd") }
     function osd() { return svc.moduleById("osd") }
     root.go(function*() {
-      // Bug: in the Omarchy shell the OSD did not load at startup; the module
-      // list was rebuilt before the standalone ids followed the module files.
+      // Bug: in the Omarchy shell the OSD did not load at startup.
       yield root.waitFor(function() { return !!osd() && !!own() })
       root.check(!!osd() && !!own(), "the OSD did not load at startup")
-      svc.replaceConfig({ modules: ["osd", "activities"], position: { screen: "all" } })
+      root.check(own().decoration === false && own().moduleIds.join() === "osd", "not the host's notch: " + JSON.stringify(own().info))
+      root.check(own().copies.length === 2, "a copy on every screen: " + own().copies.length)
+      root.check(own().copies.every(function(c) { return c.mode === "rest" && !c.needsWindow && c.undecorated }), "it shows at rest")
+      root.check(svc.standaloneNotch === undefined, "standaloneNotch is still there")
+      root.check(JSON.stringify(svc.config) === "{}", "something was written for the defaults: " + JSON.stringify(svc.config))
+      svc.replaceConfig({ modules: ["activities"] })
       twoScreens.focusedScreenName = "B"
       yield root.settle(svc)
-      root.check(!!osd(), "the OSD did not load")
-      root.check(svc.isStandalone("osd"), "the OSD is not standalone")
-      root.check(svc.notches[0].modules.indexOf(osd()) === -1, "the notch took the OSD")
-      root.check(!!own() && own().edge === "top" && own().placement.offset === 0.5, "no OSD place at the top center")
+      root.check(svc.notches[0].modules.indexOf(osd()) === -1, "the first notch took the OSD")
+      root.check(own().edge === "top" && own().placement.offset === 0.5, "no OSD place at the top center")
       svc.daemonIpc("osd", ["show", JSON.stringify({ icon: "volume", value: "40" })], "ok")
       yield root.settle(svc)
       root.check(own().copyOn("B").mode === "peek", "no peek on B: " + own().copyOn("B").mode)
-      root.check(own().copyOn("A").mode !== "peek", "the OSD peeked on A too")
+      root.check(own().copyOn("B").needsWindow, "no window for the peek")
+      root.check(own().copyOn("A").mode !== "peek" && !own().copyOn("A").needsWindow, "the OSD peeked on A too")
       root.check(svc.notches[0].copies.every(function(c) { return c.mode !== "peek" }), "a notch peeked")
       svc.dismissPeek(null)
-      svc.setConfigValue("osd.position", { edge: "bottom", offset: 0.2 })
+      // Moving it stores what differs, in an entry of its own.
+      svc.setConfigValue("notches.1.position.edge", "bottom")
+      svc.setConfigValue("notches.1.position.offset", 0.2)
       twoScreens.focusedScreenName = "A"
       yield root.settle(svc)
+      yield root.waitFor(function() { return own().edge === "bottom" })
       root.check(own().edge === "bottom" && own().placement.offset === 0.2, "position: " + JSON.stringify(own().placement))
+      root.check(JSON.stringify(svc.config.notches) === JSON.stringify([{}, { id: "osd", position: { edge: "bottom", offset: 0.2 } }]),
+                 "the entry: " + JSON.stringify(svc.config))
       svc.daemonIpc("osd", ["show", JSON.stringify({ icon: "brightness", value: "70" })], "ok")
       yield root.settle(svc)
       root.check(own().copyOn("A").mode === "peek", "no peek on A: " + own().copyOn("A").mode)
       svc.dismissPeek(null)
-      svc.setConfigValue("osd.enabled", false)
+      // Navigation lists it like any notch and draws its place.
+      svc.navigate()
+      yield root.settle(svc)
+      root.check(own().navNumber > 0 && own().copies.every(function(c) { return c.navShown && c.needsWindow }),
+                 "navigation does not draw the undecorated notch: " + own().navNumber)
+      svc.navigate()
+      yield root.settle(svc)
+      root.check(own().copies.every(function(c) { return !c.navShown }), "its place stays drawn after navigation")
+      // Taking it out writes that, and unloads the module.
+      svc.removeNotch("osd")
       yield root.settle(svc)
       yield root.waitFor(function() { return osd() === null && own() === null })
-      root.check(osd() === null && own() === null, "switched off, the OSD still loads")
-      root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "osd" && m.standalone }), "the OSD left the catalog")
-      root.check(svc.settingsSchema.some(function(f) { return f.key === "osd.enabled" && f.page === "modules/osd" }), "no switch on its page")
+      root.check(osd() === null && own() === null, "removed, the OSD notch is still there")
+      root.check(JSON.stringify(svc.config.removedNotches) === JSON.stringify(["osd"]), "removal not written: " + JSON.stringify(svc.config))
+      root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "osd" && m.standalone === undefined }), "the OSD left the catalog")
       var lists = svc.settingsSchema.filter(function(f) { return f.type === "moduleCatalog" }).map(function(f) { return f.part })
-      root.check(JSON.stringify(lists) === JSON.stringify(["notch", "agent", "terminal", "standalone"]),
-                 "the Modules page does not list agents and standalone modules apart: " + JSON.stringify(lists))
-      root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "claude" && m.agent && !m.standalone }), "claude is no agent")
+      root.check(JSON.stringify(lists) === JSON.stringify(["notch", "agent", "terminal"]),
+                 "the Modules page lists: " + JSON.stringify(lists))
+      root.check(!svc.settingsSchema.some(function(f) { return f.key === "osd.enabled" || f.key === "osd.position.edge" }), "the old osd keys are still fields")
+      root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "claude" && m.agent }), "claude is no agent")
       root.check(svc.reportedCatalog.every(function(m) { return m.moduleId === "osd" }), "the host reported more than its own modules: " + JSON.stringify(svc.reportedCatalog.map(function(m) { return m.moduleId })))
       root.check(svc.moduleSetting("codex", "command") === "codex","codex's command default: " + svc.moduleSetting("codex", "command"))
       root.check(svc.agentCommand("media", "toggle").indexOf("no agent media") === 0, "media took an agent command")
-      svc.setConfigValue("osd.enabled", undefined)
+      // The config says otherwise again: it is back.
+      svc.replaceConfig({})
       yield root.settle(svc)
       yield root.waitFor(function() { return !!osd() && !!own() })
-      root.check(!!osd() && !!own(), "switched back on, the OSD did not load")
-      svc.replaceConfig({})
+      root.check(!!osd() && !!own(), "back by default, the OSD did not load")
     })
   }
 
@@ -2593,7 +2611,7 @@ ShellRoot {
       readonly property bool vertical: w.edge === "left" || w.edge === "right"
       readonly property var packed: layoutUnderTest.packOf(w.copy)
       readonly property real packShift: w.packed ? w.packed.shift : 0
-      readonly property bool covered: (!!w.packed && w.packed.covered) || layoutUnderTest.coveredByStandalone(w.copy)
+      readonly property bool covered: (!!w.packed && w.packed.covered) || layoutUnderTest.coveredByUndecorated(w.copy)
       readonly property real rowDepth: layoutUnderTest.rowDepthOf(w.copy)
       readonly property var cornerInset: layoutUnderTest.cornerInsetOf(w.copy)
       readonly property var cornerSpan: layoutUnderTest.cornerSpanOf(w.copy)
@@ -2950,9 +2968,9 @@ ShellRoot {
       root.check(s.settingsPages.some(function(p) { return p.id === "modules/gauge" && p.label === "Gauge" }), "no page for gauge")
       var entry = s.moduleCatalog.filter(function(m) { return m.moduleId === "gauge" })[0]
       if (!root.check(!!entry, "gauge is not in the Modules page's catalog")) return
-      root.check(entry.title === "Gauge" && !entry.standalone && entry.settings.length === 1, "catalog entry: " + JSON.stringify(entry))
+      root.check(entry.title === "Gauge" && entry.settings.length === 1, "catalog entry: " + JSON.stringify(entry))
       root.check(s.moduleSettingDefault("gauge", "unit") === "kg" && s.moduleSetting("gauge", "unit") === "kg", "its default setting is " + s.moduleSettingDefault("gauge", "unit"))
-      root.check(s.isStandalone("gauge") === false && s.isAgent("gauge") === false, "kind of gauge")
+      root.check(s.isAgent("gauge") === false, "kind of gauge")
       root.check(s.reportedCatalog.every(function(m) { return m.moduleId !== "gauge" }), "the daemon was told of its own module")
       root.check(shelfList.all.indexOf("gauge") !== -1 && shelfList.available.indexOf("gauge") !== -1, "a notch's list does not offer gauge")
       shelfList.toggle("gauge")

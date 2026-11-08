@@ -56,7 +56,7 @@ const one = (cfg, defaults = ['media']) => plain(Config.notches(cfg, defaults))[
 test('notches: without a list, the top level is the one notch, at its defaults', () => {
   assert.deepEqual(plain(Config.notches({}, ['media'])), [{
     id: 'main', index: 0, prefix: '', moduleIds: ['media'],
-    reserveSpace: false, draggable: true, tabs: true, idleIcons: true, workspaces: null, position: undefined
+    reserveSpace: false, draggable: true, tabs: true, idleIcons: true, decoration: true, workspaces: null, position: undefined
   }].map(plain));
   assert.equal(plain(Config.notches({ notches: [] }, [])).length, 1);
 });
@@ -163,12 +163,30 @@ test('withWorkspace adds the workspace a notch was dropped on', () => {
   assert.deepEqual(plain(Config.withWorkspace({ length: 2, 0: 1, 1: 3 }, { id: 2, name: '2' })), [1, 2, 3]);
 });
 
-test('moduleLoadList: what notches show, never a standalone module, then the standalone ones switched on', () => {
-  const specs = [{ moduleIds: ['osd', 'media'] }, { moduleIds: ['activities', 'media'] }];
-  assert.deepEqual(plain(Config.moduleLoadList(specs, ['osd', 'clock'], ['osd', 'clock'])), ['media', 'activities', 'osd', 'clock']);
-  assert.deepEqual(plain(Config.moduleLoadList(specs, ['osd', 'clock'], ['clock'])), ['media', 'activities', 'clock'], 'osd is off, even listed');
-  assert.deepEqual(plain(Config.moduleLoadList(specs, [], ['media'])), ['osd', 'media', 'activities'], 'enabled only counts for standalone ones');
-  assert.deepEqual(plain(Config.moduleLoadList([], undefined, undefined)), []);
+test('decoration is on unless a notch says false', () => {
+  assert.equal(Config.notches({}, [])[0].decoration, true);
+  assert.equal(Config.notches({ decoration: false }, [])[0].decoration, false);
+  assert.deepEqual(plain(Config.notches({ notches: [{ id: 'a' }, { id: 'b', decoration: false }] }, []).map((n) => n.decoration)), [true, false]);
+});
+
+test('a host notch exists without config, after the config\'s own, and never inherits the top level', () => {
+  const osd = { id: 'osd', decoration: false, modules: ['osd'], position: { edge: 'top', offset: 0.5 } };
+  const specs = plain(Config.notches({ modules: ['timer'], tabs: false, position: { edge: 'left' } }, ['media'], [osd]));
+  assert.equal(specs.length, 2);
+  assert.deepEqual(specs[1], { id: 'osd', index: 1, prefix: 'notches.1.', moduleIds: ['osd'], reserveSpace: false, draggable: true,
+    tabs: true, idleIcons: true, decoration: false, workspaces: null, position: { edge: 'top', offset: 0.5 }, declared: true, inConfig: false });
+  assert.equal(specs[0].declared, undefined);
+});
+
+test('the config\'s entry of a host notch\'s id overrides only the keys it gives, removedNotches removes it', () => {
+  const osd = { id: 'osd', decoration: false, modules: ['osd'], position: { edge: 'top', offset: 0.5 } };
+  const cfg = { notches: [{ id: 'main' }, { id: 'osd', position: { offset: 0.2 } }] };
+  const specs = plain(Config.notches(cfg, [], [osd]));
+  assert.equal(specs.length, 2);
+  assert.deepEqual([specs[1].decoration, specs[1].moduleIds, specs[1].position, specs[1].inConfig],
+    [false, ['osd'], { edge: 'top', offset: 0.2 }, true]);
+  assert.equal(Config.notches({ removedNotches: ['osd'] }, [], [osd]).length, 1);
+  assert.equal(Config.notches({ removedNotches: ['clock'] }, [], [osd]).length, 2);
 });
 
 test('terminals: each entry with a command, in order, its title or ""', () => {

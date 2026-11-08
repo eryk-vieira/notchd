@@ -19,7 +19,7 @@ Start with a read when the target or module IDs are uncertain:
 notchd ipc state
 ```
 
-The reply is JSON with `notches`, `standalone`, and loaded `modules`. Inspect their IDs instead of assuming a notch or module exists. If the daemon cannot be reached, report the socket error; do not run `daemon --ensure` as a retry, since it can replace another version's daemon and end its sessions.
+The reply is JSON with `notches`, `visitor`, and loaded `modules`. Inspect their IDs instead of assuming a notch or module exists. If the daemon cannot be reached, report the socket error; do not run `daemon --ensure` as a retry, since it can replace another version's daemon and end its sessions.
 
 ## Use the available IPC
 

@@ -7,9 +7,11 @@ import "Settings.js" as Settings
 // each with its number, where it is and what it shows, and a gear that opens
 // its page ("notch/<index>", by its place in the config), and Add. Add asks
 // the daemon for a new notch (NotchService.addNotch: its rule picks the
-// screen and the spot) and opens its page; the trash can (with more than one)
-// takes a notch out, and with one left the config goes back to its top-level
-// keys. The list is edited through the service rather than `edited(value)`.
+// screen and the spot) and opens its page; the trash can takes a notch out
+// (not the last one that shows at rest), and with one left the config goes
+// back to its top-level keys; a notch the host declares goes by a note in the
+// config. The list is edited through the service rather than `edited(value)`.
+// A notch without decoration says so under its name.
 ColumnLayout {
   id: control
 
@@ -59,8 +61,9 @@ ColumnLayout {
           subtitle: Settings.notchSummary({
             edge: entry.modelData.edge,
             moduleIds: entry.modelData.moduleIds
-          }, control.titles)
-          removable: control.notches.length > 1
+          }, control.titles) + (entry.modelData.decoration ? "" : " · only while it peeks")
+          // The daemon keeps the last notch that shows at rest.
+          removable: control.notches.some(function(n) { return n !== entry.modelData && n.decoration })
           onOpenRequested: control.open(entry.modelData.index)
           onRemoveRequested: if (control.svc) control.svc.removeNotch(entry.modelData.notchId)
         }

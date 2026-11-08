@@ -1,7 +1,6 @@
 //! The modules that live in the daemon (`notchd-modules`: timer, activities,
 //! resources, osd), driven the way the module host drives a user module's
-//! process: they are loaded while a notch lists them (a standalone one:
-//! unless switched off), told the config, the time, a provider's data, an
+//! process: they are loaded while a notch lists them, told the config, the time, a provider's data, an
 //! IPC command or an `event`, and after each call their facts, views and
 //! effects (a peek, a notification) go to the store and the UIs, only what
 //! changed. Pure over a [`Store`] and [`Mods`] and a time, like `modstate`;
@@ -204,12 +203,7 @@ impl CoreHost {
         for c in st.notches.iter().flat_map(|n| n.copies.iter()) {
             seen.push((c.mode, c.peek.as_ref().map(|p| p.module.clone())));
         }
-        for c in st
-            .standalone
-            .iter()
-            .flat_map(|n| n.copies.iter())
-            .chain(st.visitor.iter())
-        {
+        for c in &st.visitor {
             seen.push((c.mode, c.peek.as_ref().map(|p| p.module.clone())));
         }
         let mut ctx = Ctx {
@@ -238,12 +232,7 @@ impl CoreHost {
         for c in st.notches.iter().flat_map(|n| n.copies.iter()) {
             see(c.mode, c.pinned, &c.shown);
         }
-        for c in st
-            .standalone
-            .iter()
-            .flat_map(|n| n.copies.iter())
-            .chain(st.visitor.iter())
-        {
+        for c in &st.visitor {
             see(c.mode, c.pinned, &c.shown);
         }
         out
@@ -301,23 +290,7 @@ impl CoreHost {
         };
         for id in candidates {
             let known = notchd_modules::IDS.contains(&id) || dynamic.contains(&id);
-            let probe = known
-                && self
-                    .loaded
-                    .get(id)
-                    .map(|m| m.standalone())
-                    .or_else(|| make(id).map(|m| m.standalone()))
-                    .unwrap_or(false);
-            let off = notchd_core::config::value_at(&cfg, &format!("{id}.enabled"))
-                == Some(&Value::Bool(false));
-            // A standalone module belongs to a host (the OSD to the one that
-            // forwards its IPC target): it runs once the host declares it.
-            let wanted = known
-                && if probe {
-                    !off && store.ui_declares(id)
-                } else {
-                    listed.iter().any(|l| l == id)
-                };
+            let wanted = known && listed.iter().any(|l| l == id);
             if wanted && !self.loaded.contains_key(id) {
                 if let Some(m) = make(id) {
                     self.loaded.insert(id, m);
@@ -371,9 +344,8 @@ impl CoreHost {
         let title = m
             .title()
             .unwrap_or_else(|| notchd_modules::title(id).to_string());
-        let standalone = m.standalone();
         store.set_module_extra(id, m.state_extra());
-        let out = mods.set_builtin(store, id, &title, standalone, &facts, views);
+        let out = mods.set_builtin(store, id, &title, &facts, views);
         for e in effects {
             match e {
                 Effect::Peek(ms) => store.request_peek(id, Some(f64::from(ms)), now),
@@ -781,17 +753,22 @@ mod tests {
     }
 
     #[test]
-    fn a_standalone_module_loads_unless_switched_off() {
+    fn the_osd_loads_while_a_notch_lists_it_like_any_module() {
         let (mut h, mut s, mut m, _) = rig(json!({"modules": []}));
         h.sync(&mut s, &mut m, 0);
-        assert!(!h.has("osd"), "no host declared it");
+        assert!(!h.has("osd"), "no notch lists it");
+        // The host declares a notch with it: it exists and the module loads.
         s.set_ui_catalog(
-            vec![json!({"moduleId": "osd", "title": "OSD", "settings": [], "standalone": true})],
+            vec![json!({"moduleId": "osd", "title": "OSD", "settings": []})],
             None,
+            Some(vec![
+                json!({"id": "osd", "decoration": false, "modules": ["osd"]}),
+            ]),
         );
         h.sync(&mut s, &mut m, 0);
         assert!(h.has("osd"));
-        s.set_config(json!({"modules": [], "osd": {"enabled": false}}));
+        // The config removes the notch: nothing lists it, the module goes.
+        s.remove_notch("osd").unwrap();
         h.sync(&mut s, &mut m, 0);
         assert!(!h.has("osd"));
         assert_eq!(

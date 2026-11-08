@@ -270,14 +270,13 @@ export function terminalIds(cfg, Config) {
     return Config.terminals(cfg ?? {}, []).list.map(t => t.id);
 }
 
-// A `modules` field (ModuleList.qml): every module a notch can show (not the
-// standalone ones), the switched-on ones first and in order. A row:
+// A `modules` field (ModuleList.qml): every module a notch can show, the
+// switched-on ones first and in order. A row:
 // `{id, title, on, known, canUp, canDown}`.
 export function moduleRows(field, catalog, extraIds = []) {
-    const standalone = new Set((catalog ?? []).filter(m => m.standalone).map(m => m.moduleId));
     const available = (catalog ?? []).map(m => m.moduleId).concat(extraIds)
-        .filter((id, i, all) => !standalone.has(id) && all.indexOf(id) === i);
-    const on = list(valueOf(field)).filter(id => !standalone.has(id));
+        .filter((id, i, all) => all.indexOf(id) === i);
+    const on = list(valueOf(field));
     const names = titles(catalog);
     const ids = on.concat(available.filter(id => !on.includes(id)));
     return ids.map(id => {
@@ -314,7 +313,8 @@ export function notchRows(state, catalog, Settings) {
     return notches.map((n, index) => ({
         index, id: n.id, number: n.number ?? 0,
         summary: Settings.notchSummary({edge: n.edge, moduleIds: n.modules ?? []}, names),
-        removable: notches.length > 1,
+        // The daemon keeps the last decorated notch.
+        removable: notches.some(o => o.id !== n.id && o.decoration !== false),
     })).sort((a, b) => place(a) - place(b) || a.index - b.index);
 }
 
@@ -330,14 +330,13 @@ export function catalogRows(field, schema, state, cfg, Settings, Config) {
     if (field.part === 'terminal') {
         return Config.terminals(cfg ?? {}, []).list.map(t => ({
             id: t.id, title: t.title || t.id,
-            status: Settings.moduleStatus(t.id, specs, false, true),
+            status: Settings.moduleStatus(t.id, specs),
             page: pageOf(t.id), removable: true,
         }));
     }
     return Array.from(Settings.catalogPart(catalog, field.part)).map(m => ({
         id: m.moduleId, title: m.title || capitalized(m.moduleId),
-        status: Settings.moduleStatus(m.moduleId, specs, !!m.standalone,
-            Config.valueAt(cfg ?? {}, `${m.moduleId}.enabled`) !== false),
+        status: Settings.moduleStatus(m.moduleId, specs),
         page: pageOf(m.moduleId), removable: false,
     }));
 }

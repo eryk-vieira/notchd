@@ -113,11 +113,6 @@ impl Settings {
             .map(|f| f["default"].clone())
             .unwrap_or(Value::Null)
     }
-
-    /// `"<id>": { "enabled": false }` and the like are the host's business.
-    pub fn standalone(&self) -> bool {
-        self.defaults["standalone"] == json!(true)
-    }
 }
 
 #[cfg(test)]

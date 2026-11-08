@@ -5,8 +5,7 @@ import "Settings.js" as Settings
 
 // `moduleCatalog` field: one list of the modules the host can load, the
 // field's `part` (Settings.moduleKind): "notch" (notches show them),
-// "agent" (coding agents), "terminal" (the config's `terminals`) or
-// "standalone" (a place of their own);
+// "agent" (coding agents) or "terminal" (the config's `terminals`);
 // where (or whether) each shows, and a gear that opens its own page
 // ("modules/<id>") when it has settings, loaded or not. The terminals'
 // list also makes and removes them, through the service
@@ -50,8 +49,7 @@ ColumnLayout {
           required property var modelData
           required property int index
           readonly property string status: control.svc
-            ? Settings.moduleStatus(modelData.moduleId, control.svc.notchSpecs, modelData.standalone,
-                                    control.svc.standaloneEnabled(modelData.moduleId)) : ""
+            ? Settings.moduleStatus(modelData.moduleId, control.svc.notchSpecs) : ""
 
           width: list.width
           first: entry.index === 0

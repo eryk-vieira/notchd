@@ -116,17 +116,18 @@ test('colors are Qt hex, alpha first, both ways', () => {
 const catalog = [
   { moduleId: 'media', title: 'Now playing' },
   { moduleId: 'timer', title: 'Timer' },
-  { moduleId: 'osd', title: 'OSD', standalone: true },
+  { moduleId: 'osd', title: 'OSD' },
   { moduleId: 'claude', title: 'Claude', agent: true },
 ];
 
-test('a notch module list: switched-on first in order, then the rest; standalone ones never', () => {
-  const f = field({ type: 'modules', key: 'modules', default: ['media'], value: ['timer', 'gone', 'osd'] });
+test('a notch module list: switched-on first in order, then the rest', () => {
+  const f = field({ type: 'modules', key: 'modules', default: ['media'], value: ['timer', 'gone'] });
   const rows = M.moduleRows(f, catalog, ['btop']);
   assert.deepEqual(rows.map((r) => [r.id, r.on, r.known, r.canUp, r.canDown]), [
     ['timer', true, true, false, true],
     ['gone', true, false, true, false],
     ['media', false, true, false, false],
+    ['osd', false, true, false, false],
     ['claude', false, true, false, false],
     ['btop', false, true, false, false],
   ]);
@@ -158,6 +159,12 @@ test('the notch list: where each is and what it shows, removable with more than 
   assert.equal(M.notchRows({ notches: [state.notches[0]] }, catalog, Settings)[0].removable, false);
 });
 
+test('an undecorated notch can go while another stays, and is no reason to keep the last decorated one', () => {
+  const hidden = { id: 'osd', edge: 'top', number: 2, decoration: false, modules: ['osd'] };
+  const rows = M.notchRows({ order: ['main', 'osd'], notches: [state.notches[0], hidden] }, catalog, Settings);
+  assert.deepEqual(rows.map((r) => [r.id, r.removable]), [['main', false], ['osd', true]]);
+});
+
 test('the notch list follows the daemon\'s spatial order, each with its number, its page by config index', () => {
   // Config order Media (left), Herdr (top center), FLEX (top left).
   const spatial = { order: ['flex', 'herdr', 'media'], notches: [
@@ -179,9 +186,8 @@ test('a module catalog part: status from the state, a page when the schema has o
   assert.deepEqual(rows.map((r) => [r.id, r.status, r.page]), [
     ['media', 'In main', 'modules/media'],
     ['timer', 'In main', ''],
+    ['osd', 'Off', ''],
   ]);
-  assert.deepEqual(M.catalogRows({ part: 'standalone' }, schema, state, { osd: { enabled: false } }, Settings, Config)
-    .map((r) => [r.id, r.status]), [['osd', 'Off']]);
   const cfg = { terminals: { btop: { command: 'btop' } } };
   assert.deepEqual(plain(M.catalogRows({ part: 'terminal' }, schema, state, cfg, Settings, Config)
     .map((r) => [r.id, r.removable])), [['btop', true]], 'the terminals come from the config');

@@ -9,7 +9,7 @@ Files, under `geometry/`:
 
 - `position.json`: `place`, `pack`, `dragTarget`, `nearestEdge`, `stretch`,
   `insets`, `isVertical`, `screenAt`, `rowDepths`, `corners`,
-  `coveredByStandalone`, `cornerInput`.
+  `coveredByUndecorated`, `cornerInput`.
 - `outline.json`: `path`.
 
 Format:

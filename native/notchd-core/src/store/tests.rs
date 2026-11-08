@@ -272,38 +272,6 @@ fn a_peek_on_focused_screen_peeks_once_in_the_first_notch_that_shows_it() {
 }
 
 #[test]
-fn a_standalone_module_peeks_in_its_own_notch_on_the_focused_screen() {
-    let mut s = store(cfg());
-    s.set_screens(screens(&["DP-1", "DP-2"], "DP-2"));
-    let mut osd = ModuleFacts::new("osd");
-    osd.standalone = true;
-    osd.info.peek = true;
-    s.set_module(osd);
-    s.request_peek("osd", Some(1000.0), 0);
-    let st = s.take_changes(0).state.unwrap();
-    assert_eq!(
-        st.notches[0].copies[0].peek, None,
-        "never in a notch of the config"
-    );
-    let own = &st.standalone[0];
-    assert_eq!(own.id, "osd");
-    let modes: Vec<_> = own
-        .copies
-        .iter()
-        .map(|c| (c.screen.as_str(), c.mode))
-        .collect();
-    assert_eq!(modes, [("DP-1", Mode::Rest), ("DP-2", Mode::Peek)]);
-    s.advance(1000);
-    let st = s.take_changes(1000).state.unwrap();
-    assert!(st.standalone[0].copies.iter().all(|c| c.mode == Mode::Rest));
-    s.set_value("osd.enabled", Some(&json!(false)));
-    assert!(
-        s.state().standalone.is_empty(),
-        "switched off in the config"
-    );
-}
-
-#[test]
 fn the_state_rev_moves_only_when_the_state_changes() {
     let mut s = store(cfg());
     let rev = s.state().rev;
@@ -832,19 +800,6 @@ fn a_focused_screen_peek_with_no_notch_there_only_peeks_in_the_visitor() {
     assert!(st.notches[0].copies[0].peek.is_none(), "once, not twice");
 }
 
-#[test]
-fn a_standalone_module_never_goes_to_the_visitor() {
-    let mut s = visitor_store();
-    let mut osd = ModuleFacts::new("osd");
-    osd.standalone = true;
-    osd.info.peek = true;
-    s.set_module(osd);
-    s.request_peek("osd", Some(1000.0), 0);
-    let st = s.take_changes(0).state.unwrap();
-    assert!(st.visitor.iter().all(|c| c.mode == Mode::Rest));
-    assert_eq!(st.standalone[0].id, "osd");
-}
-
 // ------------------------------------------------------------------- linger
 
 #[test]
@@ -874,31 +829,6 @@ fn a_guests_window_lingers_after_it_closes_then_drops() {
         s.state().notches[0].copies.iter().all(|c| c.needs_window),
         "a notch of the config always has its window"
     );
-}
-
-#[test]
-fn a_standalone_copy_lingers_too_and_a_reopen_restarts_it() {
-    let mut s = store(cfg());
-    let mut osd = ModuleFacts::new("osd");
-    osd.standalone = true;
-    osd.info.peek = true;
-    s.set_module(osd);
-    s.set_window_linger(300);
-    s.request_peek("osd", Some(400.0), 0);
-    s.take_changes(0);
-    assert!(s.state().standalone[0].copies[0].needs_window);
-    s.advance(400);
-    s.request_peek("osd", Some(400.0), 500);
-    s.advance(900);
-    s.take_changes(900);
-    assert!(
-        s.state().standalone[0].copies[0].needs_window,
-        "second close at 900"
-    );
-    s.advance(1199);
-    assert!(s.state().standalone[0].copies[0].needs_window);
-    s.advance(1200);
-    assert!(!s.state().standalone[0].copies[0].needs_window);
 }
 
 // ------------------------------------------------------------------ reserve
@@ -1100,7 +1030,7 @@ fn the_built_in_catalog_shapes_the_schema_and_the_host_and_user_modules_win_thei
     let mods = schema.modules.expect("listed");
     assert_eq!(mods.len(), 1);
     // The host's entry replaces it, not adds to it.
-    s.set_ui_catalog(vec![entry("Host's")], None);
+    s.set_ui_catalog(vec![entry("Host's")], None, None);
     let schema = s.take_changes(2).schema.expect("changed");
     assert_eq!(schema.modules.expect("listed").len(), 1);
     assert!(schema.pages.iter().any(|p| p.label == "Host's"));
@@ -1120,8 +1050,9 @@ fn the_uis_catalog_shapes_the_schema_and_a_user_module_wins_its_id() {
     s.set_ui_catalog(
         vec![
             agent.clone(),
-            json!({"moduleId": "osd", "title": "OSD", "standalone": true, "settings": []}),
+            json!({"moduleId": "osd", "title": "OSD", "settings": []}),
         ],
+        None,
         None,
     );
     let schema = s.take_changes(1).schema.expect("the catalog changed it");
@@ -1132,7 +1063,7 @@ fn the_uis_catalog_shapes_the_schema_and_a_user_module_wins_its_id() {
         .filter_map(|f| f.part.as_deref())
         .collect();
     assert!(
-        parts.contains(&"agent") && parts.contains(&"standalone"),
+        parts.contains(&"agent") && !parts.contains(&"standalone"),
         "{parts:?}"
     );
     assert!(schema.pages.iter().any(|p| p.id == "modules/claude"));
@@ -1148,7 +1079,7 @@ fn the_uis_catalog_shapes_the_schema_and_a_user_module_wins_its_id() {
     );
     // A new report replaces the last one.
     s.remove_module_def("claude");
-    s.set_ui_catalog(Vec::new(), None);
+    s.set_ui_catalog(Vec::new(), None, None);
     let schema = s.take_changes(3).schema.expect("changed");
     assert!(!schema.pages.iter().any(|p| p.id == "modules/claude"));
 }
@@ -1399,33 +1330,13 @@ fn a_notch_lists_the_hosts_default_modules_when_the_config_lists_none() {
     s.set_config(json!({}));
     s.set_screens(screens(&["DP-1"], "DP-1"));
     assert_eq!(s.state().notches[0].modules, ["media", "activities"]);
-    s.set_ui_catalog(Vec::new(), Some(vec!["timer".into()]));
+    s.set_ui_catalog(Vec::new(), Some(vec!["timer".into()]), None);
     assert_eq!(s.state().notches[0].modules, ["timer"]);
     s.set_config(json!({"modules": ["media"]}));
     assert_eq!(s.state().notches[0].modules, ["media"], "the config wins");
-    s.set_ui_catalog(Vec::new(), None);
+    s.set_ui_catalog(Vec::new(), None, None);
     s.set_config(json!({}));
     assert_eq!(s.state().notches[0].modules, ["media", "activities"]);
-}
-
-#[test]
-fn a_guest_copy_shows_the_expanded_views_of_its_modules_while_open() {
-    let mut s = store(cfg());
-    let mut osd = module("osd", 10.0);
-    osd.standalone = true;
-    s.set_module(osd);
-    s.take_changes(0);
-    s.pointer("osd", "DP-1", PointerEv::Press, 0);
-    s.take_changes(0);
-    let c = &s.state().standalone[0].copies[0];
-    assert_eq!(c.mode, Mode::Expanded);
-    assert!(c.pinned);
-    assert_eq!(c.shown, ["osd"]);
-    assert_eq!(c.keyboard, KeyboardFocus::Exclusive);
-    // The visitor opens on every module's expanded view.
-    s.pointer("", "DP-1", PointerEv::Press, 1);
-    s.take_changes(1);
-    assert_eq!(s.state().visitor[0].shown, ["timer", "media"]);
 }
 
 // ------------------------------------------------- spatial order and creating
@@ -1774,4 +1685,383 @@ fn a_notch_hidden_by_workspaces_keeps_its_number_where_it_would_be() {
     let st = s.state();
     assert!(st.notches[1].copies[0].covered);
     assert_eq!(numbers(&s), [("a".to_string(), 2), ("b".to_string(), 1)]);
+}
+
+// ------------------------------------------------- undecorated notches
+
+fn osd_decl() -> Value {
+    json!({"id": "osd", "decoration": false, "modules": ["osd"],
+           "position": {"edge": "top", "offset": 0.5}})
+}
+
+fn osd_module() -> ModuleFacts {
+    let mut osd = ModuleFacts::new("osd");
+    osd.info.peek = true;
+    osd.info.urgent_peek = true;
+    osd.info.priority = 100.0;
+    osd
+}
+
+/// The host declares the OSD notch; media and timer in "main"; two screens.
+fn osd_store(cfg: Value) -> Store {
+    let mut s = Store::new();
+    s.set_config(cfg);
+    s.set_ui_catalog(Vec::new(), None, Some(vec![osd_decl()]));
+    s.set_screens(screens(&["DP-1", "DP-2"], "DP-2"));
+    s.set_module(module("media", 50.0));
+    s.set_module(module("timer", 80.0));
+    s.set_module(osd_module());
+    s.take_changes(0);
+    s.take_write();
+    s
+}
+
+fn notch_of<'a>(st: &'a ps::State, id: &str) -> &'a ps::Notch {
+    st.notches.iter().find(|n| n.id == id).expect("the notch")
+}
+
+#[test]
+fn a_host_notch_exists_undecorated_on_every_screen_without_anything_written() {
+    let mut s = osd_store(cfg());
+    let st = s.state();
+    let osd = notch_of(&st, "osd");
+    assert!(!osd.decoration && notch_of(&st, "main").decoration);
+    assert_eq!(osd.modules, ["osd"]);
+    assert_eq!((osd.edge, osd.offset), (Edge::Top, Num(0.5)));
+    let on: Vec<_> = osd.copies.iter().map(|c| c.screen.as_str()).collect();
+    assert_eq!(
+        on,
+        ["DP-1", "DP-2"],
+        "every connected screen, not the first"
+    );
+    for c in &osd.copies {
+        assert_eq!(c.mode, Mode::Rest, "nothing at rest");
+        assert!(c.compact.is_empty() && !c.needs_window, "no row, no window");
+    }
+    assert_eq!(osd.number, 2, "navigation numbers it like any notch");
+    assert_eq!(st.order, ["main", "osd"]);
+    assert!(s.take_write().is_none(), "defaults are never written");
+    assert_eq!(s.config(), &cfg());
+}
+
+#[test]
+fn an_undecorated_notch_peeks_on_the_focused_screens_copy_and_goes_away_after() {
+    let mut s = osd_store(cfg());
+    s.request_peek("osd", Some(1000.0), 0);
+    let st = s.take_changes(0).state.unwrap();
+    let modes: Vec<_> = notch_of(&st, "osd")
+        .copies
+        .iter()
+        .map(|c| (c.screen.as_str(), c.mode, c.needs_window))
+        .collect();
+    assert_eq!(
+        modes,
+        [("DP-1", Mode::Rest, false), ("DP-2", Mode::Peek, true)]
+    );
+    assert!(
+        st.visitor.iter().all(|c| c.mode == Mode::Rest),
+        "no visitor needed"
+    );
+    assert!(
+        notch_of(&st, "main").copies[0].peek.is_none(),
+        "not in a notch that does not list it"
+    );
+    let ipc: Value = serde_json::from_str(&s.ipc_state()).unwrap();
+    let osd = ipc["notches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["id"] == "osd")
+        .unwrap()
+        .clone();
+    assert_eq!(osd["decoration"], false);
+    assert!(ipc.get("standalone").is_none());
+    s.advance(1000);
+    let st = s.take_changes(1000).state.unwrap();
+    assert!(
+        notch_of(&st, "osd")
+            .copies
+            .iter()
+            .all(|c| c.mode == Mode::Rest)
+    );
+}
+
+#[test]
+fn an_undecorated_notchs_window_lingers_after_the_peek_then_drops() {
+    let mut s = osd_store(cfg());
+    s.set_window_linger(300);
+    let needs = |s: &Store| notch_of(&s.state(), "osd").copies[1].needs_window;
+    s.request_peek("osd", Some(400.0), 0);
+    s.take_changes(0);
+    assert!(needs(&s));
+    s.advance(400);
+    s.request_peek("osd", Some(400.0), 500);
+    s.advance(900);
+    s.take_changes(900);
+    assert!(needs(&s), "second close at 900");
+    s.advance(1199);
+    assert!(needs(&s));
+    s.advance(1200);
+    assert!(!needs(&s));
+}
+
+#[test]
+fn any_module_can_be_in_an_undecorated_notch_and_a_decorated_one_too() {
+    let mut s = osd_store(json!({"notches": [
+        {"id": "main", "modules": ["media"]},
+        {"id": "quiet", "decoration": false, "modules": ["media"],
+         "position": {"screen": "DP-1"}}
+    ]}));
+    let st = s.state();
+    let quiet = notch_of(&st, "quiet");
+    assert_eq!(quiet.copies.len(), 1, "its screen is the one it names");
+    assert!(
+        notch_of(&st, "main").copies[0].compact == ["media"],
+        "the decorated one shows it closed"
+    );
+    assert!(
+        quiet.copies[0].compact.is_empty(),
+        "the undecorated one never"
+    );
+    s.set_screens(screens(&["DP-1", "DP-2"], "DP-1"));
+    s.request_peek("media", Some(1000.0), 0);
+    let st = s.take_changes(0).state.unwrap();
+    assert_eq!(notch_of(&st, "quiet").copies[0].mode, Mode::Peek);
+    assert_eq!(notch_of(&st, "main").copies[0].mode, Mode::Peek);
+    s.advance(1000);
+    let st = s.take_changes(1000).state.unwrap();
+    assert_eq!(notch_of(&st, "quiet").copies[0].mode, Mode::Rest);
+    assert_eq!(notch_of(&st, "main").copies[0].mode, Mode::Compact);
+}
+
+#[test]
+fn an_undecorated_notch_reserves_no_space_and_stays_out_of_the_reserve() {
+    let mut s = osd_store(json!({"notches": [
+        {"id": "main", "modules": ["media"], "reserveSpace": true},
+        {"id": "quiet", "decoration": false, "modules": ["media"], "reserveSpace": true,
+         "position": {"edge": "left", "screen": "DP-1"}}
+    ]}));
+    s.measure("main", "DP-1", 6.0, 0.0, 30.0);
+    s.measure("quiet", "DP-1", 9.0, 0.0, 40.0);
+    s.take_changes(0);
+    let r: Vec<_> = s
+        .state()
+        .reserve
+        .iter()
+        .map(|r| (r.edge, r.depth.0))
+        .collect();
+    assert_eq!(r, [(Edge::Top, 30.0)]);
+}
+
+#[test]
+fn an_undecorated_notch_is_drawn_while_navigating_and_selected_in_its_order() {
+    let mut s = osd_store(cfg());
+    s.navigate(0);
+    let st = s.state();
+    let osd = notch_of(&st, "osd");
+    assert!(
+        osd.copies
+            .iter()
+            .all(|c| c.needs_window && c.mode == Mode::Rest),
+        "a window to draw its place in, nothing to preview"
+    );
+    s.key("2", &[], 1);
+    assert_eq!(s.state().navigation.unwrap().notch, "osd");
+    s.key("Escape", &[], 2);
+    let st = s.state();
+    assert!(notch_of(&st, "osd").copies.iter().all(|c| !c.needs_window));
+}
+
+#[test]
+fn moving_a_host_notch_stores_only_the_difference_and_putting_it_back_stores_nothing() {
+    let mut s = osd_store(cfg());
+    s.navigate(0);
+    s.key("2", &[], 1);
+    s.key("m", &[], 2);
+    s.key("Left", &[], 3);
+    assert_eq!(
+        s.config(),
+        &json!({"modules": ["media", "timer"], "hoverOpenDelay": 100, "hoverCloseDelay": 200,
+                "notches": [{}, {"id": "osd", "position": {"edge": "left"}}]}),
+        "an entry with the edge alone: the offset and the screens are the defaults"
+    );
+    assert!(s.take_write().is_some());
+    let st = s.state();
+    assert_eq!(notch_of(&st, "osd").edge, Edge::Left);
+    assert_eq!(notch_of(&st, "osd").copies.len(), 2, "still every screen");
+    // Escape undoes the move: back to the defaults, nothing is left written.
+    s.key("Escape", &[], 4);
+    assert!(s.config().get("notches").is_none(), "{}", s.config());
+    s.key("Escape", &[], 5);
+}
+
+#[test]
+fn a_setting_of_a_host_notch_makes_its_entry_and_only_that() {
+    let mut s = osd_store(cfg());
+    let idx = s.notch_specs().iter().position(|n| n.id == "osd").unwrap();
+    s.set_value(&format!("notches.{idx}.position.offset"), Some(&json!(0.2)));
+    assert_eq!(
+        s.config()["notches"],
+        json!([{}, {"id": "osd", "position": {"offset": 0.2}}])
+    );
+    assert_eq!(notch_of(&s.state(), "osd").offset, Num(0.2));
+    // Removing the key again takes the entry with it.
+    s.set_value(&format!("notches.{idx}.position.offset"), None);
+    assert!(s.config().get("notches").is_none(), "{}", s.config());
+    // Removing what was never there writes nothing.
+    s.take_write();
+    s.set_value(&format!("notches.{idx}.position.offset"), None);
+    assert!(s.take_write().is_none());
+    assert!(s.config().get("notches").is_none());
+    // Its modules, through an edit.
+    s.edit("osd", &EditOp::ToggleModule("media".into()))
+        .unwrap();
+    assert_eq!(
+        s.config()["notches"],
+        json!([{}, {"id": "osd", "modules": ["osd", "media"]}])
+    );
+    let st = s.state();
+    assert_eq!(notch_of(&st, "osd").modules, ["osd", "media"]);
+    assert!(!notch_of(&st, "osd").decoration, "the rest stays declared");
+}
+
+#[test]
+fn removing_a_host_notch_writes_that_and_nothing_else_and_it_stays_removed() {
+    let mut s = osd_store(cfg());
+    s.remove_notch("osd").unwrap();
+    assert_eq!(
+        s.take_write().unwrap(),
+        json!({"modules": ["media", "timer"], "hoverOpenDelay": 100, "hoverCloseDelay": 200,
+               "removedNotches": ["osd"]})
+    );
+    let st = s.state();
+    assert!(st.notches.iter().all(|n| n.id != "osd"));
+    assert_eq!(st.order, ["main"]);
+    // The config says otherwise to a later load too.
+    let mut again = osd_store(s.config().clone());
+    assert!(again.state().notches.iter().all(|n| n.id != "osd"));
+    assert!(again.take_write().is_none());
+    // A peek of its module now goes to the visitor, as any module with no notch.
+    s.request_peek("osd", Some(1000.0), 0);
+    assert!(
+        s.state()
+            .notches
+            .iter()
+            .all(|n| n.copies.iter().all(|c| c.peek.is_none()))
+    );
+}
+
+#[test]
+fn removing_a_host_notch_that_has_an_entry_takes_the_entry_too() {
+    let mut s = osd_store(json!({"notches": [
+        {"id": "main", "modules": ["media"]},
+        {"id": "osd", "position": {"edge": "left"}}
+    ]}));
+    s.remove_notch("osd").unwrap();
+    assert_eq!(
+        s.config(),
+        &json!({"modules": ["media"], "removedNotches": ["osd"]})
+    );
+}
+
+#[test]
+fn x_x_in_navigation_removes_an_undecorated_notch_and_the_last_decorated_one_stays() {
+    let mut s = osd_store(cfg());
+    s.navigate(0);
+    s.key("2", &[], 1);
+    s.key("x", &[], 2);
+    s.key("x", &[], 3);
+    assert_eq!(s.config()["removedNotches"], json!(["osd"]));
+    assert!(s.state().notches.iter().all(|n| n.id != "osd"));
+    // Only "main" is left; it cannot go (and an undecorated one is no reason to keep it).
+    let mut s = osd_store(cfg());
+    assert_eq!(s.remove_notch("main"), Err("the last notch stays".into()));
+    assert!(s.take_write().is_none());
+}
+
+#[test]
+fn a_notch_added_ignores_the_undecorated_ones_for_its_place_but_not_for_its_id() {
+    let mut s = osd_store(json!({"notches": [{"id": "main"}, {"id": "notch-2"}]}));
+    s.set_screens(screens(&["DP-1", "DP-2"], "DP-1"));
+    // The center of the top is taken by "main", the OSD does not count.
+    let id = s.add_notch(&NewNotch::default()).unwrap();
+    assert_eq!(id, "notch-3");
+    let pos = &s.config()["notches"][2]["position"];
+    assert_eq!(
+        pos["offset"], 0.3,
+        "next to main, not around the OSD: {pos}"
+    );
+}
+
+#[test]
+fn a_config_from_before_moves_the_osds_keys_to_the_host_notch_and_writes_it() {
+    // The file loads before the host says what it declares: nothing moves yet.
+    let mut s = Store::new();
+    s.set_config(json!({"osd": {"enabled": false, "size": 2}}));
+    assert_eq!(s.config()["osd"]["enabled"], false);
+    assert!(s.take_write().is_none());
+    // The host declares its notch: the OSD is off, the other key stays.
+    s.set_ui_catalog(Vec::new(), None, Some(vec![osd_decl()]));
+    assert_eq!(
+        s.config(),
+        &json!({"osd": {"size": 2}, "removedNotches": ["osd"]})
+    );
+    assert!(s.take_write().is_some());
+    // A position becomes the notch's, the rest of the file as it was.
+    let mut s = Store::new();
+    s.set_ui_catalog(Vec::new(), None, Some(vec![osd_decl()]));
+    s.set_config(json!({"hoverOpenDelay": 1,
+        "osd": {"position": {"edge": "bottom", "offset": 0.5}}}));
+    assert_eq!(
+        s.config(),
+        &json!({"hoverOpenDelay": 1,
+                "notches": [{}, {"id": "osd", "position": {"edge": "bottom"}}]})
+    );
+    assert!(
+        s.take_write().is_some(),
+        "written, so the old keys go from the file"
+    );
+    s.set_screens(screens(&["DP-1"], "DP-1"));
+    let st = s.state();
+    assert_eq!(notch_of(&st, "osd").edge, Edge::Bottom);
+    // Once it moved, a second look finds nothing to do.
+    assert_eq!(config::migrate_declared(s.config(), &[osd_decl()]), None);
+}
+
+#[test]
+fn a_hover_on_an_undecorated_notch_while_it_peeks_opens_it_like_any_other() {
+    let mut s = osd_store(cfg());
+    s.request_peek("osd", Some(5000.0), 0);
+    s.pointer("osd", "DP-2", PointerEv::Enter, 10);
+    s.advance(10 + 100);
+    let st = s.take_changes(110).state.unwrap();
+    // An urgent peek is not dismissed by a hover; the copy stays up.
+    assert_ne!(notch_of(&st, "osd").copies[1].mode, Mode::Rest);
+}
+
+#[test]
+fn the_decoration_key_is_a_notch_setting_in_the_schema() {
+    let mut s = osd_store(cfg());
+    let at = s.notch_specs().iter().position(|n| n.id == "osd").unwrap();
+    s.settings(true, Some(format!("notch/{at}")));
+    let schema = s.compute_schema();
+    let key = format!(
+        "notches.{}.decoration",
+        s.notch_specs().iter().position(|n| n.id == "osd").unwrap()
+    );
+    let f = schema
+        .fields
+        .iter()
+        .find(|f| f.key.as_deref() == Some(key.as_str()))
+        .expect("a switch on the OSD notch's page");
+    assert_eq!(f.value, json!(false), "the host declared it off");
+    s.settings(true, Some("notch/0".into()));
+    let schema = s.compute_schema();
+    let f = schema
+        .fields
+        .iter()
+        .find(|f| f.key.as_deref() == Some("decoration"))
+        .expect("and main's");
+    assert_eq!(f.value, json!(true));
+    s.take_changes(1);
 }

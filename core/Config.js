@@ -9,7 +9,8 @@ var DEFAULTS = {
   reserveSpace: false,
   draggable: true,
   tabs: true,
-  idleIcons: true
+  idleIcons: true,
+  decoration: true
 }
 
 // A config file's text as an object. Anything but a JSON object is an error;
@@ -103,7 +104,7 @@ function resolve(cfg) {
 // of the config, then its default; `position` merges key by key. Without
 // `notches` (or with an empty list) there is one notch, made of the
 // top-level keys: a config from before there were several still works.
-var NOTCH_KEYS = ["modules", "reserveSpace", "draggable", "tabs", "idleIcons", "workspaces", "position"]
+var NOTCH_KEYS = ["modules", "reserveSpace", "draggable", "tabs", "idleIcons", "decoration", "workspaces", "position"]
 
 // Whether the config lists its notches (else the top level is the one).
 function hasNotchList(cfg) {
@@ -124,36 +125,71 @@ function defaultNotchId(index) { return index === 0 ? "main" : "notch-" + (index
 //               from tabs (State.shownModules); on unless false
 //   idleIcons   whether an active module with nothing to show closed shows
 //               its icon (State.compactModules)
+//   decoration  whether it shows at rest; on unless false
 //   position    the raw `position` value, top-level keys merged under the
 //               notch's (Position.resolve reads it)
-function notches(cfg, defaultModules) {
+//   declared, inConfig
+//               only on a notch the host declares (`defaultNotches`, each
+//               { id, decoration, modules, position... }): one exists unless
+//               the config's `removedNotches` lists its id, after the
+//               config's own; a notch of the config with its id overrides the
+//               keys it gives; it never inherits the top level. `inConfig` is
+//               whether the config has an entry for it.
+function notches(cfg, defaultModules, defaultNotches) {
   cfg = cfg || {}
+  defaultNotches = Array.prototype.slice.call(defaultNotches || [])
   var listed = hasNotchList(cfg)
   var entries = listed ? cfg.notches : [{}]
+  var removed = Array.isArray(cfg.removedNotches) ? cfg.removedNotches : []
   var used = {}
   var out = []
-  for (var i = 0; i < entries.length; i++) {
-    var entry = entries[i] && typeof entries[i] === "object" && !Array.isArray(entries[i]) ? entries[i] : {}
-    var pick = function(key) { return entry[key] !== undefined ? entry[key] : cfg[key] }
-    var id = typeof entry.id === "string" && entry.id.trim() !== "" ? entry.id.trim() : defaultNotchId(i)
+  var declaredOf = function(id) {
+    for (var d = 0; d < defaultNotches.length; d++)
+      if (defaultNotches[d] && defaultNotches[d].id === id) return defaultNotches[d]
+    return null
+  }
+  var resolveEntry = function(entry, i, inConfig) {
+    var explicit = typeof entry.id === "string" && entry.id.trim() !== "" ? entry.id.trim() : ""
+    var id = explicit !== "" ? explicit : defaultNotchId(i)
     var unique = id
     for (var n = 2; used[unique]; n++) unique = id + "-" + n
     used[unique] = true
+    var decl = unique === id && explicit !== "" ? declaredOf(id) : null
+    var pick = function(key) {
+      if (entry[key] !== undefined) return entry[key]
+      return decl ? decl[key] : cfg[key]
+    }
     var modules = pick("modules")
-    var top = cfg.position && typeof cfg.position === "object" ? cfg.position : null
+    var top = !decl && cfg.position && typeof cfg.position === "object" ? cfg.position : null
+    var base = decl && decl.position && typeof decl.position === "object" ? decl.position : null
     var own = entry.position && typeof entry.position === "object" ? entry.position : null
-    out.push({
+    var spec = {
       id: unique,
       index: i,
-      prefix: listed ? "notches." + i + "." : "",
+      prefix: listed || !inConfig ? "notches." + i + "." : "",
       moduleIds: Array.isArray(modules) ? modules.map(String) : (defaultModules || []).slice(),
       reserveSpace: pick("reserveSpace") === true,
       draggable: pick("draggable") !== false,
       tabs: pick("tabs") !== false,
       idleIcons: pick("idleIcons") !== false,
+      decoration: pick("decoration") !== false,
       workspaces: workspaceList(pick("workspaces")),
-      position: top || own ? Object.assign({}, top || {}, own || {}) : undefined
-    })
+      position: top || base || own ? Object.assign({}, top || {}, base || {}, own || {}) : undefined
+    }
+    if (decl) { spec.declared = true; spec.inConfig = inConfig }
+    out.push(spec)
+  }
+  for (var i = 0; i < entries.length; i++)
+    resolveEntry(entries[i] && typeof entries[i] === "object" && !Array.isArray(entries[i]) ? entries[i] : {}, i, true)
+  var next = entries.length
+  for (var d = 0; d < defaultNotches.length; d++) {
+    var decl = defaultNotches[d]
+    if (!decl || typeof decl.id !== "string" || decl.id === "" || removed.indexOf(decl.id) !== -1) continue
+    var there = false
+    for (var k = 0; k < out.length; k++) if (out[k].declared && out[k].id === decl.id) there = true
+    if (there) continue
+    resolveEntry({ id: decl.id }, next, false)
+    next++
   }
   return out
 }
@@ -167,17 +203,6 @@ function moduleUnion(specs, extra) {
       if (out.indexOf(specs[i].moduleIds[j]) === -1) out.push(specs[i].moduleIds[j])
   for (var k = 0; k < (extra || []).length; k++)
     if (out.indexOf(String(extra[k])) === -1) out.push(String(extra[k]))
-  return out
-}
-
-// The modules to load: every one a notch shows, in order of first
-// appearance, except standalone ones, which no notch can show; then the
-// standalone ones switched on (`enabled`).
-function moduleLoadList(specs, standalone, enabled) {
-  standalone = standalone || []
-  var out = moduleUnion(specs).filter(function(id) { return standalone.indexOf(id) === -1 })
-  for (var i = 0; i < (enabled || []).length; i++)
-    if (standalone.indexOf(enabled[i]) !== -1 && out.indexOf(enabled[i]) === -1) out.push(enabled[i])
   return out
 }
 
@@ -246,7 +271,7 @@ function withWorkspace(list, ws) {
 // The id is a config key then, so it can't be one the config already has
 // (RESERVED_KEYS, and the host's `taken`: its modules and its own keys),
 // nor have a dot in it.
-var RESERVED_KEYS = ["modules", "notches", "position", "theme", "terminals"]
+var RESERVED_KEYS = ["modules", "notches", "removedNotches", "position", "theme", "terminals"]
   .concat(Object.keys(DEFAULTS), NOTCH_KEYS)
 var TERMINAL_ID = /^[A-Za-z][A-Za-z0-9_-]*$/
 

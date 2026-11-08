@@ -321,7 +321,7 @@ function cornerInput(w, sides) {
 
 // One window's `key` (packItem, coverItem, closedDepth) for the work on one
 // kind of edge (left/right when `sides`, top/bottom otherwise), else null,
-// which pack, rowDepths and coveredByStandalone pass over. The edge is
+// which pack, rowDepths and coveredByUndecorated pass over. The edge is
 // checked before the key is read, as in cornerInput: a side notch's place
 // comes from the corners, which come from how the top and bottom ones were
 // packed, so a packing that read every window's packItem fed back into
@@ -354,13 +354,13 @@ function corners(items) {
   })
 }
 
-// Which notches a standalone module's card covers while it shows: it draws
+// Which notches an undecorated notch's card covers while it shows: it draws
 // in its own place, over whatever hangs there, and the notches under it
 // hide until it goes. `items`, each { group, start, end, cover, shown }:
-// the group ("<screen>|<edge>"), its span along the edge, whether it is a
-// standalone card and whether it shows. Returns, per item, whether a shown
+// the group ("<screen>|<edge>"), its span along the edge, whether it is an
+// undecorated card and whether it shows. Returns, per item, whether a shown
 // cover in its group overlaps it; never for a cover.
-function coveredByStandalone(items) {
+function coveredByUndecorated(items) {
   items = items || []
   return items.map(function(it) {
     if (!it || it.cover) return false

@@ -13,7 +13,8 @@ import "core"
 // place and modules (`main`), a copy (`main.B`: its mode, `pinned`, the peek
 // it shows, the tab, the modules it shows open and closed, `covered`,
 // `nowindow`, the keyboard it asks for), the visitor's (`visitor.B`), a
-// standalone module's (`solo.B`) and navigation (`nav`). A scenario that
+// undecorated notch's (`solo.B`: one the scenario's `defaultNotches` declare)
+// and navigation (`nav`). A scenario that
 // disagrees prints each difference.
 //
 // scripts/qml-test.sh runs this as one more shard: the daemon binary in
@@ -175,7 +176,7 @@ ShellRoot {
       // A module's facts, merged into what it had.
       function module(id, patch) {
         var f = Object.assign({ active: true, priority: 0, urgentPeek: false, attention: false, peekOnFocusedScreen: false,
-                                 icon: false, hasCompact: true, hasPeek: true, expanded: true, standalone: false }, w.facts[id] || {}, patch)
+                                 icon: false, hasCompact: true, hasPeek: true, expanded: true }, w.facts[id] || {}, patch)
         var all = Object.assign({}, w.facts)
         all[id] = f
         w.facts = all
@@ -257,10 +258,6 @@ ShellRoot {
         service.visitor.copies.forEach(function(c) {
           if (c.mode !== "rest" || c.needsWindow) out["visitor." + c.screenName] = w.copyText(c)
         })
-        service.standaloneNotches.forEach(function(n) {
-          out[n.standaloneId] = n.edge + " " + n.placement.offset
-          n.copies.forEach(function(c) { if (c.mode !== "rest" || c.needsWindow) out[n.standaloneId + "." + c.screenName] = w.copyText(c) })
-        })
         // The settings window as the daemon has it (the window itself is the UI's).
         if (service.notchState && service.notchState.settingsOpen) out.settings = service.notchState.settingsPage
         if (service.navigating) {
@@ -305,8 +302,9 @@ ShellRoot {
   function runScenario(sc) {
     var w = worldComponent.createObject(root, { tag: "s" + root.index })
     root.world = w
-    // The standalone fixture loads whenever it is switched on (by default).
-    var mods = Object.assign({ solo: {} }, sc.modules || {})
+    // The host's notches a scenario declares (the undecorated `solo`).
+    w.svc.defaultNotches = sc.defaultNotches || []
+    var mods = sc.modules || {}
     root.until(function() { return w.client.ready }, function() {
       if (!root.check(w.client.ready, "the daemon did not come up")) { root.done(); return }
       // The config goes through the service to the daemon, the file's one authority.
@@ -318,7 +316,7 @@ ShellRoot {
         function() {
           if (!root.check(w.svc.modules.length === w.svc.moduleIds.length, "the service loaded " + w.svc.modules.length + " of " + w.svc.moduleIds.length + " modules")) { root.done(); return }
           // The facts of the modules the service loaded.
-          w.svc.moduleIds.forEach(function(id) { w.module(id, Object.assign({ standalone: id === "solo" }, mods[id] || {})) })
+          w.svc.moduleIds.forEach(function(id) { w.module(id, mods[id] || {}) })
           // The copies, and the daemon's replies, settle.
           root.steps([[250, function() {}]].concat(sc.steps(w)), function() {
             root.until(function() { return w.pending === 0 }, function() { root.report(sc, w) }, 2000)
@@ -362,21 +360,18 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.module("a", { active: false }); w.module("b", { active: false }) }],
         [150, function() { w.snap("nothing active: rest", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "rest open= closed=",
           "main.B": "rest open= closed=",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.module("b", { active: true, hasCompact: false, icon: true }) }],
         [150, function() { w.snap("b has only an icon", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=b closed=b",
           "main.B": "compact open=b closed=b",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -386,26 +381,22 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [root.afterOpen, function() { w.snap("open", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("main", "B", "leave") }],
         [root.beforeClose, function() { w.snap("left, before the close delay", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [root.afterClose, function() { w.snap("closed again", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         // Leaving before it opened forgets the screen and never opens.
         [0, function() { w.pointer("main", "A", "enter") }],
@@ -414,7 +405,6 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -424,28 +414,24 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.screens({ focused: "A" }) }],
         [500, function() { w.snap("the peek ended", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("b", 400) }],
         [80, function() { w.snap("b peeks on the other screen", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "peek peek=b open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("b") }],
         [80, function() { w.snap("dismissed", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -456,21 +442,18 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=b closed=b+a tabs=b+a",
           "main.B": "peek peek=a open=b closed=b+a tabs=b+a",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("b", 1500) }],
         [80, function() { w.snap("b outranks a", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=b closed=b+a tabs=b+a",
           "main.B": "peek peek=b open=b closed=b+a tabs=b+a",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("b"); w.peek("a", 1500) }],
         [80, function() { w.snap("a again after b went", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=b closed=b+a tabs=b+a",
           "main.B": "peek peek=a open=b closed=b+a tabs=b+a",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss(""); }],
         [0, function() { w.module("a", { priority: 9 }); w.peek("b", 1500) }],
@@ -478,14 +461,12 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=b open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 1500) }],
         [80, function() { w.snap("a over b", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -498,7 +479,6 @@ ShellRoot {
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("a"); w.screens({ focused: "A" }); w.peek("c", 1500) }],
         [80, function() { w.snap("c, only on the side notch, peeks", {
@@ -507,7 +487,6 @@ ShellRoot {
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "peek peek=c open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("c"); w.module("a", { peekOnFocusedScreen: false }); w.peek("b", 1500) }],
         [80, function() { w.snap("b peeks on A", {
@@ -516,7 +495,6 @@ ShellRoot {
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -527,28 +505,24 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 1500) }],
         [80, function() { w.snap("a plain peek does not show over it", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("b", 1500) }],
         [80, function() { w.snap("b urgent peek shows over it", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=b open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("main", "B", "leave") }],
         [root.afterClose, function() { w.snap("left", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=b open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         // A peek then the pointer comes: a plain peek is dismissed, an urgent one stays.
         [0, function() { w.dismiss(""); w.peek("a", 1500) }],
@@ -556,14 +530,12 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("main", "B", "enter") }],
         [root.afterOpen, function() { w.snap("hovering dismissed a's peek", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -573,56 +545,48 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("main", "B", "enter"); w.pointer("main", "B", "leave") }],
         [root.afterClose, function() { w.snap("pinned stays open after the pointer left", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 1500) }],
         [60, function() { w.snap("a peek does not replace a pinned notch", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.press("main", "B") }],
         [60, function() { w.snap("clicked again: unpinned", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.ipc("open", []) }],
         [60, function() { w.snap("ipc open", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.ipc("close", []) }],
         [60, function() { w.snap("ipc close", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.ipc("toggle", []) }],
         [60, function() { w.snap("ipc toggle", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.ipc("closeNotch", ["main"]) }],
         [60, function() { w.snap("ipc closeNotch", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -632,35 +596,30 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.press("main", "B") }],
         [60, function() { w.snap("open, first tab", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.tab("main", "B", "b") }],
         [60, function() { w.snap("tab b", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned tab=b open=b closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.module("b", { active: false }) }],
         [60, function() { w.snap("the shown tab went inactive", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a",
           "main.B": "expanded pinned tab=b open=a closed=a keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.tab("main", "B", "") }],
         [60, function() { w.snap("no tab picked", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a",
           "main.B": "expanded pinned open=a closed=a keyboard=exclusive",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -676,7 +635,6 @@ ShellRoot {
           "nav": "select main",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Tab") }],
         [60, function() { w.snap("Tab: the next tab", {
@@ -686,7 +644,6 @@ ShellRoot {
           "nav": "select main",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Tab", ["shift"]) }],
         [60, function() { w.snap("Shift+Tab: back", {
@@ -696,7 +653,6 @@ ShellRoot {
           "nav": "select main",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Right") }],
         [60, function() { w.snap("Right: the second notch", {
@@ -706,7 +662,6 @@ ShellRoot {
           "nav": "select side",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "expanded open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Right") }],
         [60, function() { w.snap("Right: wraps", {
@@ -716,7 +671,6 @@ ShellRoot {
           "nav": "select main",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("2") }],
         [60, function() { w.snap("2: the second notch", {
@@ -726,7 +680,6 @@ ShellRoot {
           "nav": "select side",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "expanded open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Escape") }],
         [60, function() { w.snap("Escape: left", {
@@ -735,7 +688,6 @@ ShellRoot {
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.navigate() }],
         [0, function() { w.key("Right") }],
@@ -746,7 +698,6 @@ ShellRoot {
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "expanded pinned open=c closed=c keyboard=exclusive",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -765,7 +716,6 @@ ShellRoot {
           "nav": "select extra",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("x") }],
         [60, function() { w.snap("x asks first", {
@@ -777,7 +727,6 @@ ShellRoot {
           "nav": "remove extra",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Escape") }],
         [60, function() { w.snap("Escape keeps it", {
@@ -789,7 +738,6 @@ ShellRoot {
           "nav": "select extra",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("m") }],
         [60, function() { w.snap("move mode", {
@@ -801,7 +749,6 @@ ShellRoot {
           "nav": "move extra",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Left") }],
         [60, function() { w.snap("moved to the left edge", {
@@ -813,7 +760,6 @@ ShellRoot {
           "nav": "move extra",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Right", ["shift"]) }],
         [60, function() { w.snap("slid along it", {
@@ -825,7 +771,6 @@ ShellRoot {
           "nav": "move extra",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Tab") }],
         [60, function() { w.snap("on the next screen", {
@@ -837,7 +782,6 @@ ShellRoot {
           "nav": "move extra",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Escape") }],
         [60, function() { w.snap("Escape puts it back", {
@@ -849,7 +793,6 @@ ShellRoot {
           "nav": "select extra",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("x"); w.key("x") }],
         [100, function() { w.snap("x twice removed it", {
@@ -859,7 +802,6 @@ ShellRoot {
           "nav": "select side",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "expanded open=c closed=c",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -870,7 +812,6 @@ ShellRoot {
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.set("notches.1.position", { edge: "right", offset: 0.25 }) }],
         [120, function() { w.snap("the side notch on the right at 0.25", {
@@ -879,7 +820,6 @@ ShellRoot {
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "side": "right 0.25 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.set("notches.0.position", { edge: "bottom", screen: "A" }) }],
         [120, function() { w.snap("main kept on A at the bottom", {
@@ -887,7 +827,6 @@ ShellRoot {
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "side": "right 0.25 #1 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.set("notches.0.position", undefined) }],
         [120, function() { w.snap("main's position reset", {
@@ -895,7 +834,6 @@ ShellRoot {
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "side": "right 0.25 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.set("position", { edge: "left" }) }],
         [120, function() { w.snap("the global position, left", {
@@ -903,7 +841,6 @@ ShellRoot {
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "side": "right 0.25 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.set("notches.0.tabs", true); w.set("notches.0.draggable", false) }],
         [120, function() { w.snap("tabs on, not draggable", {
@@ -911,7 +848,6 @@ ShellRoot {
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "side": "right 0.25 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.set("notches.0.workspaces", ["1"]); w.set("notches.0.idleIcons", false); w.set("notches.0.reserveSpace", true) }],
         [120, function() { w.snap("workspaces, no idle icons, reserving space", {
@@ -919,7 +855,6 @@ ShellRoot {
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "side": "right 0.25 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.set("hoverOpenDelay", 30) }],
         [100, function() { w.pointer("main", "B", "enter") }],
@@ -928,7 +863,6 @@ ShellRoot {
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "side": "right 0.25 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -940,7 +874,6 @@ ShellRoot {
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "side": "right 0.7 #2 tabs [c]",
           "side.B": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.drop("main", "B", { edge: "bottom", offset: 0.2, screen: "B" }) }],
         [120, function() { w.snap("main dropped at the bottom", {
@@ -949,7 +882,6 @@ ShellRoot {
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "side": "right 0.7 #2 tabs [c]",
           "side.B": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -964,7 +896,6 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a",
           "main.B": "compact open=a closed=a covered",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.screens({ workspaces: { A: "2", B: "1" } }) }],
         [100, function() { w.snap("workspaces swapped", {
@@ -973,7 +904,6 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.screens({ focused: "A" }) }],
         [100, function() { w.snap("focus on A", {
@@ -982,7 +912,6 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 1500) }],
         [80, function() { w.snap("a peeks on the focused screen", {
@@ -991,7 +920,6 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "peek peek=a open=a closed=a",
           "main.B": "compact open=a closed=a",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("a"); w.peek("b", 1500) }],
         [80, function() { w.snap("b, kept on A, peeks", {
@@ -1000,7 +928,6 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("b"); w.screens({ focused: "B", fullscreen: ["B"] }) }],
         [100, function() { w.snap("focus on B, fullscreen there", {
@@ -1009,7 +936,6 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("home", "A", "enter") }],
         [root.afterOpen, function() { w.snap("hover opens the notch kept on A", {
@@ -1018,7 +944,6 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("home", "A", "leave") }],
         [root.afterClose, function() { w.snap("closed", {
@@ -1027,7 +952,6 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
-          "solo": "top 0.5"
         }) }],
         // A notch kept on A, a peek while you work on B: the visitor shows it on B.
         [0, function() { w.peek("b", 1500) }],
@@ -1037,7 +961,6 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a covered",
           "main.B": "compact open=a closed=a",
-          "solo": "top 0.5",
           "visitor.B": "peek peek=b open=a+b closed="
         }) }]
       ] } },
@@ -1050,21 +973,18 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.press("main", "B") }],
         [120, function() { w.snap("closing: the missed peek shows", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=b open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.module("b", { attention: false }) }],
         [700, function() { w.snap("it ended", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -1074,51 +994,43 @@ ShellRoot {
         [0, function() { w.snap("kept on A, focus on B", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("main", "A", "enter") }],
         [root.afterOpen, function() { w.snap("opens on A", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "expanded open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.screens({ focused: "A" }) }],
         [100, function() { w.snap("focus moved to A: still there, open", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "expanded open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.pointer("main", "A", "leave"); w.screens({ focused: "B" }) }],
         [root.afterClose, function() { w.snap("closed, focus on B: it does not follow", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.press("main", "A") }],
         [80, function() { w.snap("a click on A pins it there", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 1500) }],
         [80, function() { w.snap("a peek while pinned: the visitor shows it on B, where no notch is", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "expanded pinned open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5",
           "visitor.B": "peek peek=a open=a+b closed="
         }) }],
         [0, function() { w.dismiss(""); w.press("main", "A"); w.screens({ names: ["B"] }) }],
         [150, function() { w.snap("A unplugged: it shows on B for now (the config is not touched)", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.B": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5",
           "visitor.B": "rest open=a+b closed= covered"
         }) }],
         [0, function() { w.screens({ names: ["A", "B"] }) }],
         [150, function() { w.snap("A is back: it goes home", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5",
           "visitor.B": "rest open=a+b closed= covered"
         }) }]
       ] } },
@@ -1135,7 +1047,6 @@ ShellRoot {
           "notch-2.B": "expanded open= closed=",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Down") }],
         [80, function() { w.snap("it moves like any move", {
@@ -1147,7 +1058,6 @@ ShellRoot {
           "notch-2.B": "expanded open= closed=",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Escape") }],
         [80, function() { w.snap("Escape takes it away; the selection is back", {
@@ -1157,7 +1067,6 @@ ShellRoot {
           "nav": "select main",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("n"); w.key("Return") }],
         [80, function() { w.snap("Enter keeps it: navigation ends, settings opens on its page", {
@@ -1169,7 +1078,6 @@ ShellRoot {
           "settings": "notch/2",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.svc.closeSettings(); w.handler("notch", "add", "--screen A --edge right --modules c") }],
         [100, function() { w.snap("notch add over IPC", {
@@ -1182,7 +1090,6 @@ ShellRoot {
           "notch-3.A": "compact open=c closed=c",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.handler("notch", "remove", "notch-3") }],
         [100, function() { w.snap("notch remove over IPC", {
@@ -1193,7 +1100,6 @@ ShellRoot {
           "notch-2.B": "rest open= closed=",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -1207,7 +1113,6 @@ ShellRoot {
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.navigate() }],
         [80, function() { w.snap("navigating over a peek", {
@@ -1217,7 +1122,6 @@ ShellRoot {
           "nav": "select main",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("b", 1500) }],
         [80, function() { w.snap("a peek during navigation", {
@@ -1227,7 +1131,6 @@ ShellRoot {
           "nav": "select main",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.key("Escape") }],
         [100, function() { w.snap("navigation left", {
@@ -1236,7 +1139,6 @@ ShellRoot {
           "main.B": "peek peek=a open=a closed=a+b tabs=a+b",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.dismiss("") ; w.navigate(); w.navigate() }],
         [100, function() { w.snap("navigate twice", {
@@ -1245,7 +1147,6 @@ ShellRoot {
           "main.B": "compact open=a closed=a+b tabs=a+b",
           "side": "left 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -1255,28 +1156,24 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "rest open=a closed= tabs=a+b",
           "main.B": "rest open=a closed= tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("b", 400) }],
         [80, function() { w.snap("a peek without a peek view", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "rest open=a closed= tabs=a+b",
           "main.B": "rest open=a closed= tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.peek("a", 400) }],
         [80, function() { w.snap("a peeks without a compact view", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "rest open=a closed= tabs=a+b",
           "main.B": "peek peek=a open=a closed= tabs=a+b",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.module("a", { icon: true }) }],
         [500, function() { w.snap("a's icon shows closed", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a tabs=a+b",
           "main.B": "compact open=a closed=a tabs=a+b",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -1289,14 +1186,12 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "expanded pinned tab=a open=a closed=a+b tabs=a+b keyboard=exclusive",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.press("main", "B") }],
         [120, function() { w.snap("closed: b's missed peek", {
           "main": "top 0.5 #1 tabs [a,b]",
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "main.B": "peek peek=b tab=a open=a closed=a+b tabs=a+b",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
@@ -1307,7 +1202,6 @@ ShellRoot {
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "side": "right 0.1 #1 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }],
         [0, function() { w.ipc("recenter", []) }],
         [120, function() { w.snap("recentered", {
@@ -1315,24 +1209,28 @@ ShellRoot {
           "main.A": "compact open=a closed=a+b tabs=a+b",
           "side": "top 0.5 #2 tabs [c]",
           "side.A": "compact open=c closed=c",
-          "solo": "top 0.5"
         }) }]
       ] } },
 
-      { name: "scenario: a standalone module has a notch of its own", config: { notches: [{ id: "main", modules: ["a"], position: { screen: ["A", "B"] } }], solo: { position: { edge: "bottom", offset: 0.3 } } },
+      { name: "scenario: an undecorated notch has no decoration, peeks on the focused screen and moves by what differs",
+        config: { notches: [{ id: "main", modules: ["a"], position: { screen: ["A", "B"] } }] },
+        defaultNotches: [{ id: "solo", decoration: false, modules: ["solo"], position: { edge: "bottom", offset: 0.3 } }],
         modules: { a: {}, solo: {} }, steps: function(w) { return [
         [0, function() { w.snap("solo rests", {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a",
           "main.B": "compact open=a closed=a",
-          "solo": "bottom 0.3"
+          "solo": "bottom 0.3 #2 tabs fixed [solo]",
+          "solo.A": "rest open=solo closed= covered nowindow",
+          "solo.B": "rest open=solo closed= covered nowindow"
         }) }],
         [0, function() { w.peek("solo", 1500) }],
         [80, function() { w.snap("solo peeks on the focused screen", {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a",
           "main.B": "compact open=a closed=a",
-          "solo": "bottom 0.3",
+          "solo": "bottom 0.3 #2 tabs fixed [solo]",
+          "solo.A": "rest open=solo closed= covered nowindow",
           "solo.B": "peek peek=solo open=solo closed="
         }) }],
         [0, function() { w.dismiss("solo"); w.screens({ focused: "A" }); w.peek("solo", 1500) }],
@@ -1340,16 +1238,16 @@ ShellRoot {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a",
           "main.B": "compact open=a closed=a",
-          "solo": "left 0.6",
+          "solo": "bottom 0.3 #2 tabs fixed [solo]",
           "solo.A": "peek peek=solo open=solo closed=",
           "solo.B": "rest open=solo closed= covered"
         }) }],
-        [0, function() { w.set("solo.position", { edge: "left", offset: 0.6 }) }],
+        [0, function() { w.set("notches.1.position", { edge: "left", offset: 0.6 }) }],
         [100, function() { w.snap("solo moved", {
           "main": "top 0.5 #1 tabs [a]",
           "main.A": "compact open=a closed=a",
           "main.B": "compact open=a closed=a",
-          "solo": "left 0.6",
+          "solo": "left 0.6 #2 tabs fixed [solo]",
           "solo.A": "peek peek=solo open=solo closed=",
           "solo.B": "rest open=solo closed= covered"
         }) }]

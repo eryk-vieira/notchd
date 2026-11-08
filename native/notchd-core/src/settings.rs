@@ -226,9 +226,6 @@ pub struct ModuleInfo {
     pub title: String,
     /// Its settings fields, inherited ones first.
     pub settings: Vec<Value>,
-    /// No notch shows it; it has a place of its own.
-    #[serde(skip_serializing_if = "is_false")]
-    pub standalone: bool,
     /// A coding agent in a terminal.
     #[serde(skip_serializing_if = "is_false")]
     pub agent: bool,
@@ -266,7 +263,6 @@ pub fn parse_module_info(text: &str) -> ModuleInfo {
     if let Some(t) = str_of(&data, "title") {
         info.title = t.to_string();
     }
-    info.standalone = data.get("standalone") == Some(&Value::Bool(true));
     let own: Vec<Value> = match data.get("settings") {
         Some(Value::Array(list)) => list
             .iter()
@@ -430,27 +426,6 @@ pub fn setting_default(fields: &[Value], key: &str) -> Option<Value> {
 // ---------------------------------------------------------------------------
 // Module fields and pages
 
-/// What a standalone module's page has before its own fields: a switch and
-/// where it shows. `edge_preview` is the url of the edge cards' picture.
-fn standalone_fields(id: &str, edge_preview: &str) -> Vec<Value> {
-    let page = module_page_id(id);
-    let edges: Vec<Value> = ["top", "bottom", "left", "right"]
-        .iter()
-        .map(|e| json!({ "value": e, "label": capitalize(e), "preview": edge_preview }))
-        .collect();
-    vec![
-        json!({ "page": page, "key": format!("{id}.enabled"), "type": "boolean", "label": "Enabled", "default": true,
-            "help": "Off, it does not load at all." }),
-        json!({ "page": page, "section": "Position", "key": format!("{id}.position.edge"), "type": "choice", "display": "cards",
-            "label": "Edge", "default": "top",
-            "help": "Where it shows, on the screen you work on. No notch shows it: it has a place of its own, over any notch that hangs there.",
-            "options": edges }),
-        json!({ "page": page, "section": "Position", "key": format!("{id}.position.offset"), "type": "number", "display": "percent",
-            "label": "Along the edge", "default": 0.5, "min": 0, "max": 1, "step": 0.01,
-            "help": "0 % is its left (or top) end, 50 % the middle." }),
-    ]
-}
-
 /// `moduleRefs`: a field's references to other fields of its module
 /// (`when.key`) put under the module's id, as its own key is.
 fn module_refs(field: &Value, module_id: &str) -> Value {
@@ -468,20 +443,16 @@ fn module_refs(field: &Value, module_id: &str) -> Value {
 }
 
 /// `moduleFields`: the settings fields of every module (`{ moduleId, title,
-/// settings, standalone }`, from their JSON files), with their keys under the
+/// settings }`, from their JSON files), with their keys under the
 /// module's id (an `absolute` one's stays as given), on the module's own page
-/// unless they name another (then under its title); a standalone module's
-/// switch and position first.
-pub fn module_fields(modules: &[Value], edge_preview: &str) -> Vec<Value> {
+/// unless they name another (then under its title).
+pub fn module_fields(modules: &[Value]) -> Vec<Value> {
     let mut out = Vec::new();
     for m in modules {
         if !js::truthy_opt(m.get("moduleId")) {
             continue;
         }
         let id = js::string(&m["moduleId"]);
-        if js::truthy_opt(m.get("standalone")) {
-            out.extend(standalone_fields(&id, edge_preview));
-        }
         let Some(Value::Array(settings)) = m.get("settings") else {
             continue;
         };
@@ -526,13 +497,10 @@ pub fn module_title(id: &str, module: Option<&Value>) -> String {
     }
 }
 
-/// `moduleKind`: which list of the Modules page a module is in: "standalone",
-/// "agent" (a coding agent), "terminal",
-/// else "notch".
+/// `moduleKind`: which list of the Modules page a module is in: "agent" (a
+/// coding agent), "terminal", else "notch".
 pub fn module_kind(m: &Value) -> &'static str {
-    if js::truthy_opt(m.get("standalone")) {
-        "standalone"
-    } else if js::truthy_opt(m.get("agent")) {
+    if js::truthy_opt(m.get("agent")) {
         "agent"
     } else if js::truthy_opt(m.get("terminal")) {
         "terminal"
@@ -561,13 +529,10 @@ pub fn index_in(list: Option<&Value>, id: &str) -> Option<usize> {
     }
 }
 
-/// `moduleStatus`: where a module shows, for the Modules page: "On" or "Off"
-/// for a standalone one (`enabled` false is off), else "Off" when no notch
-/// lists it, "On" with one notch, or "In a, b" naming the notches that list it.
-pub fn module_status(id: &str, specs: &[Value], standalone: bool, enabled: Option<bool>) -> String {
-    if standalone {
-        return if enabled == Some(false) { "Off" } else { "On" }.into();
-    }
+/// `moduleStatus`: where a module shows, for the Modules page: "Off" when no
+/// notch lists it, "On" with one notch, or "In a, b" naming the notches that
+/// list it.
+pub fn module_status(id: &str, specs: &[Value]) -> String {
     let places: Vec<String> = specs
         .iter()
         .filter(|s| index_in(s.get("moduleIds"), id).is_some())
@@ -1043,19 +1008,16 @@ mod tests {
     // Node: moduleFields puts a module's fields under its id, on its own page
     #[test]
     fn module_fields_puts_a_modules_fields_under_its_id_on_its_own_page() {
-        let fields = module_fields(
-            &[
-                json!({ "moduleId": "resources", "title": "Resources", "settings": [
+        let fields = module_fields(&[
+            json!({ "moduleId": "resources", "title": "Resources", "settings": [
                     { "key": "compact", "type": "choice", "default": "always" },
                     { "key": "disk", "type": "string", "page": "extra", "section": "Disk" },
                     { "key": "color", "type": "color", "page": "appearance" },
                     { "type": "note", "label": "Linux only" }
                 ] }),
-                json!({ "moduleId": "media", "title": "Now playing", "settings": [] }),
-                json!({ "moduleId": "bare", "settings": [{ "key": "x", "type": "boolean" }] }),
-            ],
-            "",
-        );
+            json!({ "moduleId": "media", "title": "Now playing", "settings": [] }),
+            json!({ "moduleId": "bare", "settings": [{ "key": "x", "type": "boolean" }] }),
+        ]);
         let got: Vec<_> = fields
             .iter()
             .map(|f| (str_of(f, "key"), str_of(f, "page"), str_of(f, "section")))
@@ -1075,7 +1037,7 @@ mod tests {
             ]
         );
         assert_eq!(fields[0]["default"], "always");
-        assert!(module_fields(&[], "").is_empty());
+        assert!(module_fields(&[]).is_empty());
     }
 
     // Node: modulePages gives each loaded module a page under Modules
@@ -1134,35 +1096,30 @@ mod tests {
         assert_eq!(module_title("timer", None), "Timer");
     }
 
-    // Node: moduleStatus says where a module shows, or whether a standalone one is on
+    // Node: moduleStatus says where a module shows
     #[test]
-    fn module_status_says_where_a_module_shows_or_whether_a_standalone_one_is_on() {
+    fn module_status_says_where_a_module_shows() {
         let one = [json!({ "id": "main", "moduleIds": ["media"] })];
         let two = [
             json!({ "id": "main", "moduleIds": ["media", "osd"] }),
             json!({ "id": "jobs", "moduleIds": ["activities", "media"] }),
         ];
-        assert_eq!(module_status("media", &one, false, None), "On");
-        assert_eq!(module_status("timer", &one, false, None), "Off");
-        assert_eq!(module_status("media", &two, false, None), "In main, jobs");
-        assert_eq!(module_status("activities", &two, false, None), "In jobs");
-        assert_eq!(
-            module_status("osd", &two, true, Some(true)),
-            "On",
-            "a notch listing it does not count"
-        );
-        assert_eq!(module_status("osd", &one, true, Some(false)), "Off");
-        assert_eq!(module_status("timer", &[], false, None), "Off");
+        assert_eq!(module_status("media", &one), "On");
+        assert_eq!(module_status("timer", &one), "Off");
+        assert_eq!(module_status("media", &two), "In main, jobs");
+        assert_eq!(module_status("activities", &two), "In jobs");
+        assert_eq!(module_status("osd", &two), "In main");
+        assert_eq!(module_status("timer", &[]), "Off");
     }
 
-    // Node: catalogPart splits the Modules page into notch modules, agents and standalone ones
+    // Node: catalogPart splits the Modules page into notch modules and agents
     #[test]
-    fn catalog_part_splits_the_modules_page_into_notch_modules_agents_and_standalone_ones() {
+    fn catalog_part_splits_the_modules_page_into_notch_modules_and_agents() {
         let catalog = [
             json!({ "moduleId": "media" }),
-            json!({ "moduleId": "osd", "standalone": true }),
+            json!({ "moduleId": "osd" }),
             json!({ "moduleId": "claude", "agent": true }),
-            json!({ "moduleId": "timer", "standalone": false }),
+            json!({ "moduleId": "timer" }),
         ];
         let part = |p: Option<&str>| -> Vec<String> {
             catalog_part(&catalog, p)
@@ -1170,9 +1127,8 @@ mod tests {
                 .map(|m| str_of(m, "moduleId").unwrap().to_string())
                 .collect()
         };
-        assert_eq!(part(Some("notch")), ["media", "timer"]);
-        assert_eq!(part(None), ["media", "timer"]);
-        assert_eq!(part(Some("standalone")), ["osd"]);
+        assert_eq!(part(Some("notch")), ["media", "osd", "timer"]);
+        assert_eq!(part(None), ["media", "osd", "timer"]);
         assert_eq!(part(Some("agent")), ["claude"]);
         assert!(catalog_part(&[], Some("agent")).is_empty());
     }
@@ -1278,8 +1234,6 @@ mod tests {
             as_json(r#"{ "settings": {} }"#),
             json!({ "title": "", "settings": [] })
         );
-        assert!(parse_module_info(r#"{ "standalone": true }"#).standalone);
-        assert!(!parse_module_info(r#"{ "standalone": "yes" }"#).standalone);
         let bad = parse_module_info("{ nope");
         assert_eq!((bad.title.as_str(), bad.settings.len()), ("", 0));
         assert!(bad.error.is_some());
@@ -1364,22 +1318,9 @@ mod tests {
                 .as_object()
                 .unwrap()
                 .keys()
-                .filter(|k| !["title", "settings", "standalone", "agent"].contains(&k.as_str()))
+                .filter(|k| !["title", "settings", "agent"].contains(&k.as_str()))
                 .collect();
             assert!(unknown.is_empty(), "{file}: unknown keys {unknown:?}");
-            if info.standalone {
-                for f in &info.settings {
-                    let head = f
-                        .get("key")
-                        .map(js::string)
-                        .unwrap_or_else(|| "undefined".into());
-                    let head = head.split('.').next().unwrap().to_string();
-                    assert!(
-                        !["enabled", "position"].contains(&head.as_str()),
-                        "{file}: {head} is the standalone switch's or position's"
-                    );
-                }
-            }
             let inherited = if info.agent {
                 agent_settings(&data["agent"], &info.title).len()
             } else {
@@ -1455,48 +1396,6 @@ mod tests {
         assert_eq!(module_info_path("", "/c"), "");
     }
 
-    // Node: a standalone module's page starts with its switch and position
-    #[test]
-    fn a_standalone_modules_page_starts_with_its_switch_and_position() {
-        let fields = module_fields(
-            &[
-                json!({ "moduleId": "osd", "title": "OSD", "standalone": true, "settings": [{ "key": "size", "type": "integer", "default": 1 }] }),
-            ],
-            "edge.qml",
-        );
-        let got: Vec<_> = fields
-            .iter()
-            .map(|f| {
-                (
-                    str_of(f, "key"),
-                    str_of(f, "page"),
-                    str_of(f, "section"),
-                    f["default"].clone(),
-                )
-            })
-            .collect();
-        assert_eq!(
-            got,
-            vec![
-                (Some("osd.enabled"), Some("modules/osd"), None, json!(true)),
-                (
-                    Some("osd.position.edge"),
-                    Some("modules/osd"),
-                    Some("Position"),
-                    json!("top")
-                ),
-                (
-                    Some("osd.position.offset"),
-                    Some("modules/osd"),
-                    Some("Position"),
-                    json!(0.5)
-                ),
-                (Some("osd.size"), Some("modules/osd"), None, json!(1)),
-            ]
-        );
-        assert_eq!(fields[1]["options"][0]["preview"], "edge.qml");
-    }
-
     // Node: a terminal of your own: its entry's title and command, then the fields of a terminal, its own list
     // Its title and command are its entry's, edited in place: a `command`
     // under its id as well would be a second command for the same terminal.
@@ -1534,12 +1433,9 @@ mod tests {
                 .contains("logs stops")
         );
         // On its page, the entry's keys stay as they are; the others go under its id.
-        let fields = module_fields(
-            &[
-                json!({ "moduleId": "btop", "title": "System", "terminal": true, "settings": info.settings }),
-            ],
-            "",
-        );
+        let fields = module_fields(&[
+            json!({ "moduleId": "btop", "title": "System", "terminal": true, "settings": info.settings }),
+        ]);
         assert_eq!(
             keys(&fields)[..3],
             [
@@ -1584,13 +1480,10 @@ mod tests {
     #[test]
     fn module_fields_puts_the_references_to_a_modules_own_fields_under_its_id_as_it_does_their_keys()
      {
-        let fields = module_fields(
-            &[json!({ "moduleId": "m", "title": "M", "settings": [
+        let fields = module_fields(&[json!({ "moduleId": "m", "title": "M", "settings": [
                 { "key": "lang", "type": "choice", "default": "pt" },
                 { "key": "a", "type": "string", "default": "", "when": { "key": "lang", "is": "pt" } }
-            ] })],
-            "",
-        );
+            ] })]);
         assert_eq!(fields[1]["when"], json!({ "key": "m.lang", "is": "pt" }));
     }
 }

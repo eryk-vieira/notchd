@@ -29,7 +29,9 @@ Panel {
     onTriggered: root.svc = root.bar.shell.serviceFor("eryk.notchd")
   }
 
-  readonly property var notches: root.svc ? root.svc.notches : []
+  // The notches that show at rest: one that only peeks (the OSD's) has no
+  // open state to toggle from here; Settings lists it.
+  readonly property var notches: root.svc ? root.svc.notches.filter(function(n) { return n.decoration }) : []
   readonly property var titles: {
     var out = {}
     var catalog = root.svc ? root.svc.moduleCatalog : []

@@ -690,23 +690,25 @@ def copy_named(s, prefix):
 
 
 class Guests(ShellCase):
-    """The guest notches of `state`: a standalone module's own (the test
-    module `pinger`, tests/gnome/guest-modules, peeks every 3 s) and the
+    """The guest notches of `state`: a notch without decoration (`quiet`, with
+    the test module `pinger`, tests/gnome/guest-modules, which peeks every 3 s) and the
     visitor (a peek on a screen where no notch has the module). Unseen while
     closed; while one shows, the notch it overlaps on its edge hides."""
 
     config = {"modules": ["timer"], "reserveSpace": True,
-              "notches": [{}, {"id": "far", "modules": ["activities"], "position": {"screen": "Meta-1"}}]}
+              "notches": [{}, {"id": "far", "modules": ["activities"], "position": {"screen": "Meta-1"}},
+                          {"id": "quiet", "decoration": False, "modules": ["pinger"],
+                           "position": {"edge": "top", "offset": 0.5, "screen": "all"}}]}
     modules = os.path.join(ROOT, "tests", "gnome", "guest-modules")
 
-    def test_a_standalone_module_shows_its_own_notch_only_while_it_peeks(self):
+    def test_a_notch_without_decoration_shows_only_while_it_peeks(self):
         sh = self.shell
-        s = sh.until(lambda s: (copy_named(s, "standalone:pinger@") or {}).get("seen")
-                     and copy_named(s, "standalone:pinger@")["mode"] == "peek", 5, "the module's own notch peeking")
-        pinger, main = copy_named(s, "standalone:pinger@"), main_copy(s)
+        s = sh.until(lambda s: (copy_named(s, "quiet@") or {}).get("seen")
+                     and copy_named(s, "quiet@")["mode"] == "peek", 5, "the module's own notch peeking")
+        pinger, main = copy_named(s, "quiet@"), main_copy(s)
         self.assertIn("pinger peeks", pinger["texts"])
         self.assertTrue(main["covered"] and not main["seen"], "the notch under it hides")
-        s = sh.until(lambda s: not copy_named(s, "standalone:pinger@")["seen"], 4, "the peek over")
+        s = sh.until(lambda s: not copy_named(s, "quiet@")["seen"], 4, "the peek over")
         self.assertTrue(main_copy(s)["seen"])
 
     def test_the_visitor_shows_a_peek_where_no_notch_has_the_module(self):

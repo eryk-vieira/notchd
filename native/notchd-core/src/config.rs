@@ -25,7 +25,8 @@ pub static DEFAULTS: LazyLock<Object> = LazyLock::new(|| {
         "reserveSpace": false,
         "draggable": true,
         "tabs": true,
-        "idleIcons": true
+        "idleIcons": true,
+        "decoration": true
     }) else {
         unreachable!("an object literal")
     };
@@ -33,12 +34,13 @@ pub static DEFAULTS: LazyLock<Object> = LazyLock::new(|| {
 });
 
 /// `NOTCH_KEYS`: the keys a notch may override from the top level.
-pub const NOTCH_KEYS: [&str; 7] = [
+pub const NOTCH_KEYS: [&str; 8] = [
     "modules",
     "reserveSpace",
     "draggable",
     "tabs",
     "idleIcons",
+    "decoration",
     "workspaces",
     "position",
 ];
@@ -269,7 +271,9 @@ pub fn default_notch_id(index: usize) -> String {
 pub struct NotchSpec {
     /// Its own id or [`default_notch_id`]; unique (a repeat gets a suffix).
     pub id: String,
-    /// Its place in the list.
+    /// Its place in the list; a host's default notch that the config has no
+    /// entry for comes after the config's own, at an index the list does not
+    /// have yet (see [`NotchSpec::in_config`]).
     pub index: usize,
     /// What goes before a notch key in the config: "" for the top-level
     /// notch, "notches.<index>." otherwise.
@@ -281,14 +285,52 @@ pub struct NotchSpec {
     pub tabs: bool,
     /// Whether an idle active module shows its icon; on unless false.
     pub idle_icons: bool,
+    /// Whether it shows at rest; on unless `"decoration": false`.
+    pub decoration: bool,
     pub workspaces: Option<Vec<Value>>,
     /// The raw `position`, top-level keys merged under the notch's.
     pub position: Option<Value>,
+    /// A notch the host declares: its keys come from the declaration, then
+    /// the config's entry of that id, never the top level.
+    pub declared: bool,
+    /// Whether the config has an entry for it; `false` for a declared notch
+    /// that keeps all its defaults, which is written only when something
+    /// differs (`Store::set_value`).
+    pub in_config: bool,
 }
 
 /// `notches(cfg, defaultModules)`: every notch, resolved. A key a notch
 /// leaves out comes from the top level, then its default; `position` merges.
 pub fn notches(cfg: &Value, default_modules: &[&str]) -> Vec<NotchSpec> {
+    notches_with(cfg, default_modules, &[])
+}
+
+/// The ids the config removed from the host's default notches
+/// (`"removedNotches": ["osd"]`).
+pub fn removed_notches(cfg: &Value) -> Vec<String> {
+    match get(cfg, "removedNotches") {
+        Some(Value::Array(l)) => l
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(str::to_owned)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The id of a host's declared notch.
+pub fn declared_id(decl: &Value) -> Option<&str> {
+    get(decl, "id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+}
+
+/// [`notches`] with the notches the host declares (`defaults`, each
+/// `{ id, decoration, modules, position, ... }`): one exists unless the
+/// config's `removedNotches` lists its id; a notch of the config with that
+/// `id` overrides the keys it gives. The declared ones come after the
+/// config's own.
+pub fn notches_with(cfg: &Value, default_modules: &[&str], defaults: &[Value]) -> Vec<NotchSpec> {
     let empty = Value::Object(Object::new());
     let cfg = if cfg.is_null() { &empty } else { cfg };
     let listed = has_notch_list(cfg);
@@ -297,15 +339,16 @@ pub fn notches(cfg: &Value, default_modules: &[&str]) -> Vec<NotchSpec> {
         Some(Value::Array(l)) if listed => l,
         _ => &single,
     };
+    let removed = removed_notches(cfg);
+    let declared_of = |id: &str| defaults.iter().find(|d| declared_id(d) == Some(id));
     let mut used: Vec<String> = Vec::new();
     let mut out = Vec::new();
-    for (i, raw) in entries.iter().enumerate() {
-        let entry = if raw.is_object() { raw } else { &empty };
-        let pick = |key: &str| get(entry, key).or_else(|| get(cfg, key));
-        let id = match get(entry, "id") {
-            Some(Value::String(s)) if !s.trim().is_empty() => s.trim().to_owned(),
-            _ => default_notch_id(i),
+    let mut resolve_entry = |entry: &Value, i: usize, in_config: bool, out: &mut Vec<NotchSpec>| {
+        let explicit = match get(entry, "id") {
+            Some(Value::String(s)) if !s.trim().is_empty() => Some(s.trim().to_owned()),
+            _ => None,
         };
+        let id = explicit.clone().unwrap_or_else(|| default_notch_id(i));
         let mut unique = id.clone();
         let mut n = 2;
         while used.contains(&unique) {
@@ -313,17 +356,37 @@ pub fn notches(cfg: &Value, default_modules: &[&str]) -> Vec<NotchSpec> {
             n += 1;
         }
         used.push(unique.clone());
-        let top = get(cfg, "position").and_then(Value::as_object);
+        let decl = if unique == id {
+            explicit.as_deref().and_then(declared_of)
+        } else {
+            None
+        };
+        // A declared notch never inherits the top level.
+        let pick = |key: &str| {
+            get(entry, key).or_else(|| match decl {
+                Some(d) => get(d, key),
+                None => get(cfg, key),
+            })
+        };
+        let top = if decl.is_some() {
+            None
+        } else {
+            get(cfg, "position").and_then(Value::as_object)
+        };
+        let base = decl
+            .and_then(|d| get(d, "position"))
+            .and_then(Value::as_object);
         let own = get(entry, "position").and_then(Value::as_object);
-        let position = (top.is_some() || own.is_some()).then(|| {
+        let position = (top.is_some() || base.is_some() || own.is_some()).then(|| {
             let mut merged = top.cloned().unwrap_or_default();
+            merged.extend(base.cloned().unwrap_or_default());
             merged.extend(own.cloned().unwrap_or_default());
             Value::Object(merged)
         });
         out.push(NotchSpec {
             id: unique,
             index: i,
-            prefix: if listed {
+            prefix: if listed || !in_config {
                 format!("notches.{i}.")
             } else {
                 String::new()
@@ -336,9 +399,26 @@ pub fn notches(cfg: &Value, default_modules: &[&str]) -> Vec<NotchSpec> {
             draggable: pick("draggable") != Some(&Value::Bool(false)),
             tabs: pick("tabs") != Some(&Value::Bool(false)),
             idle_icons: pick("idleIcons") != Some(&Value::Bool(false)),
+            decoration: pick("decoration") != Some(&Value::Bool(false)),
             workspaces: workspace_list(pick("workspaces")),
             position,
+            declared: decl.is_some(),
+            in_config,
         });
+    };
+    for (i, raw) in entries.iter().enumerate() {
+        let entry = if raw.is_object() { raw } else { &empty };
+        resolve_entry(entry, i, true, &mut out);
+    }
+    let mut next = entries.len();
+    for d in defaults {
+        let Some(id) = declared_id(d) else { continue };
+        if removed.iter().any(|r| r == id) || out.iter().any(|s| s.declared && s.id == id) {
+            continue;
+        }
+        let entry = json!({ "id": id });
+        resolve_entry(&entry, next, false, &mut out);
+        next += 1;
     }
     out
 }
@@ -359,20 +439,105 @@ pub fn module_union(specs: &[NotchSpec], extra: &[&str]) -> Vec<String> {
     out
 }
 
-/// `moduleLoadList(specs, standalone, enabled)`: the modules to load: every
-/// one a notch shows except standalone ones, then the standalone ones
-/// switched on.
-pub fn module_load_list(specs: &[NotchSpec], standalone: &[&str], enabled: &[&str]) -> Vec<String> {
-    let mut out: Vec<String> = module_union(specs, &[])
-        .into_iter()
-        .filter(|id| !standalone.contains(&id.as_str()))
-        .collect();
-    for id in enabled {
-        if standalone.contains(id) && !out.iter().any(|o| o == id) {
-            out.push((*id).to_owned());
+/// A declared notch's key `key` of the config's entry for it, when it has one.
+fn declared_entry<'a>(cfg: &'a Value, id: &str) -> Option<(usize, &'a Value)> {
+    let list = get(cfg, "notches")?.as_array()?;
+    list.iter()
+        .enumerate()
+        .find(|(_, e)| get(e, "id").and_then(Value::as_str).map(str::trim) == Some(id))
+}
+
+/// `prunedDeclared(cfg, defaults)`: the config without the entries of the
+/// host's notches that say nothing but their `id` (a notch that went back to
+/// its defaults is not written).
+pub fn pruned_declared(cfg: &Value, defaults: &[Value]) -> Value {
+    let mut out = copy_cfg(cfg);
+    for d in defaults {
+        let Some(id) = declared_id(d) else { continue };
+        let Some((i, entry)) = declared_entry(&out, id) else {
+            continue;
+        };
+        let bare = entry
+            .as_object()
+            .is_some_and(|o| o.len() == 1 && o.contains_key("id"));
+        let len = get(&out, "notches")
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len);
+        if bare && len >= 2 {
+            out = without_notch(&out, i as i64);
         }
     }
     out
+}
+
+/// `withDeclaredNotchRemoved(cfg, id)`: the host's default notch `id` gone:
+/// its entry, if the config has one, leaves the list and the id goes into
+/// `removedNotches`.
+pub fn with_declared_notch_removed(cfg: &Value, id: &str) -> Value {
+    let mut out = copy_cfg(cfg);
+    if let Some((i, _)) = declared_entry(&out, id) {
+        let len = get(&out, "notches")
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len);
+        out = if len >= 2 {
+            without_notch(&out, i as i64)
+        } else {
+            with_value(&out, "notches", None)
+        };
+    }
+    let mut removed = removed_notches(&out);
+    if !removed.iter().any(|r| r == id) {
+        removed.push(id.to_owned());
+    }
+    with_value(&out, "removedNotches", Some(&json!(removed)))
+}
+
+/// `migrateDeclared(cfg, defaults)`: a config from before a host's notches
+/// were notches: a module that had a place of its own (`"osd": { "enabled",
+/// "position" }`) now is the host's default notch of that id. `enabled:
+/// false` removes the default notch; a `position` is stored as what differs
+/// from the declared one, on the notch's entry. Both old keys go. `None`
+/// when there is nothing to migrate.
+pub fn migrate_declared(cfg: &Value, defaults: &[Value]) -> Option<Value> {
+    let mut out = copy_cfg(cfg);
+    let mut changed = false;
+    for d in defaults {
+        let Some(id) = declared_id(d) else { continue };
+        let enabled = value_at(&out, &format!("{id}.enabled")).cloned();
+        let position = value_at(&out, &format!("{id}.position")).cloned();
+        if enabled.is_none() && position.is_none() {
+            continue;
+        }
+        changed = true;
+        out = with_value(&out, &format!("{id}.enabled"), None);
+        out = with_value(&out, &format!("{id}.position"), None);
+        if enabled == Some(Value::Bool(false)) {
+            out = with_declared_notch_removed(&out, id);
+            continue;
+        }
+        let Some(Value::Object(pos)) = position else {
+            continue;
+        };
+        let declared = get(d, "position").and_then(Value::as_object);
+        let differs: Object = pos
+            .into_iter()
+            .filter(|(k, v)| k != "screen" && declared.and_then(|p| p.get(k)) != Some(v))
+            .collect();
+        if differs.is_empty() {
+            continue;
+        }
+        out = match declared_entry(&out, id) {
+            Some((i, _)) => {
+                let mut o = out;
+                for (k, v) in &differs {
+                    o = with_value(&o, &format!("notches.{i}.position.{k}"), Some(v));
+                }
+                o
+            }
+            None => with_notch_added(&out, &json!({ "id": id, "position": differs })),
+        };
+    }
+    changed.then_some(out)
 }
 
 /// `freeNotchId(ids)`: notch-<n>, the lowest n (from 2) not taken.
@@ -508,12 +673,19 @@ pub const TERMINAL_MODULE_IDS: &[&str] = &[
 /// `RESERVED_KEYS`: the ids a terminal can't take, being keys the config
 /// already has.
 pub fn reserved_keys() -> Vec<String> {
-    ["modules", "notches", "position", "theme", "terminals"]
-        .into_iter()
-        .map(str::to_owned)
-        .chain(DEFAULTS.keys().cloned())
-        .chain(NOTCH_KEYS.iter().map(|k| (*k).to_owned()))
-        .collect()
+    [
+        "modules",
+        "notches",
+        "removedNotches",
+        "position",
+        "theme",
+        "terminals",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .chain(DEFAULTS.keys().cloned())
+    .chain(NOTCH_KEYS.iter().map(|k| (*k).to_owned()))
+    .collect()
 }
 
 /// `TERMINAL_ID`: a letter, then letters, digits, `-` or `_`.
@@ -773,8 +945,11 @@ mod tests {
                 draggable: true,
                 tabs: true,
                 idle_icons: true,
+                decoration: true,
                 workspaces: None,
                 position: None,
+                declared: false,
+                in_config: true,
             }]
         );
         assert_eq!(notches(&json!({ "notches": [] }), &[]).len(), 1);
@@ -1005,35 +1180,159 @@ mod tests {
         // a slice is the only list there is.
     }
 
-    // moduleLoadList: what notches show, never a standalone module, then the standalone ones switched on
+    fn osd_notch() -> Value {
+        json!({ "id": "osd", "decoration": false, "modules": ["osd"],
+                "position": { "edge": "top", "offset": 0.5 } })
+    }
+
+    // decoration: on unless a notch says false; a top-level false is every notch's
     #[test]
-    fn module_load_list_what_notches_show_never_a_standalone_module_then_the_standalone_ones_switched_on()
-     {
-        let specs = vec![
-            NotchSpec {
-                module_ids: vec!["osd".into(), "media".into()],
-                ..one(json!({}))
-            },
-            NotchSpec {
-                module_ids: vec!["activities".into(), "media".into()],
-                ..one(json!({}))
-            },
-        ];
-        assert_eq!(
-            module_load_list(&specs, &["osd", "clock"], &["osd", "clock"]),
-            ["media", "activities", "osd", "clock"]
+    fn decoration_is_on_unless_a_notch_says_false() {
+        assert!(one(json!({})).decoration);
+        assert!(!one(json!({ "decoration": false })).decoration);
+        let specs = notches(
+            &json!({ "notches": [{ "id": "a" }, { "id": "b", "decoration": false }] }),
+            &[],
         );
-        // osd is off, even listed
         assert_eq!(
-            module_load_list(&specs, &["osd", "clock"], &["clock"]),
-            ["media", "activities", "clock"]
+            specs.iter().map(|n| n.decoration).collect::<Vec<_>>(),
+            [true, false]
         );
-        // enabled only counts for standalone ones
+        assert!(one(json!({ "decoration": "no" })).decoration);
+    }
+
+    // notchesWith: a host's notch exists without a word of config, after the config's own
+    #[test]
+    fn a_host_notch_exists_without_config_after_the_configs_own() {
+        let specs = notches_with(&json!({}), &["media"], &[osd_notch()]);
+        assert_eq!(specs.len(), 2);
+        let osd = &specs[1];
+        assert_eq!((osd.id.as_str(), osd.index), ("osd", 1));
+        assert_eq!(osd.prefix, "notches.1.");
+        assert_eq!(osd.module_ids, ["osd"]);
+        assert!(!osd.decoration && osd.declared && !osd.in_config);
+        assert_eq!(osd.position, Some(json!({ "edge": "top", "offset": 0.5 })));
+        // The first notch is the top level, untouched.
+        assert!(specs[0].decoration && !specs[0].declared && specs[0].in_config);
+        assert_eq!(specs[0].prefix, "");
+    }
+
+    // notchesWith: a host's notch never inherits the top level
+    #[test]
+    fn a_host_notch_never_inherits_the_top_level() {
+        let cfg = json!({ "modules": ["timer"], "tabs": false, "reserveSpace": true,
+                          "position": { "edge": "left", "screen": "DP-1" } });
+        let osd = notches_with(&cfg, &["media"], &[osd_notch()]).remove(1);
+        assert_eq!(osd.module_ids, ["osd"]);
+        assert!(osd.tabs && !osd.reserve_space);
+        assert_eq!(osd.position, Some(json!({ "edge": "top", "offset": 0.5 })));
+    }
+
+    // notchesWith: the config's entry of that id overrides only the keys it gives
+    #[test]
+    fn a_config_entry_of_a_host_notchs_id_overrides_only_the_keys_it_gives() {
+        let cfg = json!({ "notches": [
+            { "id": "main" },
+            { "id": "osd", "position": { "offset": 0.2 } }
+        ] });
+        let specs = notches_with(&cfg, &["media"], &[osd_notch()]);
+        assert_eq!(specs.len(), 2, "one osd, not two");
+        let osd = &specs[1];
+        assert!(osd.declared && osd.in_config);
+        assert_eq!(osd.prefix, "notches.1.");
+        assert!(!osd.decoration);
+        assert_eq!(osd.module_ids, ["osd"]);
+        assert_eq!(osd.position, Some(json!({ "edge": "top", "offset": 0.2 })));
+        // And it can say what the host leaves out.
+        let cfg = json!({ "notches": [{ "id": "main" },
+            { "id": "osd", "modules": ["osd", "media"], "decoration": true }] });
+        let osd = notches_with(&cfg, &[], &[osd_notch()]).remove(1);
+        assert_eq!(osd.module_ids, ["osd", "media"]);
+        assert!(osd.decoration);
+    }
+
+    // removedNotches: a host's notch the config removed is gone
+    #[test]
+    fn a_host_notch_the_config_removed_is_gone() {
+        let cfg = json!({ "removedNotches": ["osd"] });
+        assert_eq!(notches_with(&cfg, &[], &[osd_notch()]).len(), 1);
+        assert_eq!(removed_notches(&cfg), ["osd"]);
+        assert!(removed_notches(&json!({ "removedNotches": 3 })).is_empty());
+        // Another id's tombstone changes nothing.
+        let cfg = json!({ "removedNotches": ["clock"] });
+        assert_eq!(notches_with(&cfg, &[], &[osd_notch()]).len(), 2);
+    }
+
+    // withDeclaredNotchRemoved: its entry goes and the id is remembered
+    #[test]
+    fn removing_a_host_notch_drops_its_entry_and_remembers_the_id() {
+        let kept = with_declared_notch_removed(&json!({}), "osd");
+        assert_eq!(kept, json!({ "removedNotches": ["osd"] }));
+        let cfg = json!({ "notches": [{ "id": "main" }, { "id": "osd", "position": { "offset": 0.1 } }] });
+        let out = with_declared_notch_removed(&cfg, "osd");
+        assert_eq!(out, json!({ "removedNotches": ["osd"] }));
+        // Twice is once.
+        let again = with_declared_notch_removed(&out, "osd");
+        assert_eq!(again, out);
+        // With other notches, the list stays.
+        let cfg = json!({ "notches": [{ "id": "a" }, { "id": "b" }, { "id": "osd" }] });
+        let out = with_declared_notch_removed(&cfg, "osd");
+        assert_eq!(out["notches"].as_array().map(Vec::len), Some(2));
+        assert_eq!(out["removedNotches"], json!(["osd"]));
+    }
+
+    // migrateDeclared: the old standalone keys become the host's notch
+    #[test]
+    fn the_old_standalone_keys_become_the_host_notch() {
+        let defaults = [osd_notch()];
         assert_eq!(
-            module_load_list(&specs, &[], &["media"]),
-            ["osd", "media", "activities"]
+            migrate_declared(&json!({ "hoverOpenDelay": 1 }), &defaults),
+            None
         );
-        assert!(module_load_list(&[], &[], &[]).is_empty());
+        // enabled: false removes the default notch
+        let out = migrate_declared(&json!({ "osd": { "enabled": false } }), &defaults).unwrap();
+        assert_eq!(out, json!({ "removedNotches": ["osd"] }));
+        // a position becomes the notch's, only what differs
+        let out = migrate_declared(
+            &json!({ "osd": { "position": { "edge": "bottom", "offset": 0.5 }, "size": 3 } }),
+            &defaults,
+        )
+        .unwrap();
+        assert_eq!(
+            out,
+            json!({ "osd": { "size": 3 },
+                    "notches": [{}, { "id": "osd", "position": { "edge": "bottom" } }] })
+        );
+        // a position equal to the default stores nothing
+        let out = migrate_declared(
+            &json!({ "osd": { "position": { "edge": "top", "offset": 0.5 } } }),
+            &defaults,
+        )
+        .unwrap();
+        assert_eq!(out, json!({}));
+        // both: off wins, the position is dropped with the key
+        let out = migrate_declared(
+            &json!({ "osd": { "enabled": false, "position": { "edge": "left" } } }),
+            &defaults,
+        )
+        .unwrap();
+        assert_eq!(out, json!({ "removedNotches": ["osd"] }));
+        // enabled: true was the default
+        let out = migrate_declared(&json!({ "osd": { "enabled": true } }), &defaults).unwrap();
+        assert_eq!(out, json!({}));
+        // a host that declares no such notch leaves the keys alone
+        assert_eq!(
+            migrate_declared(&json!({ "osd": { "enabled": false } }), &[]),
+            None
+        );
+        // an entry already there takes the difference
+        let cfg = json!({ "notches": [{ "id": "main" }, { "id": "osd" }],
+                          "osd": { "position": { "offset": 0.9 } } });
+        let out = migrate_declared(&cfg, &defaults).unwrap();
+        assert_eq!(
+            out,
+            json!({ "notches": [{ "id": "main" }, { "id": "osd", "position": { "offset": 0.9 } }] })
+        );
     }
 
     // terminals: each entry with a command, in order, its title or ""

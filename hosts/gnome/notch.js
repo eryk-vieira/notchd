@@ -99,8 +99,8 @@ function trace(cr, d) {
 export const NotchCopy = GObject.registerClass(
 class NotchCopy extends St.Widget {
     // `host`: { theme, send(msg), store(), monitorFor(name), names() }.
-    // `guest`: the visitor or a standalone module's own notch, unseen while
-    // closed (Notch.qml's `guest`).
+    // `guest`: the visitor or a notch without decoration, unseen while
+    // closed (NotchCopy.hiddenAtRest).
     _init(host, notchId, {guest = false} = {}) {
         // Clipped: while the card grows, its content never shows outside it.
         super._init({name: 'notchd-copy', reactive: true, can_focus: true, x: 0, y: 0, clip_to_allocation: true});

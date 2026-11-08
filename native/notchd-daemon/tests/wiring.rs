@@ -365,8 +365,8 @@ fn a_user_modules_settings_page_is_in_the_schema() {
 #[test]
 fn a_user_module_no_notch_lists_is_in_the_schema_to_turn_on_and_follows_its_folder() {
     // Listed by nothing: the schema still has its page and fields, and its
-    // standalone place, so Settings can turn it on; a new folder and a
-    // deleted one rebroadcast the schema.
+    // page, so Settings can show it; a new folder and a deleted one
+    // rebroadcast the schema.
     let r = rig("modunlisted", r#"{"modules":["media"]}"#);
     write(
         &r.modules_dir(),
@@ -390,17 +390,17 @@ fn a_user_module_no_notch_lists_is_in_the_schema_to_turn_on_and_follows_its_fold
     write(
         &r.modules_dir(),
         "clock",
-        r#"{"title":"Clock","command":["./run.sh"],"standalone":true}"#,
+        r#"{"title":"Clock","command":["./run.sh"],
+            "settings":[{"key":"format","type":"string","label":"Format","default":"24h"}]}"#,
         "#!/bin/sh\nread -r init\nwhile read -r l; do :; done\n",
     );
     let got = ui
-        .wait_for(START_WAIT, |m| {
-            matches!(m, ToUi::Schema(s) if s.fields.iter().any(|f| f.key.as_deref()
-                == Some("clock.position.edge") && f.page == "modules/clock")
-                && s.fields.iter().any(|f| f.part.as_deref() == Some("standalone")))
-        })
+        .wait_for(
+            START_WAIT,
+            |m| matches!(m, ToUi::Schema(s) if s.pages.iter().any(|p| p.id == "modules/clock")),
+        )
         .is_some();
-    assert!(got, "a folder added later brings its standalone place");
+    assert!(got, "a folder added later brings its page");
     std::fs::remove_dir_all(r.modules_dir().join("weather")).unwrap();
     let gone = ui
         .wait_for(
@@ -569,9 +569,10 @@ fn the_timer_activities_and_osd_live_in_the_daemon_and_answer_their_ipc() {
         r#"{"modules":["timer","activities"],"timer":{"notify":false}}"#,
     );
     let mut ui = r.ui_on(&["DP-1"], "DP-1");
-    // The host that owns the OSD's IPC target declares the module.
+    // The host that owns the OSD's IPC target declares the module and the
+    // undecorated notch that shows it.
     ui.send_raw(
-        r#"{"t":"catalog","modules":[{"moduleId":"osd","title":"OSD","settings":[],"standalone":true}]}"#,
+        r#"{"t":"catalog","modules":[{"moduleId":"osd","title":"OSD","settings":[]}],"defaultNotches":[{"id":"osd","decoration":false,"modules":["osd"],"position":{"edge":"top","offset":0.5}}]}"#,
     );
     // Listed, they load: their facts and an idle timer's expanded view arrive.
     assert!(
@@ -580,7 +581,7 @@ fn the_timer_activities_and_osd_live_in_the_daemon_and_answer_their_ipc() {
             .is_some()
     );
     assert!(view_where(&mut ui, "timer", Slot::Expanded, "5 min").is_some());
-    // The osd is standalone: loaded without a notch listing it.
+    // The osd is in the host's notch: loaded as any module a notch lists.
     assert!(
         ui.wait_for(START_WAIT, |m| matches!(m, ToUi::Module(i)
             if i.id == "osd" && i.priority == 100))
