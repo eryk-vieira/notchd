@@ -4,6 +4,8 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-11-08
+
 ### Fixed
 
 - Settings: a page whose `choice` has long option labels (a user module's, say) no longer grows wider than the window and cuts off every control at its right edge; segments that don't fit beside the field's text show as chips that wrap under it, and no row is wider than the page.
