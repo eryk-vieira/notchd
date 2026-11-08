@@ -60,15 +60,11 @@ run_shard() {
   cp -r -- "$root/tests/modules/hello" "$dir/data/modules/hello"
   cp -r -- "$root/tests/modules/gauge" "$dir/data/modules/gauge"
   # Fake `claude` and `codex` terminal UIs (tests/qml/fixtures/bin), state,
-  # data, cache and Claude Code's dir in the scratch dir; a fake live bridge
-  # and a fake components installer.
+  # data, cache and Claude Code's dir in the scratch dir.
   NOTCHD_TEST_DAEMON="$daemon_bin" NOTCHD_TEST_SOCKETS="$dir/sock" NOTCHD_TEST_HOOKS=1 \
     NOTCHD_QMLTEST_CASES="$cases" NOTCHD_QMLTEST_ONLY="${QMLTEST_ONLY:-}" \
     NOTCHD_QMLTEST_DIR="$dir/data" XDG_STATE_HOME="$dir/data/state" XDG_DATA_HOME="$dir/data/share" XDG_CACHE_HOME="$dir/data/cache" \
     CLAUDE_CONFIG_DIR="$dir/data/claude" \
-    NOTCHD_LIVE_BRIDGE="$root/tests/qml/fixtures/bin/codex-live" NOTCHD_FAKE_LIVE_ARGS="$dir/data/live-args" \
-    NOTCHD_LOCAL_LIVE_BRIDGE="$root/tests/qml/fixtures/bin/local-live" NOTCHD_FAKE_LOCAL_LIVE_ARGS="$dir/data/local-live-args" \
-    NOTCHD_COMPONENTS_INSTALLER="$root/tests/qml/fixtures/bin/components" NOTCHD_FAKE_COMPONENTS_DIR="$dir/data/components" \
     PATH="$root/tests/qml/fixtures/bin:$PATH" \
     NOTCHD_FAKE_CLAUDE_ARGS="$dir/data/claude-args" NOTCHD_FAKE_CODEX_ARGS="$dir/data/codex-args" "$root/scripts/isolated.sh" "$dir/runtime" \
     timeout -k 5 90 quickshell -p "$dir/config" --no-color > "$dir/log" 2>&1 || true

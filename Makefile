@@ -3,7 +3,7 @@
 # The tests are a pyramid: many cheap ones at the bottom, few costly ones on
 # top, the costly ones run less often.
 #   make test         unit: pure rules, seconds. After every change.
-#   make integration  bridges and installer as processes, with fakes.
+#   make integration  scripts and the daemon as processes, with fakes.
 #   make qmltest      QML behaviour, offscreen.
 #   make visual       offscreen renders.
 #   make check        all of it, the cheap layers first: before every commit.
@@ -48,7 +48,7 @@ check: lint validate test rust
 
 # Unit layer: the UI-side JS (core/*.js, core/settings/*.js, core/client/) in
 # Node, the Rust core's rules and modules (native/, cargo test), and
-# the Python bridges' and installer's rules as functions (tests/*_test.py,
+# the Python scripts' rules as functions (tests/*_test.py,
 # every TestCase without `tier = "integration"`). No processes, no servers.
 test:
 	@mkdir -p build/times
@@ -65,9 +65,9 @@ rust:
 	@$(TIMED) rust-clippy $(CARGO) clippy --workspace --all-targets --manifest-path native/Cargo.toml --quiet -- -D warnings
 	@$(TIMED) rust-test $(CARGO) test --workspace --manifest-path native/Cargo.toml --quiet
 
-# Integration layer: the live bridges and the components' installer run as
-# processes against fakes (a fake LocalAI, pacman, downloads from a local
-# server: nothing real is installed), on parallel workers. TestCases with
+# Integration layer: the daemon fetcher, the install script and the MPRIS
+# test run as processes against fakes (downloads from a local server: nothing
+# real is installed), on parallel workers. TestCases with
 # `tier = "integration"`.
 integration: daemon
 	@$(TIMED) py-integration scripts/pytests.py integration
@@ -122,14 +122,6 @@ lint-run:
 	if printf '%s\n' "$$out" | grep -qE '^(Warning|Error)'; then \
 	  printf '%s\n' "$$out"; exit 1; fi; \
 	echo "qmllint: clean"
-	@python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' core/live/codex-live.py \
-	  && echo "codex-live.py: parses"
-	@python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' core/live/local-live.py \
-	  && echo "local-live.py: parses"
-	@python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' core/components/localai.py \
-	  && echo "localai.py: parses"
-	@python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' core/components/install.py \
-	  && echo "install.py: parses"
 
 # The repo root is the Omarchy plugin, validated as committed (a copy of the
 # files git sees: the build folders are not the plugin's).
@@ -198,9 +190,8 @@ restart: daemon
 	fi
 	NOTCHD_BIN="$(DAEMON_BIN)" omarchy restart shell
 
-# Nothing is installed from here. What the voice modules need beyond the
-# app (LocalAI and its voices, Voxtype, system packages) is installed, removed
-# and configured from notchd's settings, Components page (core/components/).
+# Nothing is installed from here: what a module needs beyond the app is
+# installed and removed from notchd's settings.
 
 clean:
 	rm -rf build

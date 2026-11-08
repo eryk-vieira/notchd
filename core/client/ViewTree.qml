@@ -27,7 +27,7 @@ Item {
   // How deep this node is; the containers count it for the depth limit.
   property int depth: 0
   // Drawn on an accent fill (a meter's child): `foreground` reads as the
-  // background token there, as the Voice disc's glyph does.
+  // background token there, as a meter's glyph does.
   property bool onAccent: false
 
   signal action(string actionId, var value)

@@ -579,7 +579,7 @@ function image(node, ctx, depth) {
 
 const METER_EASE_MS = 140;
 
-// The Voice disc: an accent disc with a line border that swells with the
+// The meter disc: an accent disc with a line border that swells with the
 // level (`1 + value * .35` over 140 ms, from the scale it has), its `child`
 // inside on the accent. It takes the room of the fully swollen disc. As
 // MeterPrim.qml.

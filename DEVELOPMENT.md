@@ -18,22 +18,6 @@ Working on notchd itself. For using it, see the [README](README.md); for the rul
 | `git` | `git` | the same build fetches Ghostty's source at a pinned commit |
 | `curl` | `curl` | the daemon's plan-usage requests (tests use a fake network) |
 | GNOME Shell (optional) | `gnome-shell`, `mutter-devkit`, `python-gobject`; `podman` for GNOME 46 | the GNOME extension (`hosts/gnome/`): `make gnome-dev`, `make gnome-test`, and the `-46` ones. Not needed for `make check`; your session stays what it is |
-| The voice modules' parts (optional) | none to develop: Settings › Components installs them (table below). Tests use fakes (a fake bridge, a fake LocalAI and `voxtype`, fake `pacman` and a local download server), so `make check` needs none | Voice, Codex Live |
-
-## Optional components
-
-Nothing heavy ships with notchd. Everything external a module needs beyond the app is a component (`core/components/components.json`), installed, removed and shown with its progress by the settings (Components page, and the rows on the Voice and Codex Live pages). `install.py status | install <id> | run <id> | cancel <id> | remove <id>` is the installer; the daemon runs it (detached for long work) and reads its state from `$XDG_STATE_HOME/notchd/components/<id>.json`. See [docs/settings.md](docs/settings.md#components).
-
-| Component | Kind | Size | Installs |
-|---|---|---|---|
-| `libpulse` (Audio tools) | system | 2 MB | `libpulse` (pacat, parec) |
-| `voxtype` | system (AUR) | 663 MB | `voxtype-bin`, built by yay or paru in a terminal |
-| `localai` | files | 197 MB | `bin/local-ai` (the release binary) in `$XDG_DATA_HOME/notchd/localai`; Remove deletes that folder, voices included |
-| `voice-piper-<lang>` (`voice-piper-pt-br` for Portuguese) | localai | 63 to 120 MB, plus Piper's backend (`cpu-piper`, 78 MB) once | one Piper voice per language (pt faber, en amy, es davefx, fr upmc, de thorsten, it paola, nl pim; medium), through LocalAI's API |
-| `voice-pocket-<lang>` (`voice-pocket-pt` for Portuguese) | localai | 750 MB (English 1.3 GB), plus Pocket TTS's backend (`cpu-pocket-tts`, 1.2 GB) once | the `<language>_24l` weights in the shared cache (`hf/`), through LocalAI's API; every language has alba |
-| `codex-live-audio` | system | 8 MB | `python-gobject gst-plugins-{base,good,bad} libnice libpulse` |
-
-The voices of one engine share its backend (and Pocket TTS's weights cache `hf/`): Remove takes only what no other installed voice holds (`forget` in `install.py`), and a size counts a shared path once (`own_size`). A new component is an entry in the registry, a row (`{ type: "component", component: <id> }`) where it belongs, and the bridge naming its id when it is missing (`components` in the bridge's error line). Tests: `tests/components.test.mjs` (rules), `tests/components_test.py` (the installer), `tests/qml/shell.qml` (the rows).
 
 ## Layout
 
@@ -45,10 +29,10 @@ shell.qml             standalone host: the repo root is also a Quickshell config
 native/               the daemon (Rust workspace; Cargo.toml, rust-toolchain.toml, releases.json)
   notchd-proto/       the wire: every message and view primitive as serde types, JSON Schema (schema/), limits
   notchd-core/        the rules, no I/O: config, settings schema, notch state, peek, navigation, timers,
-                      usage, agent titles, voice and components rules; a `store` that holds the whole state
+                      usage, agent titles rules; a `store` that holds the whole state
   notchd-modules/     the built-in modules (media, timer, activities, resources, osd, claude, codex,
-                      terminals, voice) as `CoreModule`s: state in, facts, view trees and effects out
-  notchd-providers/   what the OS gives: media (MPRIS), /proc, PTYs, plan usage, sidecars; `linux/` backends
+                      terminals) as `CoreModule`s: state in, facts, view trees and effects out
+  notchd-providers/   what the OS gives: media (MPRIS), /proc, PTYs, plan usage; `linux/` backends
   notchd-daemon/      the `notchd` binary: server, router, hub, module host for user modules (modhost/),
                       PTY sessions, the CLI (`notchd ipc`, `notchd attach`, `notchd daemon --ensure`)
   notchd-testkit/     a fake UI, a fake module process, temp dirs, the golden loader
@@ -75,11 +59,6 @@ core/                 the Linux UI: no desktop-specific code
                       (its own connection to the daemon; keys, pointer and clipboard go back)
   modules/            claude.svg, the mark the UI bundles (each built-in module's JSON file is in
                       native/notchd-modules/modules/: the daemon's modules have no QML)
-  components/         components.json (the registry), install.py (the installer: downloads, LocalAI
-                      models, pacman; stdlib only) and localai.py (where LocalAI lives, how to reach it)
-  live/               codex-live.py and local-live.py, the voice bridges the daemon runs as sidecars
-                      (embedded in the binary and written out on first use; `NOTCHD_CORE_DIR=core` runs
-                      a checkout's files instead)
   DepthReport.qml     what a notch card measures of itself, sent to the daemon (`measure`)
   KeepShown.qml       shows a window again after its monitor goes away and comes back
   *Compositor.qml     compositor adapters (Hyprland, generic)
@@ -92,13 +71,13 @@ tests/
   modules/            fake user modules (crashing, slow, malformed...) for the module host
   fixtures/           usage responses
   *.test.mjs          Node tests of the UI-side JS and the shared vectors
-  *_test.py           Python tests of the bridges, the installer, the fetcher, MPRIS
+  *_test.py           Python tests of the fetcher, the install script, MPRIS
   load.mjs            loads a core .js file the way QML sees it
   qml/shell.qml       QML behaviour tests, regression tests among them
   qml/scenarios.qml   the daemon and the QML service together, scenario by scenario
   qml/client.qml      the QML client against a fake daemon (fake-daemon.mjs)
   qml/fixtures/       modules only the QML tests load (a module you type into), and fake `claude`,
-                      `codex`, bridges and installer
+                      `codex`
   visual/shell.qml    offscreen scenarios: the settings window, the notch per edge
   visual/hero.qml     the README image: the real notch in four states
   visual/demo-player.py  a fake MPRIS player with a fictional track
@@ -169,12 +148,12 @@ The tests are a pyramid: many cheap ones at the bottom, few costly ones on top, 
 
 | Layer | Target | What it does | Run it |
 |---|---|---|---|
-| unit | `make test` | Node tests of the UI-side JS (`core/*.js`, `core/settings/*.js`, the client) and the shared vectors; the Python rules of the live bridges and the components' installer as functions (`tests/*_test.py`, every TestCase without `tier = "integration"`); `cargo test` over the workspace (the rules and modules as values, the daemon over a real socket on a temp dir, with a fake UI). No processes of the user's, no servers | after every change |
+| unit | `make test` | Node tests of the UI-side JS (`core/*.js`, `core/settings/*.js`, the client) and the shared vectors; the Python rules of the scripts as functions (`tests/*_test.py`, every TestCase without `tier = "integration"`); `cargo test` over the workspace (the rules and modules as values, the daemon over a real socket on a temp dir, with a fake UI). No processes of the user's, no servers | after every change |
 | rust | `make rust` | `cargo fmt --check`, `clippy -D warnings` and `cargo test --workspace` over `native/`. `make test` runs the same `cargo test`; `make rust` adds the format check and clippy, which `make check` needs | after a change to `native/` |
-| integration | `make integration` (builds the daemon) | `tests/codex_live_test.py`'s echo canceller on real GStreamer; `tests/local_live_test.py`, the whole local voice bridge with a fake LocalAI, voxtype, pacat, codex and claude; `tests/components_test.py`, the components' installer with fake `pacman`, `pkexec`, `yay`, a fake LocalAI and downloads from a server on 127.0.0.1; `tests/fetch_daemon_test.py`, `scripts/fetch-daemon.py` and `scripts/ensure-daemon.sh` against a local release server; `tests/mpris_test.py`, the real daemon against the demo player on a private D-Bus (`make integration` builds the daemon first). On parallel workers, each in its own process group, killed with what it left behind (every process is also under `timeout -k`) | after a change to `core/live/`, `core/components/`, `scripts/fetch-daemon.py` or `scripts/ensure-daemon.sh` |
+| integration | `make integration` (builds the daemon) | `tests/fetch_daemon_test.py`, `scripts/fetch-daemon.py` and `scripts/ensure-daemon.sh` against a local release server; `tests/mpris_test.py`, the real daemon against the demo player on a private D-Bus (`make integration` builds the daemon first). On parallel workers, each in its own process group, killed with what it left behind (every process is also under `timeout -k`) | after a change to `scripts/fetch-daemon.py` or `scripts/ensure-daemon.sh` |
 | qml | `make qmltest` (builds the daemon) | the QML behaviour tests, in parallel shards (below) | after a QML change |
 | visual | `make visual` | renders the settings window and the notch on each edge (the real modules, the media one playing the demo player's track) offscreen into `build/visual/`; fails on any QML warning, so it also proves the core loads | after a visual change, and look at the PNGs |
-| static | `make lint` | `qmllint` over `shell.qml` and the core; fails on any warning. Also checks that the Python bridges and installer parse | after a QML change |
+| static | `make lint` | `qmllint` over `shell.qml` and the core; fails on any warning | after a QML change |
 | static | `make validate` | `omarchy plugin validate .` | before a commit |
 
 `make check` runs lint, validate, the unit layer and `make rust` first, one after another, so a broken rule fails in seconds; then integration, qml and visual at once. CI (`.github/workflows/ci.yml`) runs `make rust`, `make test` and `make integration`; the QML layers need Quickshell and stay local.
@@ -228,16 +207,6 @@ Objects and arrays built inside the vm have their own prototypes; compare them t
 ### README image
 
 `make hero` renders `docs/images/hero.webp` from `tests/visual/hero.qml`: the real `NotchCard` in four states, each with its own `NotchService` and demo data, offscreen. It runs on a private D-Bus where the only media player is `tests/visual/demo-player.py`, so whatever you are playing never ends up in the image, and with `tests/visual/bin` first on PATH, so the agents are demo scripts that print a finished conversation, never your own `claude` or `codex`, and their usage is set by hand (offscreen nothing asks the network). The tiles use Omarchy's Gruvbox colors and its "The Backwater" wallpaper (`WALLPAPER=<image> make hero` for another; a gradient without one). The wallpaper stays out of the repo; only the rendered image is committed. Rerun it after a visual change to the notch and commit the result.
-
-### Local voice
-
-`core/live/local-live.py` speaks the same stdout protocol as `codex-live.py`, so the daemon's voice module (`native/notchd-modules/src/voice.rs`) runs it unchanged (`notchd_core::live::local_bridge_args` makes its command line). The QML tests use `tests/qml/fixtures/bin/local-live` (`NOTCHD_LOCAL_LIVE_BRIDGE`); `tests/local_live_test.py` tests the voice activity detector, sentence splitter, markdown stripper, the agents' command lines and streams as functions, and runs the whole bridge on a fake LocalAI (an HTTP server on 127.0.0.1 in the test: `/readyz`, `/v1/models`, `/v1/audio/speech` returning 16-bit or float WAVs) and fake `voxtype`, `pacat`, `codex` and `claude` with `--mic <wav>` (`NOTCHD_LIVE_MIC_SPEED=10` plays it faster), including that stop, end of stdin and SIGTERM leave no child behind, and that a LocalAI the bridge started (`NOTCHD_LOCALAI_BIN`, a fake program) stops with it while one that was already running is left alone. The real LocalAI, by hand and never in `make check`: install the components from the settings (or `NOTCHD_LOCALAI_URL=http://127.0.0.1:18081 XDG_DATA_HOME=<scratch> python3 core/components/install.py install voice-piper-pt-br`, which starts and stops a LocalAI of its own), then `local-live.py` with a fake `pacat` on PATH. By hand: `python3 core/live/local-live.py --agent codex --session new --cwd <scratch folder>` (never `last` in a folder with sessions you care about: it writes into them), speak, Ctrl+C; `NOTCHD_LIVE_DEBUG=1` copies the log. Bound every run with `timeout -k` and check `ps` for `parec`, `pacat`, `voxtype`, `local-ai` after.
-
-### Codex Live
-
-The QML tests and visual scenarios never run the real installer either: `NOTCHD_COMPONENTS_INSTALLER` points at `tests/qml/fixtures/bin/components`, a fake that reports a canned state and logs the `install`, `cancel` and `remove` it is asked for. They never run the real bridge: `NOTCHD_LIVE_BRIDGE` points at `tests/qml/fixtures/bin/codex-live`, which prints the same lines (live, a question, an answer, a voice level) and waits for `{"stop": true}`; a `--codex` with `missing` in it fails as the real one does without its packages. `tests/codex_live_test.py` covers what the bridge makes of the server's messages, and builds the echo canceller's branch where GStreamer is.
-
-By hand, the bridge runs on its own and prints its lines: `python3 core/live/codex-live.py`, talk, Ctrl+C. `--mic <file.wav>` puts a recording in the microphone's place (begin it with ~12 s of silence, while it connects); `NOTCHD_LIVE_DEBUG=1` copies the log to stderr; `NOTCHD_LIVE_RECORD=<file.wav>` writes Codex's voice as it is decoded. To hear nothing while measuring what it plays, give it a sink of its own: `pactl load-module module-null-sink sink_name=notchd_test`, `PULSE_SINK=notchd_test`, record `notchd_test.monitor` with `parec`, and `pactl unload-module` it after. Bound every such run with `timeout -k`, and check nothing is left playing.
 
 ### App icon
 

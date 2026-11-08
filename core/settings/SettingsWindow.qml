@@ -34,9 +34,8 @@ FloatingWindow {
 
   // ----------------------------------------------------------------- pages
   // Settings.js has the rules.
-  // What the page shows: the service's schema (the daemon's: the choices
-  // that wait on a component are already locked) without the fields that wait
-  // on another field's value (`when`).
+  // What the page shows: the service's schema (the daemon's) without the
+  // fields that wait on another field's value (`when`).
   readonly property var schema: win.svc ? Settings.shownFields(win.svc.settingsSchema, win.svc.configValue) : []
   readonly property var pages: Settings.visiblePages(win.svc ? win.svc.settingsPages : [], win.schema)
   readonly property var navPages: Settings.navPages(win.pages)

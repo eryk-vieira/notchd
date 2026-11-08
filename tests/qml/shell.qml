@@ -241,17 +241,11 @@ ShellRoot {
       { name: "a notch open on the screen without focus keeps the keyboard", run: root.keyboardOnOtherScreen },
       { name: "navigation: x twice removes the selected notch, s opens its settings", run: root.navigationRemove },
       { name: "navigation: m moves the notch live; Enter keeps it, Escape or the shortcut puts it back", run: root.navigationMove },
-      { name: "live: a click opens the notch and starts talking, a hover doesn't; closing ends it", run: root.liveTalks },
-      { name: "live: stop holds until the notch closes; mute goes to the bridge; IPC words and errors", run: root.liveStopAndCommands },
-      { name: "live: without its packages it says what to install, and the config stays as it was", run: root.liveMissingPackages },
-      { name: "live: a new session ends the one running, clears the transcript and starts another", run: root.liveNewSession },
-      { name: "live: the local voice starts its own bridge with its settings", run: root.localLiveArgs },
       { name: "daemon: a settings edit goes to the daemon and comes back; defaults are never written; a slider drag is one write", run: root.daemonSettingsRoundTrip },
       { name: "daemon: ipc set answers as before, the daemon's own ipc set and a hand edit of the file reach the UI, a bad file is ignored", run: root.daemonIpcAndFile },
       { name: "daemon: a command for a module no notch loads says so, instead of ok", run: root.ipcModuleNotLoaded },
       { name: "daemon: killed, the notch says notchd is not running, the config stays, an edit waits, and it all comes back", run: root.daemonDownAndBack },
       { name: "daemon: SIGKILLed with nothing else happening, it comes back by itself", run: root.daemonKilledComesBack },
-      { name: "components: the settings rows show the installer's state, install, cancel and remove (twice) through it, and lock a voice until it is installed", run: root.componentRows }
     ]
     // scripts/qml-test.sh runs the cases in shards at once: NOTCHD_QMLTEST_CASES
     // is the comma-separated indexes of this one's; unset, all of them.
@@ -275,7 +269,7 @@ ShellRoot {
   }
   function daemonsReady() {
     var services = [service, multi, standaloneSvc, resourced, timed, played, typer, dropSvc, codexSvc, claudeSvc, codexMissingSvc,
-                    ownTermSvc, reconnectSvc, liveSvc, localLiveSvc, componentSvc, tallSvc, tabsSvc, idleSvc]
+                    ownTermSvc, reconnectSvc, tallSvc, tabsSvc, idleSvc]
     return services.every(function(s) { return s.daemonReady })
   }
 
@@ -2416,310 +2410,6 @@ ShellRoot {
     }
   }
 
-  // A spoken conversation (LiveModule) with a fake bridge
-  // (tests/qml/fixtures/bin/codex-live): it says it is live, hears a
-  // question, answers, and closes on {"stop": true}.
-  TestService {
-    id: liveSvc
-    ipcTarget: "notchd-qmltest-live"
-    configPath: root.dir + "/live.json"
-    compositor: workspace4
-    defaultModules: ["codex-live"]
-  }
-  FloatingWindow {
-    implicitWidth: 700
-    implicitHeight: 600
-    NotchCard { notch: liveSvc.notches.length > 0 ? liveSvc.notches[0].copies[0] : null }
-  }
-  FileView {
-    id: liveArgs
-    path: Quickshell.env("NOTCHD_FAKE_LIVE_ARGS")
-    blockLoading: true
-    printErrors: false
-  }
-  function liveCopy() { return liveSvc.notches[0].copies[0] }
-
-  // The local voice (modules/local-live.qml): its own bridge and arguments.
-  TestService {
-    id: localLiveSvc
-    ipcTarget: "notchd-qmltest-local-live"
-    configPath: root.dir + "/local-live.json"
-    compositor: workspace4
-    defaultModules: ["local-live"]
-  }
-  FloatingWindow {
-    implicitWidth: 700
-    implicitHeight: 600
-    NotchCard { notch: localLiveSvc.notches.length > 0 ? localLiveSvc.notches[0].copies[0] : null }
-  }
-  FileView {
-    id: localLiveArgsFile
-    path: Quickshell.env("NOTCHD_FAKE_LOCAL_LIVE_ARGS")
-    blockLoading: true
-    printErrors: false
-  }
-  function localLiveArgs() {
-    localLiveSvc.replaceConfig({ "local-live": { agent: "claude", session: "new", directory: "~/talk", language: "en",
-                                                 speechModel: "small", voiceModel: "pocket-pt", otherVoiceModel: "mine",
-                                                 voice: "rafael", localaiUrl: "http://127.0.0.1:9" } })
-    localLiveSvc.open()
-    root.steps([
-      [900, function() {
-        var t = root.texts(localLiveSvc.client.view("local-live", "expanded"))
-        root.check(t.indexOf("Claude · Listening") !== -1 || t.indexOf("Listening") !== -1, "no conversation: " + t)
-        localLiveArgsFile.reload()
-        var args = localLiveArgsFile.text().split("\n")
-        var home = Quickshell.env("HOME")
-        root.check(args[args.indexOf("--agent") + 1] === "claude", "the agent: " + args)
-        root.check(args[args.indexOf("--session") + 1] === "new", "the session: " + args)
-        root.check(args[args.indexOf("--cwd") + 1] === home + "/talk", "the folder: " + args)
-        root.check(args[args.indexOf("--lang") + 1] === "en", "the language: " + args)
-        root.check(args[args.indexOf("--speech-model") + 1] === "small", "the speech model: " + args)
-        root.check(args[args.indexOf("--voice-model") + 1] === "mine", "a model of your own wins: " + args)
-        root.check(args[args.indexOf("--voice") + 1] === "rafael", "the voice: " + args)
-        root.check(args[args.indexOf("--localai-url") + 1] === "http://127.0.0.1:9", "the address: " + args)
-        root.check(args.indexOf("--whisper-model") === -1 && args.indexOf("--tts") === -1, "an old engine's argument: " + args)
-        root.check(args.indexOf("--codex") === -1, "a codex-live argument: " + args)
-        localLiveSvc.close()
-      }],
-      [2500, function() { root.check(root.texts(localLiveSvc.client.view("local-live", "compact")).length === 0, "closed, it went on") }]
-    ], function() {
-      localLiveSvc.replaceConfig({})
-      root.done()
-    })
-  }
-
-  // The optional components (core/ComponentStore.qml, settings/ComponentRow.qml)
-  // against a fake installer (fixtures/bin/components): the state it reports
-  // reaches the rows, their buttons run it, and a choice that needs a
-  // component is locked until it is installed.
-  TestService {
-    id: componentSvc
-    ipcTarget: "notchd-qmltest-components"
-    configPath: root.dir + "/components.json"
-    compositor: workspace4
-    defaultModules: ["local-live"]
-  }
-  FileView {
-    id: componentLog
-    path: root.dir + "/components/log"
-    blockLoading: true
-    printErrors: false
-  }
-  FloatingWindow {
-    implicitWidth: 700
-    implicitHeight: 200
-    Item { id: componentHost; anchors.fill: parent }
-  }
-  Component {
-    id: settingsWindowComponent
-    SettingsWindow { svc: componentSvc }
-  }
-  Component {
-    id: componentRowComponent
-    ComponentRow { svc: componentSvc }
-  }
-  function componentLog_() {
-    componentLog.reload()
-    componentLog.waitForJob()
-    return componentLog.text().split("\n").filter(function(l) { return l !== "" })
-  }
-  // The rows are the daemon's (the schema's `row`, its state read from the
-  // fake installer while the settings are open); the buttons are the
-  // `component` IPC.
-  function componentRows() {
-    componentSvc.settingsOpen = true
-    var rows = []
-    function field(id) {
-      return componentSvc.settingsSchema.filter(function(f) { return f.type === "component" && f.component === id && f.page === "components" })[0]
-    }
-    function row(id) {
-      var item = componentRowComponent.createObject(componentHost, { field: field(id) })
-      rows.push(item)
-      return item
-    }
-    function lockedChoices() {
-      var f = componentSvc.settingsSchema.filter(function(x) { return x.key === "local-live.voiceModel" })[0]
-      return f.options.map(function(o) { return o.disabled === true })
-    }
-    function voiceRows() {
-      // What the window shows: the schema without the rows whose `when` fails.
-      return Settings.shownFields(componentSvc.settingsSchema, componentSvc.configValue).filter(function(f) { return f.type === "component" && f.page === "modules/local-live" && f.component.indexOf("voice-") === 0 })
-        .map(function(f) { return f.component })
-    }
-    root.check(componentSvc.settingsPages.some(function(p) { return p.id === "components" }), "no Components page")
-    root.steps([
-      [1500, function() {
-        var small = row("localai")
-        var medium = row("voice-pocket-pt")
-        var voice = row("voice-piper-pt-br")
-        var base = row("voxtype")
-        var pulse = row("libpulse")
-        root.check(small.info.text === "Installed (197 MB)", "installed: " + small.info.text)
-        root.check(medium.info.text === "Downloading 42 % (644 MB of 1.5 GB)" && medium.working, "downloading: " + medium.info.text)
-        root.check(medium.info.actions.length === 1 && medium.info.actions[0].id === "cancel", "a download has Cancel only")
-        root.check(voice.info.state === "failed" && voice.info.text.indexOf("could not download") !== -1, "failed: " + voice.info.text)
-        root.check(pulse.info.text === "Installed by the system" && pulse.info.actions.length === 0, "a system package is never removed here")
-        root.check(base.info.text === "Not installed" && base.info.actions[0].id === "install", "missing: " + base.info.text)
-        var rowsOnPage = componentSvc.settingsSchema.filter(function(f) { return f.page === "components" && f.type === "component" })
-        root.check(rowsOnPage.length > 6, "the overview misses components: " + rowsOnPage.length)
-        var field = componentSvc.settingsSchema.filter(function(f) { return f.component === "localai" && f.page === "modules/local-live" })[0]
-        root.check(!!field && field.label === "LocalAI" && field.help.indexOf("For Voice") !== -1, "row not filled: " + JSON.stringify(field))
-        // the Voice page: the chosen language's voices only, its choices locked until they are installed
-        root.check(JSON.stringify(voiceRows()) === JSON.stringify(["voice-piper-pt-br", "voice-pocket-pt"]), "pt voices: " + JSON.stringify(voiceRows()))
-        root.check(JSON.stringify(lockedChoices()) === "[false,true,true]", "pt locks: " + JSON.stringify(lockedChoices()))
-        componentSvc.setConfigValue("local-live.voiceLanguage", "en")
-      }],
-      [600, function() {
-        root.check(JSON.stringify(voiceRows()) === JSON.stringify(["voice-piper-en", "voice-pocket-en"]), "en voices: " + JSON.stringify(voiceRows()))
-        root.check(JSON.stringify(lockedChoices()) === "[false,true,false]", "en locks (Pocket installed): " + JSON.stringify(lockedChoices()))
-        componentSvc.setConfigValue("local-live.voiceLanguage", undefined)
-        // Install runs the installer; the row follows its state
-        rows[3].act("install")
-      }],
-      [1500, function() {
-        var base = row("voxtype")
-        root.check(root.componentLog_().indexOf("install voxtype") !== -1, "install not run: " + root.componentLog_())
-        root.check(base.working && base.info.percent === 10, "no progress after Install: " + base.info.text)
-        base.act("cancel")
-      }],
-      [1500, function() {
-        var base = row("voxtype")
-        root.check(root.componentLog_().indexOf("cancel voxtype") !== -1, "cancel not run: " + root.componentLog_())
-        root.check(base.info.state === "missing", "still working after Cancel: " + base.info.text)
-        // Remove asks twice
-        var small = row("localai")
-        small.act("remove")
-        root.check(small.confirming && root.componentLog_().indexOf("remove localai") === -1, "removed on the first click")
-        small.act("remove")
-      }],
-      [1500, function() {
-        var small = row("localai")
-        root.check(root.componentLog_().indexOf("remove localai") !== -1, "remove not run on the second click")
-        root.check(small.info.state === "missing", "still installed after Remove: " + small.info.text)
-        rows.forEach(function(r) { r.destroy() })
-        componentSvc.settingsOpen = false
-      }]
-    ], function() { root.done() })
-  }
-
-  function liveTexts() { return root.texts(liveSvc.client.view("codex-live", "expanded")) }
-  function liveRunning() { return liveSvc.client.view("codex-live", "compact") !== null }
-
-  function liveTalks() {
-    liveSvc.replaceConfig({ "codex-live": { voice: "maple", directory: "~/talk", access: "workspace-write" } })
-    // A hover shows it and leaves the microphone off.
-    root.hover(root.liveCopy())
-    root.steps([
-      [400, function() {
-        root.check(root.liveCopy().mode === "expanded", "hovered, the notch didn't open")
-        root.check(!root.liveRunning(), "a hover started a conversation")
-        root.unhover(root.liveCopy())
-        liveSvc.open()
-      }],
-      [1000, function() {
-        var t = root.liveTexts()
-        root.check(root.liveRunning(), "no conversation: " + t)
-        root.check(t.indexOf("Rodei os testes.") !== -1, "transcript: " + t)
-        root.check(t.indexOf("Speaking") !== -1 || t.indexOf("Working") !== -1, "the voice's level didn't show: " + t)
-        liveArgs.reload()
-        var args = liveArgs.text().split("\n")
-        var home = Quickshell.env("HOME")
-        root.check(args.indexOf("--voice") !== -1 && args[args.indexOf("--voice") + 1] === "maple", "args: " + args)
-        root.check(args[args.indexOf("--cwd") + 1] === home + "/talk", "the folder: " + args)
-        root.check(args[args.indexOf("--access") + 1] === "workspace-write", "the access: " + args)
-        root.check(args[args.indexOf("--codex") + 1] === "codex", "the command: " + args)
-        // Closed for a moment, it goes on.
-        liveSvc.close()
-      }],
-      [500, function() {
-        root.check(root.liveRunning(), "closing for a moment ended it, or nothing shows closed")
-      }],
-      [2200, function() {
-        root.check(!root.liveRunning(), "closed, the conversation went on")
-        root.check(root.liveTexts().indexOf("Rodei os testes.") !== -1, "the transcript went with it")
-      }]
-    ], function() {
-      liveSvc.replaceConfig({})
-      root.done()
-    })
-  }
-
-  function liveStopAndCommands() {
-    root.check(/^not in a conversation/.test(liveSvc.liveCommand("codex-live", "mute")), "mute without a conversation")
-    root.check(/^usage: live codex-live/.test(liveSvc.liveCommand("codex-live", "sing")), "no usage")
-    root.check(/^no live module codex; live modules: codex-live/.test(liveSvc.liveCommand("codex", "start")), "an agent took live")
-    root.check(liveSvc.liveCommand("codex-live", "start") === "ok", "start was refused")
-    root.steps([
-      [1000, function() {
-        root.check(root.liveCopy().pinned && root.liveRunning(), "start didn't open the notch and talk")
-        liveSvc.notchIpc("live", ["codex-live", "mute"])
-      }],
-      [500, function() {
-        // The fake bridge keeps "speaking", which the status line prefers to
-        // "Muted"; the microphone button is what says it.
-        root.check(JSON.stringify(liveSvc.client.view("codex-live", "expanded")).indexOf("Unmute the microphone") !== -1, "the bridge didn't say muted: " + root.liveTexts())
-        liveSvc.notchIpc("live", ["codex-live", "stop"])
-      }],
-      [800, function() {
-        root.check(!root.liveRunning(), "stop didn't end it")
-        root.check(root.liveCopy().pinned, "stop closed the notch")
-      }],
-      [1800, function() {
-        root.check(!root.liveRunning(), "stopped with the notch open, it started again")
-        liveSvc.close()
-      }],
-      [400, function() { liveSvc.open() }],
-      [1000, function() {
-        root.check(root.liveRunning(), "opened again after a stop, it didn't talk")
-        liveSvc.notchIpc("live", ["codex-live", "toggle"])
-      }],
-      [800, function() {
-        root.check(!root.liveRunning(), "toggle didn't stop it")
-        liveSvc.close()
-      }],
-      [1800, function() {}]
-    ], root.done)
-  }
-
-  function liveMissingPackages() {
-    liveSvc.replaceConfig({ "codex-live": { command: "missing-codex" } })
-    liveSvc.open()
-    root.steps([
-      [1000, function() {
-        var t = root.liveTexts()
-        root.check(!root.liveRunning(), "it kept running: " + t)
-        root.check(t.some(function(x) { return /Install WebRTC and audio in Settings › Components\.$/.test(x) }), "error: " + t)
-        root.check(t.indexOf("Stopped") !== -1, "status: " + t)
-        root.check(JSON.stringify(liveSvc.config) === JSON.stringify({ "codex-live": { command: "missing-codex" } }),
-                   "the config changed: " + JSON.stringify(liveSvc.config))
-        liveSvc.close()
-      }],
-      [1800, function() {}]
-    ], function() {
-      liveSvc.replaceConfig({})
-      root.done()
-    })
-  }
-
-  function liveNewSession() {
-    liveSvc.open()
-    root.steps([
-      [1000, function() {
-        root.check(root.liveRunning() && root.liveTexts().indexOf("Rodei os testes.") !== -1, "no conversation: " + root.liveTexts())
-        root.check(liveSvc.notchIpc("live", ["codex-live", "new"]) !== false, "new was refused")
-      }],
-      [1200, function() {
-        var t = root.liveTexts()
-        root.check(root.liveRunning(), "the new session isn't live: " + t)
-        // The fake says the same two lines again: the old ones are gone.
-        root.check(t.filter(function(x) { return x === "Rodei os testes." }).length === 1, "the transcript wasn't cleared: " + t)
-        liveSvc.close()
-      }],
-      [2500, function() { root.check(!root.liveRunning(), "closed, it went on") }]
-    ], root.done)
-  }
-
   function codexIdle() {
     if (root.noTerminal(codexSvc)) return
     root.go(function*() {
@@ -3186,7 +2876,7 @@ ShellRoot {
       if (!root.check(!!entry, "gauge is not in the Modules page's catalog")) return
       root.check(entry.title === "Gauge" && !entry.standalone && entry.settings.length === 1, "catalog entry: " + JSON.stringify(entry))
       root.check(s.moduleSettingDefault("gauge", "unit") === "kg" && s.moduleSetting("gauge", "unit") === "kg", "its default setting is " + s.moduleSettingDefault("gauge", "unit"))
-      root.check(s.isStandalone("gauge") === false && s.isAgent("gauge") === false && s.isLive("gauge") === false, "kind of gauge")
+      root.check(s.isStandalone("gauge") === false && s.isAgent("gauge") === false, "kind of gauge")
       root.check(s.reportedCatalog.every(function(m) { return m.moduleId !== "gauge" }), "the daemon was told of its own module")
       root.check(shelfList.all.indexOf("gauge") !== -1 && shelfList.available.indexOf("gauge") !== -1, "a notch's list does not offer gauge")
       shelfList.toggle("gauge")

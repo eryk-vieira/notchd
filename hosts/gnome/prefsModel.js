@@ -13,7 +13,6 @@ const PAGE_ICONS = {
     general: 'preferences-system-symbolic',
     notch: 'video-display-symbolic',
     modules: 'application-x-addon-symbolic',
-    components: 'package-x-generic-symbolic',
     appearance: 'applications-graphics-symbolic',
 };
 
@@ -85,7 +84,6 @@ const CONTROLS = {
     workspaces: 'workspaces',
     notches: 'notches',
     moduleCatalog: 'catalog',
-    component: 'component',
     note: 'note',
 };
 const WIDE = new Set(['modules', 'workspaces', 'notches', 'catalog']);
@@ -127,12 +125,12 @@ export function pageGroups(schema, pageId) {
 }
 
 // What a page looks like, without values: equal while only values,
-// visibility, locks and component states change, which the rows update in
+// visibility changes, which the rows update in
 // place; anything else draws the page again.
 export function pageShape(schema, pageId) {
     return JSON.stringify(pageGroups(schema, pageId).map(g => [g.title, g.description,
         g.fields.map(f => [f.type, f.key, f.label, f.help, f.options, f.display, f.min, f.max, f.step,
-            f.unit, f.part, f.component, f.required, f.default])]));
+            f.unit, f.part, f.required, f.default])]));
 }
 
 // A field's value as a control shows it: the config's, else the default.
@@ -192,13 +190,11 @@ export function fromSpin(field, shown) {
 }
 
 // -------------------------------------------------------------- choices
-// A combo row's items: an option that waits on a component (`disabled`)
-// says so and cannot be picked.
+// A combo row's items.
 export function comboItems(field) {
     return (field.options ?? []).map(o => ({
         value: o.value,
-        label: o.disabled ? `${o.label} (not installed)` : String(o.label ?? o.value),
-        disabled: !!o.disabled,
+        label: String(o.label ?? o.value),
     }));
 }
 
@@ -208,11 +204,10 @@ export function comboIndex(field, value) {
     return at === -1 ? 0 : at;
 }
 
-// The value the item at `index` stands for, or undefined when it cannot be
-// picked (a disabled option, out of range): the control goes back.
+// The value the item at `index` stands for, or undefined when it is out of
+// range: the control goes back.
 export function comboValue(field, index) {
-    const o = (field.options ?? [])[index];
-    return !o || o.disabled ? undefined : o.value;
+    return (field.options ?? [])[index]?.value;
 }
 
 // --------------------------------------------------------------- text
@@ -379,22 +374,6 @@ export function addTerminal(cfg, catalog, Config) {
 
 export function removeTerminal(cfg, id, Config) {
     return configSets(cfg, Config.withoutTerminal(cfg ?? {}, id));
-}
-
-// ----------------------------------------------------------- components
-// A component row's button, as the `component` IPC's first argument
-// (ComponentRow.qml): remove and cancel as they are, anything else installs
-// (Install, Try again).
-export function componentCommand(actionId) {
-    return actionId === 'remove' || actionId === 'cancel' ? actionId : 'install';
-}
-
-// The line under a component's title: its state, and its size when idle.
-export function componentText(row) {
-    if (!row)
-        return '';
-    const size = row.state !== 'working' && row.size ? ` · ${row.size}` : '';
-    return `${row.text ?? ''}${size}`;
 }
 
 // -------------------------------------------------------- following

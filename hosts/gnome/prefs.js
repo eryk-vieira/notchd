@@ -121,8 +121,7 @@ class SettingsUi {
         if (this._closed)
             return;
         this._closed = true;
-        // The window is gone: the daemon stops polling components for it,
-        // and navigation's `s` opens it again.
+        // The window is gone: navigation's `s` opens it again.
         this._client.sendFinal({t: 'settings', open: false});
         this._window.disconnect(this._pageId);
         if (this._keysChangedId)
@@ -391,7 +390,6 @@ class SettingsUi {
         case 'entry': return this._entry(field, group, false);
         case 'color': return this._entry(field, group, true);
         case 'note': return this._note(field, group);
-        case 'component': return this._component(field, group);
         case 'modules': return this._list(group, f => Model.moduleRows(f, this._ctx.schema.modules,
             Model.terminalIds(this._ctx.cfg, Config)), r => this._moduleRow(r, pageId));
         case 'workspaces': return this._workspaces(field, group, pageId);
@@ -405,11 +403,9 @@ class SettingsUi {
         }
     }
 
-    // What every row takes from its field: shown or not, locked or not.
+    // What every row takes from its field: shown or not.
     _common(widget, field) {
         widget.visible = field.visible !== false;
-        widget.sensitive = !field.locked;
-        widget.tooltip_text = field.locked ? String(field.locked) : null;
     }
 
     _switch(field, group) {
@@ -554,71 +550,6 @@ class SettingsUi {
         const r = row(Adw.ActionRow, {title: field.label || '', subtitle: field.help ?? ''});
         group.add(r);
         return {update: f => this._common(r, f)};
-    }
-
-    // `component` (ComponentRow.qml): its state, a bar while it installs and
-    // its buttons, each the `component` IPC. Remove asks twice.
-    _component(field, group) {
-        let current = field;
-        let actions = '';
-        let confirming = 0;
-        const r = row(Adw.ActionRow, {title: field.label || field.component || ''});
-        const bar = new Gtk.ProgressBar({valign: Gtk.Align.CENTER, width_request: 120, visible: false});
-        const buttons = new Gtk.Box({spacing: 6, valign: Gtk.Align.CENTER});
-        r.add_suffix(bar);
-        r.add_suffix(buttons);
-        const act = (id, button) => {
-            if (id === 'remove' && !confirming) {
-                button.label = 'Sure?';
-                confirming = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => {
-                    confirming = 0;
-                    button.label = 'Remove';
-                    return GLib.SOURCE_REMOVE;
-                });
-                return;
-            }
-            if (confirming)
-                GLib.source_remove(confirming);
-            confirming = 0;
-            this._client.ipc('component', [Model.componentCommand(id), current.component]);
-        };
-        group.add(r);
-        return {
-            update: f => {
-                current = f;
-                this._common(r, f);
-                const info = f.row ?? null;
-                r.subtitle = info ? Model.componentText(info) : f.help ?? '';
-                r.tooltip_text = f.help ?? null;
-                const working = info?.state === 'working';
-                bar.visible = working;
-                if (working) {
-                    if (info.percent >= 0)
-                        bar.fraction = info.percent / 100;
-                    else
-                        bar.pulse();
-                }
-                const next = JSON.stringify(info?.actions ?? []);
-                if (next !== actions) {
-                    actions = next;
-                    let child;
-                    while ((child = buttons.get_first_child()))
-                        buttons.remove(child);
-                    for (const a of info?.actions ?? []) {
-                        const b = new Gtk.Button({label: a.label});
-                        if (a.id === 'remove')
-                            b.add_css_class('destructive-action');
-                        b.connect('clicked', () => act(a.id, b));
-                        buttons.append(b);
-                    }
-                }
-            },
-            destroy: () => {
-                if (confirming)
-                    GLib.source_remove(confirming);
-                confirming = 0;
-            },
-        };
     }
 
     // A list field's rows, drawn again when what they show changes:

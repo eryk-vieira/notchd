@@ -96,7 +96,7 @@ Item {
   // not (moduleInfo).
   readonly property var fileModuleIds: Object.keys(svc.hostModules || {})
   // The modules the daemon lists in its schema: the built-ins and the user
-  // modules, each `{ moduleId, title, settings, standalone, agent, live }`.
+  // modules, each `{ moduleId, title, settings, standalone, agent }`.
   // (The host's and the terminals' entries, which this service reported, come
   // back in it too: ownModuleIds leaves them out.)
   readonly property var daemonCatalog: svc.daemonSchema && svc.daemonSchema.modules ? svc.daemonSchema.modules : []
@@ -141,7 +141,7 @@ Item {
   }
   property string terminalErrors: ""
 
-  // id -> { title, settings, standalone, agent, live, terminal }: the host's
+  // id -> { title, settings, standalone, agent, terminal }: the host's
   // modules from their JSON files (Settings.parseModuleInfo; a module without
   // one has none of them), each terminal's entry, and the daemon's catalog.
   property var fileModuleInfo: ({})
@@ -152,7 +152,7 @@ Item {
       var e = svc.daemonCatalog.filter(function(m) { return m.moduleId === id })[0]
       var m = svc.client.modules[id]
       out[id] = e ? { title: e.title, settings: e.settings || [], standalone: !!e.standalone,
-                      agent: !!e.agent, live: !!e.live, terminal: !!e.terminal }
+                      agent: !!e.agent, terminal: !!e.terminal }
                   : { title: m ? m.title : "", settings: [], standalone: false }
     })
     return out
@@ -169,11 +169,11 @@ Item {
   onModuleInfoReadyChanged: if (svc.moduleInfoReady) svc.refreshModuleIds()
   onConfigResolvedChanged: svc.refreshModuleIds()
   // Every module with its title and fields: [{ moduleId, title, settings,
-  // standalone, agent, live, terminal }].
+  // standalone, agent, terminal }].
   function catalogEntry(id) {
     var info = svc.moduleInfo[id] || {}
     return { moduleId: id, title: Settings.moduleTitle(id, info), settings: info.settings || [],
-             standalone: !!info.standalone, agent: !!info.agent, live: !!info.live, terminal: !!info.terminal }
+             standalone: !!info.standalone, agent: !!info.agent, terminal: !!info.terminal }
   }
   readonly property var moduleCatalog: svc.availableModuleIds.map(svc.catalogEntry)
   // What the daemon is told (`catalog`): the host's modules and the
@@ -213,29 +213,6 @@ Item {
       return "no terminal " + id + (ids.length > 0 ? "; terminals: " + ids.join(", ") : "")
     }
     return svc.moduleById(id) ? svc.daemonIpc("terminal", [id, command], "ok") : id + " module not loaded"
-  }
-
-  // ---------------------------------------------------------------- live
-  // Spoken conversations (`"live"` in their file) are modules of the daemon
-  // (native/notchd-modules/src/voice.rs), which runs their bridges
-  // and the optional components' installer (the daemon ships both); `live` and
-  // `component` are its IPC.
-  function isLive(id) { return !!svc.moduleInfo[id] && !!svc.moduleInfo[id].live }
-  // A live module's IPC command: the daemon's module answers it.
-  function liveCommand(id, command) {
-    if (!svc.isLive(id)) {
-      var ids = svc.availableModuleIds.filter(function(a) { return svc.isLive(a) })
-      return "no live module " + id + (ids.length > 0 ? "; live modules: " + ids.join(", ") : "")
-    }
-    if (!svc.moduleById(id)) return id + " module not loaded"
-    // The host's target cannot wait for the daemon's answer, so the two it
-    // can know here are answered here: the words, and no talking to mute.
-    var word = String(command).trim().split(/\s+/)[0]
-    if (["start", "stop", "toggle", "new", "mute", "unmute"].indexOf(word) === -1)
-      return "usage: live " + id + " start | stop | toggle | new | mute | unmute"
-    if ((word === "mute" || word === "unmute") && svc.client.view(id, "compact") === null)
-      return "not in a conversation"
-    return svc.daemonIpc("live", [id, command], "ok")
   }
 
   // Standalone modules (`"standalone": true` in their file) have a place of
@@ -629,7 +606,6 @@ Item {
     { id: "general", label: "General", icon: 0xF0493 },      // nf-md-cog
     { id: "notch", label: "Notches", icon: 0xF0379 },        // nf-md-monitor
     { id: "modules", label: "Modules", icon: 0xF0A66 },      // nf-md-puzzle_outline
-    { id: "components", label: "Components", icon: 0xF03D6 }, // nf-md-package_variant_closed
     { id: "appearance", label: "Appearance", icon: 0xF0E0C } // nf-md-palette_outline
   ]
   // Then a sub-page per notch ("notch/<index>") and per module
@@ -641,9 +617,8 @@ Item {
 
   // The fields the settings window shows come from the daemon's `schema`
   // (the core's pages, a notch's, a user module's: Settings.windowFields),
-  // and what it does not carry yet is built here: the Components page, the
-  // built-in modules' pages, the host's own fields, the edge cards' previews
-  // (remaining for later slices: they move with the modules and components).
+  // and what it does not carry yet is built here: the host's own fields and
+  // the edge cards' previews.
   // A descriptor is:
   //   key        config key (dotted for nested objects)
   //   type       "choice" | "integer" | "boolean" | "string" | "color"
@@ -665,8 +640,7 @@ Item {
   // the top-level key it inherits.
   // "general" has what applies to every notch, "modules" every module the
   // host can load, each module's own fields on its page under it.
-  // The daemon's schema has every page, the Components page and the
-  // components' rows included (with their state); the host adds its own fields.
+  // The daemon's schema has every page; the host adds its own fields.
   readonly property var settingsSchema: Settings.windowFields(svc.daemonSchema ? svc.daemonSchema.fields : [], svc.moduleCatalog, Qt.resolvedUrl("settings/previews/Edge.qml"))
     .concat(svc.hostSettingsSchema || [])
   // id -> title of every module, for the texts that name them.
@@ -1014,9 +988,6 @@ Item {
     function terminal(id: string, command: string): string { return svc.terminalCommand(id, command) }
     function claude(command: string): string { return svc.agentCommand("claude", command) }
     function codex(command: string): string { return svc.agentCommand("codex", command) }
-    // A spoken conversation, by its module's id: "start" opens its notch and
-    // starts talking, "stop", "toggle", "mute", "unmute"; see native/notchd-modules/src/voice.rs.
-    function live(id: string, command: string): string { return svc.liveCommand(id, command) }
     function state(): string {
       return JSON.stringify({
         // The selected notch while navigating, else null.

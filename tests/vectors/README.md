@@ -49,7 +49,7 @@ agree: this is the differential check of `docs/architecture.md`, Phase 1.
 One file per JS file: `config`, `settings`, `position`
 (the config half: `resolve`, `configValue`, `isEdge`, `isVertical`; the
 geometry half is `geometry/position.json`), `countdown`, `usage`,
-`resources`, `agent`, `live`, `components`, `terminal`. Each is
+`resources`, `agent`, `terminal`. Each is
 `{ description, cases: [{ name, fn, args, expected, source }] }`:
 
 - `fn` is the JS function name; `args` its positional arguments, `expected`
@@ -77,18 +77,15 @@ needs a QML object, a file or an identity check; where the JS takes one, the
 adapter stands in:
 
 - Callbacks (`valueOf`) are an object of values (`effectiveValue`,
-  `shownFields`, `needed`, `gate`). `sortWorkspaces` returns a sorted copy.
+  `shownFields`). `sortWorkspaces` returns a sorted copy.
 - Modules (`State`) are objects with an `id`, and what returns modules
   returns their ids; in `canPeek`, `current` is the module itself when the ids
-  match. Components (`Components`) are the registry's entries, and what
-  returns them returns their ids (`parseCatalog`: `{ id, title, kind }`).
+  match.
 - Where the Rust API differs on purpose: a `-1` is a `None` (`indexIn`,
   `focusedPeek`, `start`), `{ error }` is an `Err` (`countdown.parseCommand`,
   `usage.request`), a missing title or path is `""`, `Countdown`'s `null` state
   is the idle one (a `null` `next` and the idle `duration: 0` are not
-  compared), `Countdown.add` takes no `now` there, `Live.parseLine` answers
-  `true` or `null` (the event's shape is Rust's own), and `Live.reduce` reads
-  its event as `parse_line` does.
+  compared) and `Countdown.add` takes no `now` there.
 - Error texts that are the engine's own (V8's and serde's JSON syntax
   errors in `Config.parse` and `parseModuleInfo`) compare as `"syntax"`; the
   rules' own messages compare as they are. A bad percent escape throws a

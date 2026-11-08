@@ -313,16 +313,6 @@ impl Hub {
 
     /// A terminal's or a usage request's report, for its module.
     fn on_note(&self, note: &Note) {
-        // What the installer said of the components: no module's.
-        if note.provider == "components" {
-            let mut g = self.lock();
-            let Inner { core, store, .. } = &mut *g;
-            core.components_note(store, &note.data);
-            let _ = self.publish(&mut g);
-            drop(g);
-            self.wake.notify_all();
-            return;
-        }
         let Some(id) = note.data.get("id").and_then(Value::as_str) else {
             return;
         };
@@ -475,8 +465,8 @@ impl Hub {
         }
     }
 
-    /// The notch state changed: the modules that follow it (a voice session
-    /// follows its notch opening) are told, and what that moves is sent. A
+    /// The notch state changed: the modules that follow it (media's clock
+    /// follows its view) are told, and what that moves is sent. A
     /// module tells nothing twice, so this settles within a few rounds.
     fn notches_changed(&self, g: &mut Inner) {
         for _ in 0..4 {

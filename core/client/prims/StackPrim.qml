@@ -1,8 +1,8 @@
 import QtQuick
 import ".."
 
-// Overlay: every child on top of the others, centered by default (the Voice
-// disc and its glyph). The size is the largest child's.
+// Overlay: every child on top of the others, centered by default (a meter
+// and its glyph). The size is the largest child's.
 PrimBase {
   id: stack
   readonly property bool start: stack.node.align === "start"

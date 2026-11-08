@@ -225,7 +225,7 @@ pub struct Schema {
     pub pages: Vec<Page>,
     pub fields: Vec<Field>,
     /// The modules the settings pages are made of, built-in, host's and
-    /// user's alike: `{ moduleId, title, settings, standalone, agent, live,
+    /// user's alike: `{ moduleId, title, settings, standalone, agent,
     /// terminal }` each (the shape of a `catalog` entry). It is how a UI that
     /// does not ship the built-ins' JSON files learns their titles, kinds and
     /// setting defaults.
@@ -491,7 +491,7 @@ pub struct SettingsPage {
 
 /// The modules of the host that the daemon cannot know (the Omarchy `osd`,
 /// a terminal of the config): `{ moduleId, title, settings, standalone, agent,
-/// live, terminal }` each, free-form like a module's settings fields. The
+/// terminal }` each, free-form like a module's settings fields. The
 /// built-in modules are the daemon's own (their JSON files are embedded), so a
 /// UI does not send them; one that does wins on the same id. The daemon
 /// builds the settings pages that depend on them (which lists the Modules
@@ -506,9 +506,8 @@ pub struct Catalog {
     /// when absent).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_modules: Option<Vec<String>>,
-    /// Deprecated, still accepted within proto 1: a folder with the sidecars
-    /// (`live/`, `components/`) for the daemon to run instead of its own,
-    /// which it ships embedded. A UI omits it.
+    /// Deprecated and ignored, still accepted within proto 1: a folder with
+    /// sidecars, which the daemon no longer runs. A UI omits it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub core_dir: Option<String>,
 }

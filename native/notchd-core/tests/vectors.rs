@@ -14,14 +14,10 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 #[path = "vectors/agent.rs"]
 mod agent;
-#[path = "vectors/components.rs"]
-mod components;
 #[path = "vectors/config.rs"]
 mod config;
 #[path = "vectors/countdown.rs"]
 mod countdown;
-#[path = "vectors/live.rs"]
-mod live;
 #[path = "vectors/navigate.rs"]
 mod navigate;
 #[path = "vectors/position.rs"]
@@ -155,8 +151,6 @@ fn call(file: &str, f: &str, a: &[Value]) -> Option<Value> {
         "usage.json" => usage::call(f, a),
         "resources.json" => resources::call(f, a),
         "agent.json" => agent::call(f, a),
-        "live.json" => live::call(f, a),
-        "components.json" => components::call(f, a),
         "terminal.json" => terminal::call(f, a),
         _ => None,
     }
