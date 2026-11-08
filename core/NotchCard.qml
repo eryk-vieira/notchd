@@ -135,6 +135,10 @@ Item {
   // The lip shown at rest, nothing active: its depth and length.
   readonly property real restDepth: Theme.space(5)
   readonly property real restLength: Theme.space(120)
+  // An undecorated notch has no lip. While navigation draws its place it is
+  // a dashed outline of this size, with nothing in it (`ghost`).
+  readonly property real ghostDepth: Theme.space(28)
+  readonly property bool ghost: !!card.notch && !!card.notch.undecorated && card.navShown && !card.roomy
   // The concave flare into the edge, drawn outside the card at both ends.
   readonly property real shoulder: Theme.space(10)
 
@@ -202,8 +206,9 @@ Item {
   Component {
     id: restView
     Item {
-      implicitWidth: card.vertical ? card.restDepth : card.restLength
-      implicitHeight: card.vertical ? card.restLength : card.restDepth
+      readonly property real depth: card.ghost ? card.ghostDepth : card.restDepth
+      implicitWidth: card.vertical ? depth : card.restLength
+      implicitHeight: card.vertical ? card.restLength : depth
     }
   }
 
@@ -479,7 +484,7 @@ Item {
     })
 
     ShapePath {
-      fillColor: Theme.background
+      fillColor: card.ghost ? "transparent" : Theme.background
       strokeColor: "transparent"
       PathSvg { path: outline.paths.fill }
     }
@@ -491,10 +496,40 @@ Item {
     // muted: a hairline still, the color sets them apart.
     ShapePath {
       fillColor: "transparent"
-      strokeColor: card.navSelected ? Theme.accent : card.navShown ? Theme.muted
+      strokeColor: card.ghost ? "transparent"
+        : card.navSelected ? Theme.accent : card.navShown ? Theme.muted
         : card.roomy || card.stretched ? Theme.line : "transparent"
       strokeWidth: 1
       PathSvg { path: outline.paths.stroke }
+    }
+  }
+
+  // An undecorated notch has nothing to show at rest, so navigation draws
+  // where it is as a dashed outline, the selected one's in the accent.
+  Shape {
+    id: ghostOutline
+    anchors.fill: parent
+    visible: card.ghost
+    preferredRendererType: Shape.CurveRenderer
+    readonly property real w: card.width
+    readonly property real h: card.height
+    readonly property real r: Math.min(Theme.space(10), h / 2, w / 2)
+    ShapePath {
+      fillColor: "transparent"
+      strokeColor: card.navRemoving ? Theme.danger : card.navSelected ? Theme.accent : Theme.muted
+      strokeWidth: 1
+      strokeStyle: ShapePath.DashLine
+      dashPattern: [4, 3]
+      PathSvg {
+        path: "M " + (ghostOutline.r + 0.5) + " 0.5 H " + (ghostOutline.w - ghostOutline.r - 0.5)
+          + " A " + ghostOutline.r + " " + ghostOutline.r + " 0 0 1 " + (ghostOutline.w - 0.5) + " " + (ghostOutline.r + 0.5)
+          + " V " + (ghostOutline.h - ghostOutline.r - 0.5)
+          + " A " + ghostOutline.r + " " + ghostOutline.r + " 0 0 1 " + (ghostOutline.w - ghostOutline.r - 0.5) + " " + (ghostOutline.h - 0.5)
+          + " H " + (ghostOutline.r + 0.5)
+          + " A " + ghostOutline.r + " " + ghostOutline.r + " 0 0 1 0.5 " + (ghostOutline.h - ghostOutline.r - 0.5)
+          + " V " + (ghostOutline.r + 0.5)
+          + " A " + ghostOutline.r + " " + ghostOutline.r + " 0 0 1 " + (ghostOutline.r + 0.5) + " 0.5 Z"
+      }
     }
   }
 

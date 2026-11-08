@@ -9,8 +9,8 @@ import "client/Protocol.js" as Protocol
 // space the closed notches keep clear of windows. Notches on one edge of a
 // screen go side by side, never on each other (Position.pack): each as
 // near its offset as the others let it, ones that come close joined flush
-// into one shape, and an open one hides those it grows over. A standalone
-// module's card stays out of that: it shows in its own place, over the
+// into one shape, and an open one hides those it grows over. An undecorated
+// notch's card stays out of that: it shows in its own place, over the
 // notches there, which hide until it goes.
 //
 // With reserveSpace on, an empty window per screen edge holds a layer-shell
@@ -59,7 +59,7 @@ Item {
     }
   }
 
-  // Side by side, the corners and what a standalone card covers.
+  // Side by side, the corners and what an undecorated card covers.
   NotchLayout {
     id: layout
     windows: root.windows

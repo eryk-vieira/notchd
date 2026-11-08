@@ -11,11 +11,15 @@ import "Position.js" as Position
 // `workspaces` leaving its screen's workspace out, the copy hides there
 // instead of moving.
 //
+// A notch without decoration (`"decoration": false`) shows nothing at rest:
+// its copies have no window until one of its modules peeks (or navigation
+// draws its place), and it draws over the decorated notches it overlaps then.
+// With no screen it has a copy on every screen. The Omarchy host's `osd` is
+// one, declared by the host.
+//
 // The service also makes one `visitor`: no config of its own, a copy per
 // screen at the top, each hidden until it shows a peek on a screen where no
-// notch with that module does. And one per standalone module switched on
-// (`standaloneId`): only that module, on every screen where "<id>.position"
-// says, hidden until it peeks. The daemon decides which peeks go where.
+// notch with that module does. The daemon decides which peeks go where.
 Item {
   id: notch
   visible: false
@@ -24,22 +28,18 @@ Item {
   property string notchId: ""
   // The visitor, rather than a notch of the config.
   property bool visitor: false
-  // A standalone module's own notch: it shows only that module, where the
-  // module's "<id>.position" says.
-  property string standaloneId: ""
-  // The visitor or a standalone notch: hidden while closed, a copy on every
-  // screen, only there for peeks (NotchCopy.guest).
-  readonly property bool guest: notch.visitor || notch.standaloneId !== ""
-  // What the daemon calls it in the messages that name a copy: a standalone
-  // module's own id, the visitor's "".
-  readonly property string wireId: notch.standaloneId !== "" ? notch.standaloneId : notch.notchId
+  // The visitor: hidden while closed, a copy on every screen, only there
+  // for peeks (NotchCopy.guest).
+  readonly property bool guest: notch.visitor
+  // What the daemon calls it in the messages that name a copy: its id, the
+  // visitor's "".
+  readonly property string wireId: notch.notchId
 
   // ----------------------------------------------------------------- state
   // The daemon's notch: its place, its modules, the copies' state.
   readonly property var info: {
     if (!notch.svc || notch.visitor) return null
-    return notch.standaloneId !== "" ? notch.svc.standaloneInfo[notch.standaloneId] || null
-      : notch.svc.notchInfo[notch.notchId] || null
+    return notch.svc.notchInfo[notch.notchId] || null
   }
   // The copies' state, one per screen where there is one.
   readonly property var copyInfos: notch.visitor ? (notch.svc ? notch.svc.visitorInfo : []) : notch.info ? notch.info.copies : []
@@ -52,12 +52,14 @@ Item {
 
   // ---------------------------------------------------------------- config
   // The keys of the config's entry the state does not carry (Config.notches);
-  // null for the visitor and the standalone notches.
+  // null for the visitor.
   readonly property var spec: notch.svc && !notch.guest ? notch.svc.notchSpec(notch.notchId) : null
-  // Its place among the config's notches, -1 for the guests.
+  // Its place among the notches, -1 for the visitor.
   readonly property int index: notch.svc && !notch.guest ? notch.svc.notchIds.indexOf(notch.notchId) : -1
-  // Never a standalone module, but in its own notch.
-  readonly property var moduleIds: notch.info && !notch.guest ? notch.info.modules : notch.standaloneId !== "" ? [notch.standaloneId] : []
+  readonly property var moduleIds: notch.info && !notch.guest ? notch.info.modules : []
+  // Whether it shows at rest (the daemon's `decoration`); an undecorated one
+  // only peeks, over the notches it overlaps.
+  readonly property bool decoration: !notch.info || notch.info.decoration !== false
   // Keep windows out of the strip the closed notch hangs into.
   readonly property bool reserveSpace: !!notch.spec && notch.spec.reserveSpace
   // The open notch shows one module at a time, picked from tabs.
@@ -66,11 +68,9 @@ Item {
   readonly property bool idleIcons: !!notch.spec && notch.spec.idleIcons
   // Workspaces the closed notch hangs on (ids or names); null: every one.
   readonly property var workspaces: notch.spec ? notch.spec.workspaces : null
-  // The position, { edge, offset, screen } (Position.js): the daemon's for a
-  // notch of the config (`screen` the first it hangs on); a standalone
-  // module's from its own key, the visitor's the default.
-  readonly property var wantedPlace: Position.resolve(notch.standaloneId !== "" ? (notch.svc ? notch.svc.standalonePosition(notch.standaloneId) : undefined)
-    : notch.visitor ? undefined
+  // The position, { edge, offset, screen } (Position.js): the daemon's
+  // (`screen` the first it hangs on), the visitor's the default.
+  readonly property var wantedPlace: Position.resolve(notch.visitor ? undefined
     : notch.info ? { edge: notch.info.edge, offset: notch.info.offset, screen: notch.info.screen }
     : notch.spec ? notch.spec.position : undefined)
   // Where it is. Replaced only when it moves: a state that says the same
@@ -80,7 +80,7 @@ Item {
   readonly property string edge: notch.placement.edge
   readonly property bool vertical: Position.isVertical(notch.edge)
   // Whether it can be dragged to another edge.
-  readonly property bool canDrag: !!notch.info && !notch.guest && notch.info.draggable
+  readonly property bool canDrag: !!notch.info && !notch.guest && notch.decoration && notch.info.draggable
 
   // The config key for one of this notch's keys: "position" at the top
   // level, "notches.<index>.position" in a list.

@@ -4,7 +4,7 @@ import "Position.js" as Position
 // Where the notch windows go beside each other (NotchSurface's): packed
 // side by side on each edge (Position.pack), a joined row's depth
 // (Position.rowDepths), the corners top and side notches share
-// (Position.corners) and what a standalone card covers
+// (Position.corners) and what an undecorated card covers
 // (Position.coveredByUndecorated). No window of its own, so the QML tests
 // run it on plain objects with the windows' bindings.
 //
@@ -72,9 +72,9 @@ QtObject {
   function cornerInsetOf(copy) { return layout.cornerOf(copy, layout.cornerInsets) }
   function cornerSpanOf(copy) { return layout.cornerOf(copy, layout.cornerSpans) }
 
-  // ------------------------------------------------------------- standalone
-  // A standalone module's card (the OSD) keeps its own place and draws over
-  // the notches it overlaps on its edge, which hide while it shows.
+  // ------------------------------------------------------------ undecorated
+  // An undecorated notch's card (the OSD's) keeps its own place and draws
+  // over the notches it overlaps on its edge, which hide while it shows.
   readonly property var coversAcross: Position.coveredByUndecorated(layout.inputs(false, "coverItem"))
   readonly property var coversDown: Position.coveredByUndecorated(layout.inputs(true, "coverItem"))
   function coveredByUndecorated(copy) {

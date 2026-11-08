@@ -98,8 +98,8 @@ ShellRoot {
     compositor: fakeCompositor
     configPath: root.outDir + "/config.json"
     hostSettingsSchema: root.scenario && root.scenario.fields ? root.scenario.fields : []
-    // The Omarchy host's standalone OSD, so the Modules page lists it apart;
-    // switched off (next()), since osdSvc's owns the `osd` IPC target.
+    // The Omarchy host's OSD, so the Modules page lists it; switched off
+    // (next()), since osdSvc's owns the `osd` IPC target.
     hostModules: root.scenario && root.scenario.bar ? ({ osd: Qt.resolvedUrl("hosts/omarchy/modules/osd.qml") }) : ({})
     settingsPage: root.scenario && root.scenario.page ? root.scenario.page : "notch"
   }
@@ -116,13 +116,15 @@ ShellRoot {
   }
   DemoService { id: mediaSvc; tag: "media"; defaultModules: ["media"] }
   DemoService { id: activitySvc; tag: "activity"; defaultModules: ["activities"] }
-  // The OSD is standalone: no notch shows it, its own notch does.
+  // The OSD is in the notch the Omarchy host declares: no decoration, so it
+  // draws only while it peeks.
   DemoService {
     id: osdSvc; tag: "osd"; defaultModules: []
+    defaultNotches: [{ id: "osd", decoration: false, modules: ["osd"], position: { edge: "top", offset: 0.5 } }]
     hostModules: ({ osd: Qt.resolvedUrl("hosts/omarchy/modules/osd.qml") })
   }
-  function standaloneCopy(service, id) {
-    var n = service.standaloneNotch(id)
+  function notchCopy(service, id) {
+    var n = service.notchById(id)
     return n && n.copies.length > 0 ? n.copies[0] : null
   }
   DemoService { id: openSvc; tag: "open"; defaultModules: ["media", "activities"] }
@@ -148,8 +150,10 @@ ShellRoot {
   DemoService { id: agentsSideSvc; tag: "agents-side"; defaultModules: ["timer", "claude", "codex"] }
   // Navigation (IPC `navigate`): two notches, numbered, the first selected
   // and open as a preview.
+  // And a notch with no decoration, which navigation draws as a dashed outline.
   DemoService {
     id: navSvc; tag: "navigate"; defaultModules: ["media"]
+    defaultNotches: [{ id: "Quiet", decoration: false, modules: [], position: { edge: "top", offset: 0.8 } }]
     function navNotch(i) { return navSvc.notches.length > i ? navSvc.notches[i].copies[0] : null }
   }
   readonly property var demoServices: [mediaSvc, activitySvc, osdSvc, openSvc, resourcesSvc, resourcesOpenSvc,
@@ -425,7 +429,7 @@ ShellRoot {
       spacing: Theme.space(16)
       MockScreen { svc: mediaSvc; caption: "media, compact" }
       MockScreen { svc: activitySvc; caption: "activities, compact" }
-      MockScreen { svc: osdSvc; copy: root.standaloneCopy(osdSvc, "osd"); caption: "osd, peek (standalone)" }
+      MockScreen { svc: osdSvc; copy: root.notchCopy(osdSvc, "osd"); caption: "osd, peek (a notch with no decoration)" }
       MockScreen { svc: openSvc; caption: "expanded" }
       MockScreen { svc: resourcesSvc; caption: "resources, compact (memory short)" }
       MockScreen { svc: resourcesOpenSvc; caption: "resources, expanded" }
@@ -439,6 +443,7 @@ ShellRoot {
       CornerScreen { caption: "a corner shared by two edges" }
       MockScreen { svc: navSvc; copy: navSvc.navNotch(0); caption: "navigating, the notch selected" }
       MockScreen { svc: navSvc; copy: navSvc.navNotch(1); caption: "navigating, another notch" }
+      MockScreen { svc: navSvc; copy: root.notchCopy(navSvc, "Quiet"); caption: "navigating, a notch with no decoration" }
     }
   }
 

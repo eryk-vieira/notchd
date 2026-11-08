@@ -58,6 +58,12 @@ Item {
   property var screens: Quickshell.screens || []
   // Modules to load when the config doesn't list any.
   property var defaultModules: ["media", "activities"]
+  // Notches the host declares, `{ id, decoration, modules, position }` each
+  // (the Omarchy host: an undecorated notch with its `osd`, top center).
+  // One exists unless the config's `removedNotches` lists its id; the
+  // daemon decides, this only tells it (`catalog`) and reads the modules
+  // they list.
+  property var defaultNotches: []
   // Extra settings-window fields for the host's own config keys, in the
   // same format as coreSettingsSchema below.
   property var hostSettingsSchema: []
@@ -96,7 +102,7 @@ Item {
   // not (moduleInfo).
   readonly property var fileModuleIds: Object.keys(svc.hostModules || {})
   // The modules the daemon lists in its schema: the built-ins and the user
-  // modules, each `{ moduleId, title, settings, standalone, agent }`.
+  // modules, each `{ moduleId, title, settings, agent }`.
   // (The host's and the terminals' entries, which this service reported, come
   // back in it too: ownModuleIds leaves them out.)
   readonly property var daemonCatalog: svc.daemonSchema && svc.daemonSchema.modules ? svc.daemonSchema.modules : []
@@ -141,7 +147,7 @@ Item {
   }
   property string terminalErrors: ""
 
-  // id -> { title, settings, standalone, agent, terminal }: the host's
+  // id -> { title, settings, agent, terminal }: the host's
   // modules from their JSON files (Settings.parseModuleInfo; a module without
   // one has none of them), each terminal's entry, and the daemon's catalog.
   property var fileModuleInfo: ({})
@@ -151,15 +157,13 @@ Item {
     svc.daemonOwnedIds.forEach(function(id) {
       var e = svc.daemonCatalog.filter(function(m) { return m.moduleId === id })[0]
       var m = svc.client.modules[id]
-      out[id] = e ? { title: e.title, settings: e.settings || [], standalone: !!e.standalone,
-                      agent: !!e.agent, terminal: !!e.terminal }
-                  : { title: m ? m.title : "", settings: [], standalone: false }
+      out[id] = e ? { title: e.title, settings: e.settings || [], agent: !!e.agent, terminal: !!e.terminal }
+                  : { title: m ? m.title : "", settings: [] }
     })
     return out
   }
   // Every host module has its file read (or found missing) and the daemon
-  // has said its catalog: modules load only then, so a standalone one never
-  // starts out in a notch. A terminal's
+  // has said its catalog: modules load only then. A terminal's
   // info comes with its entry: counting terminals, a new id made it false
   // for a moment, which emptied the list of modules and made them all
   // again, an agent's session with them.
@@ -169,11 +173,11 @@ Item {
   onModuleInfoReadyChanged: if (svc.moduleInfoReady) svc.refreshModuleIds()
   onConfigResolvedChanged: svc.refreshModuleIds()
   // Every module with its title and fields: [{ moduleId, title, settings,
-  // standalone, agent, terminal }].
+  // agent, terminal }].
   function catalogEntry(id) {
     var info = svc.moduleInfo[id] || {}
     return { moduleId: id, title: Settings.moduleTitle(id, info), settings: info.settings || [],
-             standalone: !!info.standalone, agent: !!info.agent, terminal: !!info.terminal }
+             agent: !!info.agent, terminal: !!info.terminal }
   }
   readonly property var moduleCatalog: svc.availableModuleIds.map(svc.catalogEntry)
   // What the daemon is told (`catalog`): the host's modules and the
@@ -215,19 +219,6 @@ Item {
     return svc.moduleById(id) ? svc.daemonIpc("terminal", [id, command], "ok") : id + " module not loaded"
   }
 
-  // Standalone modules (`"standalone": true` in their file) have a place of
-  // their own, a notch that shows only them, and no notch of the config
-  // shows them, whatever its `modules` say. They load while switched on
-  // ("<id>.enabled", true by default); "<id>.position" places them.
-  readonly property var standaloneIds: svc.availableModuleIds.filter(function(id) { return svc.isStandalone(id) })
-  function isStandalone(id) { return !!svc.moduleInfo[id] && !!svc.moduleInfo[id].standalone }
-  function standaloneEnabled(id) { return Config.valueAt(svc.config, id + ".enabled") !== false }
-  // Where a standalone module shows: its edge and offset, on every screen
-  // (a peek goes to the focused one).
-  function standalonePosition(id) {
-    var p = Config.valueAt(svc.config, id + ".position")
-    return Object.assign({}, p && typeof p === "object" ? p : {}, { screen: "all" })
-  }
   // A module's setting: the config's value, else its field's default.
   function moduleSetting(id, key) {
     var v = Config.valueAt(svc.config, id + "." + key)
@@ -270,29 +261,19 @@ Item {
   property var config: ({})
   property int hoverOpenDelay: Config.DEFAULTS.hoverOpenDelay
   property int hoverCloseDelay: Config.DEFAULTS.hoverCloseDelay
-  // Every notch of the config, resolved (Config.notches): the keys the
-  // daemon's `state` does not carry (a notch's own config key prefix, its
-  // workspaces, `reserveSpace`, `idleIcons`).
-  property var notchSpecs: Config.notches({}, svc.defaultModules)
+  // Every notch, resolved (Config.notches; the host's declared ones too):
+  // the keys the daemon's `state` does not carry (a notch's own config key
+  // prefix, its workspaces, `reserveSpace`, `idleIcons`).
+  property var notchSpecs: Config.notches({}, svc.defaultModules, svc.defaultNotches)
   // The ids of the notches, as the daemon's `state` lists them (config
   // order): a notch exists once the daemon has said so.
   property var notchIds: []
-  // The modules to load: every one some notch shows, and the standalone
-  // ones switched on (Config.moduleLoadList).
+  // The modules to load: every one some notch shows (Config.moduleUnion).
   property var moduleIds: []
-  // Read fresh: called as the module files finish loading, before
-  // `standaloneIds` follows them (the OSD was left out at startup).
-  function loadList(specs) {
-    var standalone = svc.availableModuleIds.filter(function(id) { return svc.isStandalone(id) })
-    // A user module that is standalone says so to the daemon, not in a file.
-    svc.standaloneStateIds.forEach(function(id) { if (standalone.indexOf(id) === -1) standalone.push(id) })
-    var enabled = standalone.filter(function(id) { return svc.standaloneEnabled(id) })
-    return Config.moduleLoadList(specs, standalone, enabled)
-  }
 
   function sameList(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
   function refreshModuleIds() {
-    var modules = svc.loadList(svc.notchSpecs)
+    var modules = Config.moduleUnion(svc.notchSpecs)
     if (!svc.sameList(modules, svc.moduleIds)) svc.moduleIds = modules
   }
 
@@ -304,7 +285,7 @@ Item {
   // module again, losing what it shows.
   function applyConfig(cfg, resolved) {
     var r = resolved || Config.resolve(cfg)
-    var specs = Config.notches(cfg, svc.defaultModules)
+    var specs = Config.notches(cfg, svc.defaultModules, svc.defaultNotches)
     var terminals = Config.terminals(cfg, svc.takenIds())
     var errors = terminals.errors.join("; ")
     if (errors !== "" && errors !== svc.terminalErrors) console.warn(svc.logName + ": skipping terminals: " + errors)
@@ -314,7 +295,7 @@ Item {
     svc.hoverOpenDelay = r.hoverOpenDelay
     svc.hoverCloseDelay = r.hoverCloseDelay
     svc.notchSpecs = specs
-    var modules = svc.loadList(specs)
+    var modules = Config.moduleUnion(specs)
     if (!svc.sameList(modules, svc.moduleIds)) svc.moduleIds = modules
   }
 
@@ -381,15 +362,10 @@ Item {
   // is away the last state stays, so the notch is frozen where it was
   // instead of blank, and is replaced by the new daemon's as it connects.
   property var notchState: null
-  // id -> the daemon's notch, and its standalone modules' (by module id).
+  // id -> the daemon's notch.
   readonly property var notchInfo: svc.byId(svc.notchState ? svc.notchState.notches : [])
-  readonly property var standaloneInfo: svc.byId(svc.notchState ? svc.notchState.standalone : [])
   // The visitor's copies (by screen).
   readonly property var visitorInfo: svc.notchState ? svc.notchState.visitor : []
-  // The standalone modules that have a notch, as the daemon says: stable,
-  // like `notchIds`, so a new state does not make every notch again.
-  property var standaloneStateIds: []
-  onStandaloneStateIdsChanged: svc.refreshModuleIds()
   // { "<screen>|<edge>": depth }: what windows keep clear (NotchSurface).
   property var reserveZones: ({})
 
@@ -403,8 +379,6 @@ Item {
     svc.notchState = msg
     var ids = msg.notches.map(function(n) { return n.id })
     if (!svc.sameList(ids, svc.notchIds)) svc.notchIds = ids
-    var standalone = msg.standalone.map(function(n) { return n.id })
-    if (!svc.sameList(standalone, svc.standaloneStateIds)) svc.standaloneStateIds = standalone
     var zones = {}
     for (var i = 0; i < msg.reserve.length; i++) zones[msg.reserve[i].screen + "|" + msg.reserve[i].edge] = msg.reserve[i].depth
     if (!svc.sameList(zones, svc.reserveZones)) svc.reserveZones = zones
@@ -438,7 +412,7 @@ Item {
     return {
       id: m.moduleId, priority: m.priority, active: m.active, compact: !!m.compact, peek: !!m.peek,
       icon: !!m.icon, expanded: !!m.expanded, attention: m.attention, urgentPeek: m.urgentPeek,
-      peekOnFocusedScreen: m.peekOnFocusedScreen, standalone: svc.isStandalone(m.moduleId)
+      peekOnFocusedScreen: m.peekOnFocusedScreen
     }
   }))
   property string factsSent: ""
@@ -478,8 +452,10 @@ Item {
   readonly property string catalogReport: JSON.stringify(svc.reportedCatalog)
   onCatalogReportChanged: Qt.callLater(svc.reportCatalog)
   onDefaultModulesChanged: Qt.callLater(svc.reportCatalog)
+  onDefaultNotchesChanged: Qt.callLater(svc.reportCatalog)
   function reportCatalog() {
-    if (svc.client.ready) svc.client.send({ t: "catalog", modules: JSON.parse(svc.catalogReport), defaultModules: svc.defaultModules })
+    if (svc.client.ready) svc.client.send({ t: "catalog", modules: JSON.parse(svc.catalogReport), defaultModules: svc.defaultModules,
+                                            defaultNotches: svc.defaultNotches })
   }
   readonly property string screensReport: {
     var c = svc.compositor
@@ -701,26 +677,6 @@ Item {
       notchId: modelData
     }
   }
-  // A notch per standalone module switched on: on every screen where its
-  // position says, hidden until it peeks, and drawn over the notches there
-  // (NotchSurface, Position.coveredByUndecorated). The daemon says which.
-  Variants {
-    id: standaloneVariants
-    readonly property var owner: svc
-    model: svc.configResolved && svc.moduleInfoReady ? svc.standaloneStateIds : []
-    Notch {
-      required property var modelData
-      svc: standaloneVariants.owner
-      standaloneId: modelData
-    }
-  }
-  readonly property var standaloneNotches: standaloneVariants.instances
-  function standaloneNotch(id) {
-    for (var i = 0; i < svc.standaloneNotches.length; i++)
-      if (svc.standaloneNotches[i].standaloneId === id) return svc.standaloneNotches[i]
-    return null
-  }
-
   // The default notch: a notch of its own at the top of every screen, hidden
   // until it shows a peek where no notch with that module does (the daemon
   // routes it).
@@ -753,7 +709,6 @@ Item {
     var out = []
     for (var i = 0; i < svc.notches.length; i++) out = out.concat(svc.notches[i].copies)
     out = out.concat(visitorNotch.copies)
-    for (var j = 0; j < svc.standaloneNotches.length; j++) out = out.concat(svc.standaloneNotches[j].copies)
     return out
   }
   // The first notch's first copy: what a single-notch view (the visual
@@ -772,7 +727,9 @@ Item {
   // daemon refused or is away. `remove` takes the notch's id.
   function addNotch(done) {
     svc.flushReports()
-    var index = svc.notchIds.length
+    // It goes after the notches of the config, before the host's that keep
+    // their defaults (they have no entry yet).
+    var index = svc.notchSpecs.filter(function(n) { return n.inConfig !== false }).length
     var sent = svc.client.ipc("notch", ["add"], function(reply) {
       if (done) done(reply.t === "ok" ? index : -1)
     })
@@ -799,9 +756,8 @@ Item {
   // A module's peek is the daemon's to route: to every notch that shows the
   // module (on the copy on the focused screen of one that has a copy per
   // screen), and to the visitor when none of them peeks on the focused
-  // screen; a module that peeks on the focused screen only peeks once; a
-  // standalone module's goes to its own notch. The module's facts go first,
-  // so it decides on the module as it is.
+  // screen; a module that peeks on the focused screen only peeks once. The
+  // module's facts go first, so it decides on the module as it is.
   function requestPeek(module, ms) {
     if (!module) return
     svc.flushReports()
@@ -1014,6 +970,7 @@ Item {
         notches: svc.notches.map(function(n) {
           return {
             id: n.notchId,
+            decoration: n.decoration,
             reserveSpace: n.reserveSpace,
             tabs: n.tabs,
             idleIcons: n.idleIcons,
@@ -1029,15 +986,6 @@ Item {
         // The visitor's copies that show something.
         visitor: visitorNotch.copies.filter(function(c) { return c.mode === "peek" || c.mode === "expanded" })
           .map(function(c) { return { screen: c.screenName, mode: c.mode, peek: c.peekModule ? c.peekModule.moduleId : null } }),
-        // Each standalone module's place, and its copies that show something.
-        standalone: svc.standaloneNotches.map(function(n) {
-          return {
-            id: n.standaloneId,
-            position: n.placement,
-            copies: n.copies.filter(function(c) { return c.mode === "peek" || c.mode === "expanded" })
-              .map(function(c) { return { screen: c.screenName, mode: c.mode } })
-          }
-        }),
         modules: svc.modules.map(function(m) {
           return { id: m.moduleId, active: m.active, priority: m.priority }
         })

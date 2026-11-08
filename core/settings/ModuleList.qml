@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import ".."
 import "Settings.js" as Settings
 
-// `modules` field: every module the host can load but the standalone ones,
-// enabled ones first and in order. The switch loads or unloads one; the
+// `modules` field: every module the host can load, enabled ones first and
+// in order. The switch loads or unloads one; the
 // arrows reorder enabled ones.
 Rectangle {
   id: control
@@ -14,11 +14,8 @@ Rectangle {
   property var svc: null
   signal edited(var value)
 
-  // Standalone modules have a place of their own: no notch lists them, and
-  // an edit drops one an old config still lists.
-  function listable(id) { return !control.svc || !control.svc.isStandalone(id) }
-  readonly property var enabledIds: Settings.toList(control.value).filter(control.listable)
-  readonly property var available: control.svc ? Settings.toList(control.svc.availableModuleIds).filter(control.listable) : []
+  readonly property var enabledIds: Settings.toList(control.value)
+  readonly property var available: control.svc ? Settings.toList(control.svc.availableModuleIds) : []
   readonly property var all: Settings.allIds(control.enabledIds, control.available)
 
   function toggle(id) { control.edited(Settings.toggleId(control.enabledIds, id)) }

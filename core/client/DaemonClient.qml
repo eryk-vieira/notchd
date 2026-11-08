@@ -82,8 +82,7 @@ QtObject {
   function pointer(notch, screen, ev) { return client._send(Protocol.pointer(notch, screen, ev)) }
   function key(notch, screen, name, mods, text) { return client._send(Protocol.key(notch, screen, name, mods, text)) }
   function event(moduleId, slot, action, value) { return client._send(Protocol.event(moduleId, slot, action, value)) }
-  // The notch's inputs. A copy is named by its notch (a standalone module's by
-  // its module id, the visitor's by "") and its screen ("" for the one that moves).
+  // The notch's inputs. A copy is named by its notch (the visitor's by "") and its screen ("" for the one that moves).
   function pin(notch, screen, on) { return client._send(Protocol.pin(notch, screen, on)) }
   function focus(notch, screen, active) { return client._send(Protocol.focus(notch, screen, active)) }
   function tab(notch, screen, module) { return client._send(Protocol.tab(notch, screen, module)) }

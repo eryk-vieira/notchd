@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A standalone module for tests/gnome_test.py: its own notch, which peeks
+"""A module for tests/gnome_test.py, in a notch without decoration, which peeks
 for 1.5 s every 3 s with a text. The GNOME UI must draw that guest notch
 only while it peeks. Not shipped."""
 

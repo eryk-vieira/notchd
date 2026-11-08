@@ -354,11 +354,11 @@ function corners(items) {
   })
 }
 
-// Which notches a standalone module's card covers while it shows: it draws
+// Which notches an undecorated notch's card covers while it shows: it draws
 // in its own place, over whatever hangs there, and the notches under it
 // hide until it goes. `items`, each { group, start, end, cover, shown }:
-// the group ("<screen>|<edge>"), its span along the edge, whether it is a
-// standalone card and whether it shows. Returns, per item, whether a shown
+// the group ("<screen>|<edge>"), its span along the edge, whether it is an
+// undecorated card and whether it shows. Returns, per item, whether a shown
 // cover in its group overlaps it; never for a cover.
 function coveredByUndecorated(items) {
   items = items || []

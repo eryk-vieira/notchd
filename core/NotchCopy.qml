@@ -7,8 +7,9 @@ import QtQuick
 // drag, its window's keyboard). A notch that moves, or stays on its home, has
 // one copy, and the daemon picks its screen; one on every screen has a copy
 // per screen (`fixedScreen`). The visitor's copies are guests: hidden while
-// closed, they only show peeks. NotchCard draws a copy and NotchWindow puts
-// it on its screen.
+// closed, they only show peeks, as do the copies of an undecorated notch
+// (`hiddenAtRest`). NotchCard draws a copy and NotchWindow puts it on its
+// screen.
 Item {
   id: copy
   visible: false
@@ -32,9 +33,13 @@ Item {
   readonly property var placement: copy.owner ? copy.owner.placement : ({ edge: "top", offset: 0.5, screen: "" })
   readonly property bool reserveSpace: !!copy.owner && copy.owner.reserveSpace
   readonly property bool canDrag: !!copy.owner && copy.owner.canDrag
-  // A copy of the visitor or of a standalone notch: it only shows peeks and
-  // the open notch.
+  // A copy of the visitor: it only shows peeks and the open notch.
   readonly property bool guest: !!copy.owner && copy.owner.guest
+  // A copy of an undecorated notch: nothing at rest, no compact row, no
+  // space kept clear, no reach for the pointer; a window only while it
+  // peeks or navigation draws its place.
+  readonly property bool undecorated: !!copy.owner && !copy.owner.decoration
+  readonly property bool hiddenAtRest: copy.guest || copy.undecorated
 
   readonly property string mode: copy.info ? copy.info.mode : "rest"
   readonly property bool isOpen: copy.mode === "peek" || copy.mode === "expanded"
@@ -152,8 +157,8 @@ Item {
   // ------------------------------------------------------------ navigation
   // Navigation (NotchService.navigating) highlights every notch of the
   // config with its number; the selected one's copy on the focused screen
-  // opens as a preview, not pinned. Guests (the visitor, standalone notches)
-  // take no part.
+  // opens as a preview, not pinned. The visitor takes no part; an undecorated
+  // notch is there, drawn as a dashed outline.
   readonly property bool navigating: !!copy.svc && copy.svc.navigating
   readonly property bool navShown: copy.navigating && !copy.guest
   readonly property bool navSelected: copy.navShown && !!copy.owner && copy.owner.navSelected
@@ -194,7 +199,7 @@ Item {
   // Whether its window is on screen: a guest's only while open and for a
   // while after it closes, so it closes with its animation and a peek soon
   // after reuses it. The daemon says.
-  readonly property bool needsWindow: copy.info ? copy.info.needsWindow : !copy.guest
+  readonly property bool needsWindow: copy.info ? copy.info.needsWindow : !copy.hiddenAtRest
   // A window going away reports no pointer leaving it: forget what it had.
   onNeedsWindowChanged: if (!copy.needsWindow) copy.pointerSources = ({})
 
