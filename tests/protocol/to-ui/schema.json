@@ -2,7 +2,7 @@
  "message": "schema",
  "valid": [
   {"t":"schema","rev":3,"pages":[{"id":"general","label":"General","icon":"","sub":false},{"id":"modules/media","label":"Now playing","icon":"","sub":true}],"fields":[{"page":"general","section":"Hover","key":"hoverOpenDelay","type":"integer","label":"Open delay","min":0,"max":2000,"step":20,"unit":"ms","default":120,"value":120,"visible":true}]},
-  {"t":"schema","rev":5,"pages":[],"fields":[],"modules":[{"moduleId":"media","title":"Now playing","settings":[{"key":"equalizer","type":"choice","label":"Equalizer","default":"smooth"}],"standalone":false,"agent":false,"terminal":false}]},
+  {"t":"schema","rev":5,"pages":[],"fields":[],"modules":[{"moduleId":"media","title":"Now playing","settings":[{"key":"equalizer","type":"choice","label":"Equalizer","default":"smooth"}],"agent":false,"terminal":false}]},
   {"t":"schema","rev":4,"pages":[{"id":"general","label":"General","icon":"","sub":false}],"fields":[{"page":"general","section":"Notch","key":"compact","type":"choice","label":"Closed notch","help":"When the compact view shows.","options":[{"value":"always","label":"Always"},{"value":"playing","label":"While playing","preview":"p.png"}],"display":"chips","default":"always","value":"playing","visible":true,"when":{"key":"mode","is":["a","b"]}},{"page":"modules","section":"","type":"moduleCatalog","label":"Notch modules","visible":true,"part":"notch"},{"page":"general","section":"Notch","type":"note","label":"Restart to apply","visible":false},{"page":"general","section":"Look","key":"opacity","type":"number","label":"Opacity","display":"percent","min":0,"max":1,"step":0.05,"default":1,"value":0.85,"visible":true}]}
  ],
  "invalid": [

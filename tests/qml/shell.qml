@@ -2593,7 +2593,7 @@ ShellRoot {
       readonly property bool vertical: w.edge === "left" || w.edge === "right"
       readonly property var packed: layoutUnderTest.packOf(w.copy)
       readonly property real packShift: w.packed ? w.packed.shift : 0
-      readonly property bool covered: (!!w.packed && w.packed.covered) || layoutUnderTest.coveredByStandalone(w.copy)
+      readonly property bool covered: (!!w.packed && w.packed.covered) || layoutUnderTest.coveredByUndecorated(w.copy)
       readonly property real rowDepth: layoutUnderTest.rowDepthOf(w.copy)
       readonly property var cornerInset: layoutUnderTest.cornerInsetOf(w.copy)
       readonly property var cornerSpan: layoutUnderTest.cornerSpanOf(w.copy)

@@ -109,8 +109,7 @@ function sections(schema, page) {
 function modulePageId(moduleId) { return "modules/" + moduleId }
 
 // A module's JSON file (media.json next to media.qml): its `title`,
-// `settings` fields, whether it is `standalone` (no notch shows it; it has
-// a place of its own), whether it is an `agent` (a coding agent in a
+// `settings` fields, whether it is an `agent` (a coding agent in a
 // terminal: `"agent": { "command": ... }`, which brings the fields every
 // agent has, agentSettings; `"usage"` there names where its plan usage
 // comes from, native/notchd-core/src/usage.rs, as `usage`). Anything malformed is dropped, so a bad file
@@ -121,7 +120,6 @@ function parseModuleInfo(text) {
   try { data = JSON.parse(text) } catch (e) { info.error = String(e.message || e); return info }
   if (!data || typeof data !== "object" || Array.isArray(data)) { info.error = "not an object"; return info }
   if (typeof data.title === "string") info.title = data.title
-  if (data.standalone === true) info.standalone = true
   var own = []
   if (Array.isArray(data.settings))
     own = data.settings.filter(function(f) { return f && typeof f === "object" && !Array.isArray(f) && typeof f.type === "string" })
@@ -231,26 +229,23 @@ function settingDefault(fields, key) {
 }
 
 // What the host knows of a user module, which has no JSON file of its own:
-// the title the daemon announced, and its manifest's `settings` and whether
-// it is `standalone`, read back from the daemon's schema (the fields of its
-// page, "modules/<id>": their keys without the id; the three a standalone
-// module always has are recognised and left out).
+// the title the daemon announced, and its manifest's `settings`, read back
+// from the daemon's schema (the fields of its page, "modules/<id>": their
+// keys without the id).
 function userModuleInfo(id, title, schemaFields) {
   var page = modulePageId(id), prefix = id + "."
   var own = Array.prototype.filter.call(schemaFields || [], function(f) {
     return !!f && pageOf(f) === page && String(f.key || "").indexOf(prefix) === 0
   })
-  var standalone = own.some(function(f) { return f.key === prefix + "position.edge" })
   var settings = []
   own.forEach(function(f) {
     var key = String(f.key).slice(prefix.length)
-    if (standalone && (key === "enabled" || key === "position.edge" || key === "position.offset")) return
     var field = Object.assign({}, f, { key: key })
     delete field.value
     delete field.visible
     settings.push(field)
   })
-  return { title: title, settings: settings, standalone: standalone }
+  return { title: title, settings: settings }
 }
 
 // A module's title: its own (the loaded module's, or its JSON file's),
@@ -261,11 +256,9 @@ function moduleTitle(id, module) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-// Which list of the Modules page a module is in: "standalone" (a place of
-// its own), "agent" (a coding agent),
+// Which list of the Modules page a module is in: "agent" (a coding agent),
 // "terminal" (one of the config's `terminals`), else "notch".
 function moduleKind(m) {
-  if (m && m.standalone) return "standalone"
   if (m && m.agent) return "agent"
   if (m && m.terminal) return "terminal"
   return "notch"
@@ -278,12 +271,9 @@ function catalogPart(catalog, part) {
   })
 }
 
-// Where a module shows, for the Modules page: "On" or "Off" for a
-// standalone one, whose `enabled` says whether it is on (its own list says
-// it is standalone); "On" or "Off" with one notch, else the notches that
-// list it.
-function moduleStatus(id, specs, standalone, enabled) {
-  if (standalone) return enabled === false ? "Off" : "On"
+// Where a module shows, for the Modules page: "On" or "Off" with one notch,
+// else the notches that list it.
+function moduleStatus(id, specs) {
   specs = specs || []
   var where = []
   for (var i = 0; i < specs.length; i++)

@@ -5,7 +5,7 @@ import "Position.js" as Position
 // side by side on each edge (Position.pack), a joined row's depth
 // (Position.rowDepths), the corners top and side notches share
 // (Position.corners) and what a standalone card covers
-// (Position.coveredByStandalone). No window of its own, so the QML tests
+// (Position.coveredByUndecorated). No window of its own, so the QML tests
 // run it on plain objects with the windows' bindings.
 //
 // The work runs in two halves, top and bottom edges apart from the sides,
@@ -75,9 +75,9 @@ QtObject {
   // ------------------------------------------------------------- standalone
   // A standalone module's card (the OSD) keeps its own place and draws over
   // the notches it overlaps on its edge, which hide while it shows.
-  readonly property var coversAcross: Position.coveredByStandalone(layout.inputs(false, "coverItem"))
-  readonly property var coversDown: Position.coveredByStandalone(layout.inputs(true, "coverItem"))
-  function coveredByStandalone(copy) {
+  readonly property var coversAcross: Position.coveredByUndecorated(layout.inputs(false, "coverItem"))
+  readonly property var coversDown: Position.coveredByUndecorated(layout.inputs(true, "coverItem"))
+  function coveredByUndecorated(copy) {
     var i = layout.indexOf(copy)
     if (i < 0) return false
     return !!(layout.isSide(layout.windows[i]) ? layout.coversDown : layout.coversAcross)[i]

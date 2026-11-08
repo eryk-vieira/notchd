@@ -40,8 +40,6 @@ pub struct Manifest {
     /// Provider names pushed to the module.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subscribe: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub standalone: Option<bool>,
 }
 
 impl Validate for Manifest {

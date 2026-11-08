@@ -337,7 +337,7 @@ export default class NotchdExtension extends Extension {
     }
 
     // A guest that shows covers the notches of the config it overlaps on
-    // its edge of its monitor (Position.coveredByStandalone): they hide
+    // its edge of its monitor (Position.coveredByUndecorated): they hide
     // while it shows, unless they are open themselves.
     _cover() {
         const copies = [...this._copies.values()];

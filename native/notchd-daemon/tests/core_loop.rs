@@ -319,7 +319,7 @@ fn facts_line(modules: &[(&str, i32)]) -> String {
         .map(|(id, priority)| {
             json!({"id": id, "priority": priority, "active": true, "compact": true,
                    "peek": true, "icon": false, "expanded": true, "attention": false,
-                   "urgentPeek": false, "peekOnFocusedScreen": false, "standalone": false})
+                   "urgentPeek": false, "peekOnFocusedScreen": false})
         })
         .collect();
     json!({"t": "facts", "modules": list}).to_string()

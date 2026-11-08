@@ -133,24 +133,22 @@ test('moduleTitle uses the loaded module\'s title, else its id', () => {
   assert.equal(Settings.moduleTitle('timer', null), 'Timer');
 });
 
-test('moduleStatus says where a module shows, or whether a standalone one is on', () => {
+test('moduleStatus says where a module shows', () => {
   const one = [{ id: 'main', moduleIds: ['media'] }];
   const two = [{ id: 'main', moduleIds: ['media', 'osd'] }, { id: 'jobs', moduleIds: ['activities', 'media'] }];
   assert.equal(Settings.moduleStatus('media', one), 'On');
   assert.equal(Settings.moduleStatus('timer', one), 'Off');
   assert.equal(Settings.moduleStatus('media', two), 'In main, jobs');
   assert.equal(Settings.moduleStatus('activities', two), 'In jobs');
-  assert.equal(Settings.moduleStatus('osd', two, true, true), 'On', 'a notch listing it does not count');
-  assert.equal(Settings.moduleStatus('osd', one, true, false), 'Off');
+  assert.equal(Settings.moduleStatus('osd', two), 'In main');
   assert.equal(Settings.moduleStatus('timer', undefined), 'Off');
 });
 
-test('catalogPart splits the Modules page into notch modules, agents and standalone ones', () => {
-  const catalog = [{ moduleId: 'media' }, { moduleId: 'osd', standalone: true }, { moduleId: 'claude', agent: true },
-                   { moduleId: 'timer', standalone: false }];
-  assert.deepEqual(plain(Settings.catalogPart(catalog, 'notch').map((m) => m.moduleId)), ['media', 'timer']);
-  assert.deepEqual(plain(Settings.catalogPart(catalog).map((m) => m.moduleId)), ['media', 'timer']);
-  assert.deepEqual(plain(Settings.catalogPart(catalog, 'standalone').map((m) => m.moduleId)), ['osd']);
+test('catalogPart splits the Modules page into notch modules and agents', () => {
+  const catalog = [{ moduleId: 'media' }, { moduleId: 'osd' }, { moduleId: 'claude', agent: true }, { moduleId: 'timer' }];
+  assert.deepEqual(plain(Settings.catalogPart(catalog, 'notch').map((m) => m.moduleId)), ['media', 'osd', 'timer']);
+  assert.deepEqual(plain(Settings.catalogPart(catalog).map((m) => m.moduleId)), ['media', 'osd', 'timer']);
+  assert.deepEqual(plain(Settings.catalogPart(catalog, 'standalone').map((m) => m.moduleId)), []);
   assert.deepEqual(plain(Settings.catalogPart(catalog, 'agent').map((m) => m.moduleId)), ['claude']);
   assert.deepEqual(plain(Settings.catalogPart(undefined, 'agent')), []);
 });
@@ -192,8 +190,6 @@ test('parseModuleInfo keeps a title and well-formed fields, drops the rest', () 
   assert.deepEqual(plain(Settings.parseModuleInfo('{ "title": "Timer", "settings": [{ "key": "a", "type": "boolean" }, 3, { "key": "b" }] }')),
     { title: 'Timer', settings: [{ key: 'a', type: 'boolean' }] });
   assert.deepEqual(plain(Settings.parseModuleInfo('{ "settings": {} }')), { title: '', settings: [] });
-  assert.equal(Settings.parseModuleInfo('{ "standalone": true }').standalone, true);
-  assert.equal(Settings.parseModuleInfo('{ "standalone": "yes" }').standalone, undefined);
   const bad = plain(Settings.parseModuleInfo('{ nope'));
   assert.deepEqual([bad.title, bad.settings], ['', []]);
   assert.ok(bad.error);
@@ -237,9 +233,7 @@ test('every module JSON file is well-formed', () => {
     assert.equal(info.error, undefined, file);
     assert.ok(info.title, `${file}: no title`);
     const keys = Object.keys(JSON.parse(text));
-    assert.deepEqual(keys.filter((k) => !['title', 'settings', 'standalone', 'agent'].includes(k)), [], `${file}: unknown keys`);
-    if (info.standalone)
-      for (const f of info.settings) assert.ok(!['enabled', 'position'].includes(String(f.key).split('.')[0]), `${file}: ${f.key} is the standalone switch's or position's`);
+    assert.deepEqual(keys.filter((k) => !['title', 'settings', 'agent'].includes(k)), [], `${file}: unknown keys`);
     const inherited = info.agent ? Settings.agentSettings(JSON.parse(text).agent, info.title).length : 0;
     assert.ok(info.settings.length >= Math.max(inherited, JSON.parse(text).settings?.length ?? 0), `${file}: a field was dropped`);
     for (const f of info.settings) {
@@ -349,15 +343,7 @@ test('userModuleInfo reads a user module back from the daemon\'s schema fields',
   ];
   const info = plain(Settings.userModuleInfo('weather', 'Weather', fields));
   assert.equal(info.title, 'Weather');
-  assert.equal(info.standalone, false);
   assert.deepEqual(info.settings.map((f) => [f.key, f.default, f.value]), [['city', 'Berlin', undefined], ['enabled', false, undefined]],
     'its own fields, keys without the id, a setting named enabled kept');
-  const standalone = fields.concat([
-    { page: 'modules/weather', key: 'weather.position.edge', type: 'choice' },
-    { page: 'modules/weather', key: 'weather.position.offset', type: 'number' },
-  ]);
-  const s = plain(Settings.userModuleInfo('weather', 'Weather', standalone));
-  assert.equal(s.standalone, true);
-  assert.deepEqual(s.settings.map((f) => f.key), ['city'], 'the standalone place is not a setting of its own');
-  assert.deepEqual(plain(Settings.userModuleInfo('x', '', undefined)), { title: '', settings: [], standalone: false });
+  assert.deepEqual(plain(Settings.userModuleInfo('x', '', undefined)), { title: '', settings: [] });
 });

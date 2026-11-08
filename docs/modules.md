@@ -184,7 +184,7 @@ A module with a fixed job and a place of its own, the way an OSD always shows vo
 - No notch shows it, even one whose `modules` list it; the settings window leaves it out of a notch's module list.
 - It loads on its own, unless the config switches it off: `"<id>": { "enabled": false }`.
 - The service gives it a notch of its own (`NotchService.standaloneNotch(id)`), a copy on every screen, hidden until the module peeks; the peek shows on the focused screen. `"<id>": { "position": { "edge", "offset" } }` places it, top center by default; there is no `screen`, since it follows focus.
-- It draws over the notches it overlaps there, which hide while it shows (`Position.coveredByStandalone`, the UI's geometry), and stays out of the side-by-side packing.
+- It draws over the notches it overlaps there, which hide while it shows (`Position.coveredByUndecorated`, the UI's geometry), and stays out of the side-by-side packing.
 - Its page in the settings window starts with an Enabled switch and its position (`standalone_fields` in `native/notchd-core/src/settings.rs`), then its own fields. `enabled` and `position` are taken: don't name a field of its own after them.
 
 Give it a `peek` view (and a `verticalPeek` for a side edge); it has no closed or expanded state of its own to show.

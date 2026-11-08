@@ -50,7 +50,7 @@ Item {
       layerNamespace: root.layerNamespace
       readonly property var packed: layout.packOf(modelData)
       packShift: packed ? packed.shift : 0
-      covered: (!!packed && packed.covered) || layout.coveredByStandalone(modelData)
+      covered: (!!packed && packed.covered) || layout.coveredByUndecorated(modelData)
       joinStart: layout.windowAt(packed ? packed.joinStart : -1)
       joinEnd: layout.windowAt(packed ? packed.joinEnd : -1)
       rowDepth: layout.rowDepthOf(modelData)

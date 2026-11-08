@@ -703,7 +703,7 @@ Item {
   }
   // A notch per standalone module switched on: on every screen where its
   // position says, hidden until it peeks, and drawn over the notches there
-  // (NotchSurface, Position.coveredByStandalone). The daemon says which.
+  // (NotchSurface, Position.coveredByUndecorated). The daemon says which.
   Variants {
     id: standaloneVariants
     readonly property var owner: svc

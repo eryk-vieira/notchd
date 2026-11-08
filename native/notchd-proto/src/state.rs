@@ -23,12 +23,11 @@ pub struct State {
     /// and the order Settings lists the notches in.
     pub order: Vec<String>,
     pub reserve: Vec<Reserve>,
-    pub standalone: Vec<Standalone>,
     /// The visitor (`NotchService.visitor`): the default notch, a copy per
     /// screen at the top, hidden until it shows a peek where no notch with
     /// that module does. Its copies are named by the notch id `""` in
     /// `pointer`, `key` and `tab`.
-    pub visitor: Vec<StandaloneCopy>,
+    pub visitor: Vec<GuestCopy>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,8 +63,23 @@ pub struct Notch {
     pub number: u32,
     pub draggable: bool,
     pub tabs: bool,
+    /// Whether it shows at rest. `false` (an undecorated notch): no lip, no
+    /// compact row, no reserved space; it appears only while one of its
+    /// modules peeks (or navigation shows its place), over the decorated
+    /// notches it overlaps, and takes no part in the side-by-side packing.
+    /// Absent means `true`.
+    #[serde(default = "yes", skip_serializing_if = "is_yes")]
+    pub decoration: bool,
     pub modules: Vec<String>,
     pub copies: Vec<Copy>,
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_yes(b: &bool) -> bool {
+    *b
 }
 
 /// One notch on one screen.
@@ -106,16 +120,10 @@ pub struct Reserve {
     pub depth: Num,
 }
 
-/// A standalone module (one with its own window, like `osd`).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Standalone {
-    pub id: String,
-    pub copies: Vec<StandaloneCopy>,
-}
-
+/// A copy of the visitor: hidden while closed.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StandaloneCopy {
+pub struct GuestCopy {
     pub screen: String,
     pub mode: Mode,
     /// Pinned open by a press on it.
@@ -123,7 +131,7 @@ pub struct StandaloneCopy {
     pub peek: Option<Peek>,
     /// What it shows while open: the expanded views of its modules.
     pub shown: Vec<String>,
-    /// `State.needsWindow` for a guest: only while open and for 5 s after.
+    /// `State.needsWindow` for a guest copy: only while open and for 5 s after.
     pub needs_window: bool,
     pub keyboard: KeyboardFocus,
 }

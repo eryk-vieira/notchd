@@ -129,7 +129,7 @@ Scope {
     open: root.cardOpen,
     skip: root.hidden || !!root.dragPlacement || root.windowScreenName === "" || root.standalone
   })
-  // Its span along the edge where it shows, for Position.coveredByStandalone:
+  // Its span along the edge where it shows, for Position.coveredByUndecorated:
   // a standalone card that shows covers the notches it overlaps.
   readonly property var coverItem: {
     var middle = root.standalone ? root.wishCenter : root.wishCenter + root.packShift

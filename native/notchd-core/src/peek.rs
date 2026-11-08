@@ -66,9 +66,9 @@ pub struct Route {
     pub visitor: bool,
 }
 
-/// `NotchService.requestPeek` for a module of the notches (not a standalone
-/// one: that goes to its own notch). `places` are the notches that show the
-/// module, in order. A module that `on_focused_screen` only peeks once: in the
+/// `NotchService.requestPeek`: `places` are the notches that show the
+/// module, in order (an undecorated one too: its copy on the focused screen
+/// peeks). A module that `on_focused_screen` only peeks once: in the
 /// first notch there that shows it, else in the visitor; any other peeks in
 /// every notch that shows it, and in the visitor when none peeks on the
 /// focused screen.

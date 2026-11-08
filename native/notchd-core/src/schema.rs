@@ -29,9 +29,11 @@ pub struct Inputs<'a> {
     /// Workspace ids reported by the compositor, for settings UIs that do
     /// not have direct access to its workspace manager.
     pub known_workspaces: &'a [String],
-    /// `moduleCatalog`: `{ moduleId, title, settings, standalone }` per module.
+    /// `moduleCatalog`: `{ moduleId, title, settings }` per module.
     pub catalog: &'a [Value],
     pub default_modules: &'a [&'a str],
+    /// The notches the host declares (`catalog`'s `defaultNotches`).
+    pub declared: &'a [Value],
 }
 
 /// `corePages`: the sidebar, with the Nerd Font code point of each icon.
@@ -54,7 +56,18 @@ fn core_fields(i: &Inputs) -> Vec<Value> {
         .get(i.settings_notch.min(i.notches.len().saturating_sub(1)));
     let prefix = n.map_or("", |n| n.prefix.as_str());
     let key = |k: &str| format!("{prefix}{k}");
+    let declared = n.is_some_and(|n| n.declared);
     let inherited = |k: &str, fallback: Value| -> Value {
+        // A host's notch has its own defaults, the declaration's; the top
+        // level is no notch's default but the first's.
+        if declared {
+            let at = n.and_then(|n| {
+                i.declared
+                    .iter()
+                    .find(|d| config::declared_id(d) == Some(n.id.as_str()))
+            });
+            return at.and_then(|d| pick(d, k)).cloned().unwrap_or(fallback);
+        }
         if prefix.is_empty() {
             return fallback;
         }
@@ -63,11 +76,6 @@ fn core_fields(i: &Inputs) -> Vec<Value> {
     let several = i.notches.len() > 1;
     let own = settings::notch_page_id(n.map_or(0, |n| n.index) as u64);
     let default_of = |k: &str| config::DEFAULTS.get(k).cloned().unwrap_or(Value::Null);
-    let standalone: Vec<&Value> = i
-        .catalog
-        .iter()
-        .filter(|m| js::truthy_opt(m.get("standalone")))
-        .collect();
 
     out.push(json!({"page": "notch", "key": "notches", "type": "notches", "label": "Notches",
         "help": if several {
@@ -77,31 +85,17 @@ fn core_fields(i: &Inputs) -> Vec<Value> {
         }}));
     if !prefix.is_empty()
         && let Some(n) = n
+        && !n.declared
     {
         out.push(json!({"page": own, "key": key("id"), "type": "string", "label": "Name",
             "default": config::default_notch_id(n.index),
             "help": "What IPC calls it: openNotch, closeNotch and toggleNotch take it, so renaming it breaks a shortcut that names it. An agent opens by its own id instead: agent <id> toggle."}));
     }
-    let modules_help = format!(
-        "{}{}",
-        if several {
-            "What this notch shows. A module may show in several notches. Their order breaks ties in the expanded view."
-        } else {
-            "Switched-on modules load. Their order breaks ties in the expanded view."
-        },
-        if standalone.is_empty() {
-            String::new()
-        } else {
-            let titles: Vec<String> = standalone
-                .iter()
-                .map(|m| settings::module_title(&js::string(&m["moduleId"]), Some(m)))
-                .collect();
-            format!(
-                " Standalone modules, such as {}, have a place of their own: see the Modules page.",
-                titles.join(", ")
-            )
-        }
-    );
+    let modules_help = if several {
+        "What this notch shows. A module may show in several notches. Their order breaks ties in the expanded view."
+    } else {
+        "Switched-on modules load. Their order breaks ties in the expanded view."
+    };
     out.push(
         json!({"page": own, "section": "Modules", "key": key("modules"), "type": "modules",
         "label": "Loaded modules", "default": inherited("modules", json!(i.default_modules)),
@@ -116,6 +110,9 @@ fn core_fields(i: &Inputs) -> Vec<Value> {
     out.push(json!({"page": own, "section": "Layout", "key": key("idleIcons"), "type": "boolean",
         "label": "Icons for idle modules", "default": inherited("idleIcons", default_of("idleIcons")),
         "help": "A module with nothing to show closed, like a timer that isn't running, shows its icon in the closed notch. Off, it stays out until it has something."}));
+    out.push(json!({"page": own, "section": "Layout", "key": key("decoration"), "type": "boolean",
+        "label": "Show at rest", "default": inherited("decoration", default_of("decoration")),
+        "help": "Off, the notch shows nothing while it has nothing to say: no lip, no closed row, no space kept clear. It appears over the notches it overlaps while one of its modules peeks, and goes away after. Without a screen of its own it is on every screen, and the peek shows on the one you work on."}));
     let edges: Vec<Value> = ["top", "bottom", "left", "right"]
         .iter()
         .map(|e| json!({"value": e, "label": capitalize(e)}))
@@ -184,10 +181,6 @@ fn core_fields(i: &Inputs) -> Vec<Value> {
     }
     out.push(json!({"page": "modules", "type": "moduleCatalog", "part": "terminal", "label": "Terminals",
         "help": "Commands of your own, each in a terminal: btop, a dev server, a shell. Add terminal makes one running your shell; its gear changes its command, folder and size. A notch shows it once the notch's page lists it. A shortcut opens one with terminal <id> toggle."}));
-    if !standalone.is_empty() {
-        out.push(json!({"page": "modules", "type": "moduleCatalog", "part": "standalone", "label": "Standalone modules",
-            "help": "Each has a place of its own, over any notch that hangs there, and no notch shows it. Its page switches it on and places it."}));
-    }
     out
 }
 
@@ -263,7 +256,7 @@ fn to_field(f: &Value, shown: bool, value_of: &dyn Fn(&str) -> Option<Value>) ->
 /// The whole schema (rev 0; the store numbers it as it sends it).
 pub fn build(i: &Inputs) -> Schema {
     let mut loose = core_fields(i);
-    loose.extend(settings::module_fields(i.catalog, ""));
+    loose.extend(settings::module_fields(i.catalog));
     let mut pages: Vec<Value> = CORE_PAGES
         .iter()
         .map(|(id, label, icon)| {
@@ -337,6 +330,7 @@ mod tests {
             known_workspaces: &[],
             catalog,
             default_modules: &["media", "activities"],
+            declared: &[],
         })
     }
 
@@ -362,6 +356,7 @@ mod tests {
             known_workspaces: &known,
             catalog: &[],
             default_modules: &["media"],
+            declared: &[],
         });
         let choices = field(&schema, "workspaces").options.as_ref().unwrap();
         assert_eq!(
@@ -471,15 +466,47 @@ mod tests {
     }
 
     #[test]
-    fn a_standalone_module_has_a_switch_and_a_place_and_the_catalog_lists_it() {
-        let def = json!({"moduleId": "osd", "title": "OSD", "standalone": true, "settings": []});
-        let s = build_for(json!({}), &[def], &["DP-1"]);
-        assert!(field(&s, "osd.enabled").visible);
+    fn a_notch_page_has_the_decoration_switch_and_the_catalog_has_no_standalone_list() {
+        let s = build_for(json!({}), &[], &["DP-1"]);
+        let f = field(&s, "decoration");
+        assert_eq!(f.value, json!(true));
+        assert_eq!(f.page, "notch/0");
         assert!(
-            s.fields
+            !s.fields
                 .iter()
                 .any(|f| f.part.as_deref() == Some("standalone"))
         );
-        assert!(field(&s, "modules").help.as_ref().unwrap().contains("OSD"));
+    }
+
+    #[test]
+    fn a_declared_notch_page_starts_from_its_declaration_and_cannot_be_renamed() {
+        let decl = [json!({"id": "osd", "decoration": false, "modules": ["osd"],
+            "position": {"edge": "top", "offset": 0.25}})];
+        let cfg = json!({"position": {"edge": "left"}, "modules": ["media"]});
+        let notches = config::notches_with(&cfg, &["media"], &decl);
+        assert_eq!(notches.len(), 2);
+        let screens: Vec<String> = vec!["DP-1".into()];
+        let s = build(&Inputs {
+            config: &cfg,
+            notches: &notches,
+            order: &[],
+            settings_notch: 1,
+            screens: &screens,
+            supports_workspaces: false,
+            known_workspaces: &[],
+            catalog: &[],
+            default_modules: &["media"],
+            declared: &decl,
+        });
+        // Not the top level's left edge and media: the declaration's.
+        assert_eq!(field(&s, "notches.1.position.edge").value, json!("top"));
+        assert_eq!(field(&s, "notches.1.position.offset").value, json!(0.25));
+        assert_eq!(field(&s, "notches.1.modules").value, json!(["osd"]));
+        assert_eq!(field(&s, "notches.1.decoration").value, json!(false));
+        assert!(
+            !s.fields
+                .iter()
+                .any(|f| f.key.as_deref() == Some("notches.1.id"))
+        );
     }
 }

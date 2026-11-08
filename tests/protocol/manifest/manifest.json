@@ -1,7 +1,7 @@
 {
  "message": "manifest",
  "valid": [
-  {"title":"Weather","command":["./run.sh"],"priority":40,"icon":"󰖐","expandedWidth":360,"permissions":["network"],"settings":[{"key":"city","type":"string","label":"City","default":"Berlin"}],"subscribe":["resources"],"standalone":false},
+  {"title":"Weather","command":["./run.sh"],"priority":40,"icon":"󰖐","expandedWidth":360,"permissions":["network"],"settings":[{"key":"city","type":"string","label":"City","default":"Berlin"}],"subscribe":["resources"]},
   {"command":["python3","${config}/x.py"],"urgentPeek":true,"peekOnFocusedScreen":true,"env":{"LANG":"C"}},
   {"command":["./run.sh"]}
  ],

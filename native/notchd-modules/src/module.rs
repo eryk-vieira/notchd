@@ -119,10 +119,6 @@ pub trait CoreModule: Send {
     fn title(&self) -> Option<String> {
         None
     }
-    /// Standalone: a notch of its own, no place in a notch's module list.
-    fn standalone(&self) -> bool {
-        false
-    }
     fn facts(&self, now: u64) -> Facts;
     /// The tree of a slot now; `None`: no view for it.
     fn view(&self, slot: Slot, now: u64) -> Option<Node>;

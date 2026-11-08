@@ -42,7 +42,11 @@ pub fn route(store: &mut Store, msg: &ToDaemon, now: u64) -> Vec<ToUi> {
             store.settings(open, Some(s.page.clone()));
         }
         ToDaemon::Catalog(c) => {
-            store.set_ui_catalog(c.modules.clone(), c.default_modules.clone());
+            store.set_ui_catalog(
+                c.modules.clone(),
+                c.default_modules.clone(),
+                c.default_notches.clone(),
+            );
         }
         ToDaemon::Measure(m) => {
             store.measure(&m.notch, &m.screen, m.rest.0, m.compact.0, m.baseline.0)
@@ -87,7 +91,6 @@ pub fn route(store: &mut Store, msg: &ToDaemon, now: u64) -> Vec<ToUi> {
                     },
                     expanded: m.expanded,
                     peek_on_focused_screen: m.peek_on_focused_screen,
-                    standalone: m.standalone,
                 })
                 .collect(),
         ),

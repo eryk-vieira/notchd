@@ -90,7 +90,7 @@ pub struct Field {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<When>,
     /// For `moduleCatalog`: which list of the Modules page (`notch`,
-    /// `agent`, `terminal` or `standalone`).
+    /// `agent` or `terminal`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub part: Option<String>,
 }
