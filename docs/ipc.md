@@ -139,28 +139,6 @@ omarchy-shell eryk.notchd agent codex "ask explain: $(wl-paste --primary)"   # t
 
 It answers `ok`, `no UI connected draws a terminal`, the usage, `<id> module not loaded` when no notch lists it, or `no agent <id>` with the agents there are. The agents live in the daemon, which answers: `notchd ipc agent claude ...` prints those. The shell's own target (`omarchy-shell eryk.notchd agent ...`) cannot wait for the daemon and answers `ok` once it has sent the command (it still answers `no agent <id>` and `<id> module not loaded`, which it knows). The program runs in the daemon, so an agent keeps running through a shell reload (`make restart`) and the notch comes back to the same session.
 
-## Live
-
-A spoken conversation (`codex-live` or `local-live`, [modules.md](modules.md#live)), by its module's id. It talks while its notch is open by a click or a shortcut; these drive it from a key or a script:
-
-```sh
-bind = SUPER ALT, V, exec, omarchy-shell eryk.notchd live codex-live toggle
-```
-
-| Command | |
-|---|---|
-| `start` | open its notch (the first that lists it), which starts talking |
-| `stop` | end the conversation; the notch stays open, and it starts again the next time it opens |
-| `toggle` | `stop` while it talks, else `start` |
-| `new` | a new session, the transcript cleared |
-| `mute`, `unmute` | the microphone, while it talks |
-
-It answers `ok`, `no notch shows <id>; add it to one`, `not in a conversation`, the usage, `<id> module not loaded`, or `no live module <id>` with the ones there are. The module and its bridge are the daemon's, so `notchd ipc live ...` prints those answers; the shell's own target answers `ok` once it has sent the command.
-
-## Components
-
-The optional components ([settings.md](settings.md#components)): `notchd ipc component status [id]` prints a line per component (`<id>: <state in words>`), `component install <id>`, `component cancel <id>` and `component remove <id>` run the installer (the same as the buttons of the settings) and answer `ok`, or `no component <id>; components: ...`. An installation runs apart from the daemon (detached) and goes on if it stops.
-
 ## Terminals
 
 A terminal of your own (an entry of the config's `terminals`) takes the same commands by its id: `terminal <id> toggle`, `terminal <id> new` (its command starts again), `terminal <id> "ask <text>"` (the text typed in, then Enter: a command for a shell, say).

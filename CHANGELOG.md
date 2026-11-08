@@ -4,6 +4,10 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+### Removed
+
+- The voice modules (`codex-live` and `local-live`) and the optional components (the Components page of the settings, and the `live` and `component` IPC methods) are gone; voice will come back redesigned. Keys left in your config for them (`codex-live`, `local-live`, `voiceModel`...) and their ids in a notch's `modules` are ignored like any unknown one, and nothing is rewritten. What the components installed stays on disk and can be deleted by hand: `$XDG_DATA_HOME/notchd/` (usually `~/.local/share/notchd/`), for example its `localai` folder (LocalAI and the voices), and the installer's state under `$XDG_STATE_HOME/notchd/components/`.
+
 ## [0.7.3] — 2026-11-08
 
 ### Fixed

@@ -58,13 +58,11 @@ pub const IPC_METHODS: &[&str] = &[
     "codex",
     "terminal",
     "timer",
-    "live",
     "navigate",
     "settings",
     "recenter",
     "set",
     "state",
-    "component",
 ];
 
 /// Provider names (`subscribe`, `provider`).
@@ -75,7 +73,6 @@ pub const PROVIDERS: &[&str] = &[
     "usage",
     "audio",
     "notifications",
-    "components",
     "osd",
 ];
 

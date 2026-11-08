@@ -9,9 +9,8 @@
 
 use crate::modstate::Mods;
 use crate::ptyhost::{Note, PtyHost, Session};
-use crate::sidecars::Sidecars;
 use notchd_core::store::Store;
-use notchd_modules::module::{Bridge, PtyCmd, PtyStart, Shown, SidecarCmd};
+use notchd_modules::module::{PtyCmd, PtyStart, Shown};
 use notchd_modules::plan::Ask;
 use notchd_modules::{CoreModule, Ctx, Effect};
 use notchd_proto::common::Mode;
@@ -40,17 +39,9 @@ const METHODS: &[(&str, &str)] = &[
 /// The agents `agent <id> ...` takes, in the order they are listed.
 const AGENTS: &[&str] = &["claude", "codex"];
 
-/// The spoken conversations `live <id> ...` takes.
-const LIVES: &[&str] = &["codex-live", "local-live"];
-
-/// The modules told how the notches show them (`CoreModule::shown`): the
-/// conversations follow their notch opening, media ticks its clock only while
-/// its expanded view is on screen.
-const SHOWN_AWARE: &[&str] = &["codex-live", "local-live", "media"];
-
-/// How often the installer is asked for its state while the settings are
-/// open and something installs.
-const COMPONENT_POLL_MS: u64 = 1000;
+/// The modules told how the notches show them (`CoreModule::shown`): media
+/// ticks its clock only while its expanded view is on screen.
+const SHOWN_AWARE: &[&str] = &["media"];
 
 /// How the daemon reads its environment: a closure, so tests give it their
 /// own (a scratch `HOME`, no real login).
@@ -88,19 +79,11 @@ pub struct CoreHost {
     env_names: EnvNames,
     /// The daemon that owns terminal programs, independent of inherited CLI env.
     terminal_instance: Option<(String, PathBuf, Option<PathBuf>)>,
-    /// The sidecars written out of the binary (`assets`), on first use.
-    embedded: std::sync::OnceLock<Option<String>>,
     http: Arc<dyn Http>,
     /// Some UI can draw a terminal (`surfaces` of its `hello`).
     terminal_ui: bool,
-    /// The voice's bridges, and what the notches showed of each module last.
-    sidecars: Sidecars,
+    /// What the notches showed of each module last.
     shown_seen: BTreeMap<&'static str, Shown>,
-    /// The optional components: when the installer is asked next, whether a
-    /// `status` is out, and whether the settings were open at the last look.
-    comp_next: u64,
-    comp_busy: bool,
-    comp_settings: bool,
 }
 
 impl Default for CoreHost {
@@ -127,14 +110,9 @@ impl CoreHost {
                     .collect()
             }),
             terminal_instance: None,
-            embedded: std::sync::OnceLock::new(),
             http: Arc::new(Curl),
             terminal_ui: false,
-            sidecars: Sidecars::default(),
             shown_seen: BTreeMap::new(),
-            comp_next: 0,
-            comp_busy: false,
-            comp_settings: false,
         }
     }
 
@@ -187,7 +165,6 @@ impl CoreHost {
     /// feeds each note to its module.
     pub fn set_notes(&mut self, notes: Sender<Note>) {
         self.ptys.set_notes(notes.clone());
-        self.sidecars.set_notes(notes.clone());
         self.notes = Some(notes);
     }
 
@@ -209,7 +186,6 @@ impl CoreHost {
     /// Stops every terminal's program (the daemon is going).
     pub fn stop_terminals(&mut self) {
         self.ptys.stop_all();
-        self.sidecars.stop_all();
     }
 
     pub fn has(&self, id: &str) -> bool {
@@ -274,7 +250,7 @@ impl CoreHost {
     }
 
     /// The notch state changed: tells the modules whose answer did how the
-    /// notches show them now (a voice session follows its notch opening).
+    /// notches show them now (media's clock follows its view).
     pub fn notches_changed(&mut self, store: &mut Store, mods: &mut Mods, now: u64) -> Vec<ToUi> {
         let ids: Vec<&'static str> = self.loaded.keys().copied().collect();
         let mut out = Vec::new();
@@ -354,7 +330,6 @@ impl CoreHost {
                 self.due.remove(id);
                 // Its program goes with it, as its terminal did.
                 self.ptys.stop(id);
-                self.sidecars.stop(id);
                 self.shown_seen.remove(id);
                 store.set_module_extra(id, None);
                 out.extend(mods.apply(
@@ -410,189 +385,11 @@ impl CoreHost {
                     }
                 }
                 Effect::Pty(cmd) => self.pty_command(id, cmd),
-                Effect::Sidecar(cmd) => self.sidecar_command(store, id, cmd),
                 Effect::Usage(ask) => self.ask_usage(id, ask),
                 Effect::Notch(op) => store.module_op(id, op, now),
             }
         }
         out
-    }
-
-    /// Where a sidecar file is (`live/codex-live.py`...): `NOTCHD_CORE_DIR`
-    /// (a dev checkout's `core/`), else the folder a UI's `catalog` named
-    /// (`coreDir`, deprecated), else the daemon's own, embedded in it and
-    /// written out on first use (`assets`).
-    fn core_file(&self, store: &Store, rel: &str) -> String {
-        let dir = (self.env)("NOTCHD_CORE_DIR")
-            .or_else(|| store.core_dir().map(String::from))
-            .or_else(|| {
-                self.embedded
-                    .get_or_init(|| {
-                        let home = crate::assets::data_home(&*self.env)?;
-                        match crate::assets::extract(&home) {
-                            Ok(dir) => Some(dir.to_string_lossy().into_owned()),
-                            Err(e) => {
-                                eprintln!(
-                                    "notchd: cannot write its sidecars under {}: {e}",
-                                    home.display()
-                                );
-                                None
-                            }
-                        }
-                    })
-                    .clone()
-            })
-            .unwrap_or_default();
-        format!("{}/{rel}", dir.trim_end_matches('/'))
-    }
-
-    /// What a voice module asked of its bridge.
-    fn sidecar_command(&mut self, store: &Store, id: &str, cmd: SidecarCmd) {
-        match cmd {
-            SidecarCmd::Start(s) => {
-                let home = (self.env)("HOME").unwrap_or_default();
-                let argv = match &s.bridge {
-                    Bridge::Codex(o) => {
-                        let path = (self.env)("NOTCHD_LIVE_BRIDGE")
-                            .unwrap_or_else(|| self.core_file(store, "live/codex-live.py"));
-                        notchd_core::live::bridge_args(&path, o, &home)
-                    }
-                    Bridge::Local(o) => {
-                        let path = (self.env)("NOTCHD_LOCAL_LIVE_BRIDGE")
-                            .unwrap_or_else(|| self.core_file(store, "live/local-live.py"));
-                        notchd_core::live::local_bridge_args(&path, o, &home)
-                    }
-                };
-                self.sidecars.start(id, s.run, &argv);
-            }
-            SidecarCmd::Write(line) => self.sidecars.write(id, &line),
-            SidecarCmd::Term => self.sidecars.terminate(id),
-        }
-    }
-
-    // ---------------------------------------------------------- components
-
-    /// The installer's command line (`NOTCHD_COMPONENTS_INSTALLER`, else
-    /// the daemon's own `components/install.py`).
-    fn installer(&self, store: &Store, args: &[&str]) -> Vec<String> {
-        let script = (self.env)("NOTCHD_COMPONENTS_INSTALLER")
-            .unwrap_or_else(|| self.core_file(store, "components/install.py"));
-        let args: Vec<String> = args.iter().map(|a| (*a).to_string()).collect();
-        notchd_core::components::installer_command(&script, &args)
-    }
-
-    /// Runs the installer on a thread of its own (an action, then a `status`
-    /// to see what it did), and tells the hub what `status` said.
-    fn run_installer(&mut self, store: &Store, action: Option<(&str, &str)>) {
-        let Some(notes) = self.notes.clone() else {
-            return;
-        };
-        let status = self.installer(store, &["status"]);
-        let act = action.map(|(verb, id)| self.installer(store, &[verb, id]));
-        self.comp_busy = true;
-        let _ = std::thread::Builder::new()
-            .name("notchd-components".into())
-            .spawn(move || {
-                use notchd_providers::components::{ACTION_LIMIT, STATUS_LIMIT, run};
-                if let Some(act) = act {
-                    let _ = run(&act, &[], ACTION_LIMIT);
-                }
-                let text = run(&status, &[], STATUS_LIMIT)
-                    .map(|r| r.stdout)
-                    .unwrap_or_default();
-                let _ = notes.send(Note {
-                    provider: "components",
-                    data: json!({"status": text}),
-                });
-            });
-    }
-
-    /// What the installer said of the components (a `components` note).
-    pub fn components_note(&mut self, store: &mut Store, data: &Value) {
-        self.comp_busy = false;
-        let text = data.get("status").and_then(Value::as_str).unwrap_or("");
-        let states = notchd_core::components::parse_status(text);
-        if !states.is_empty() {
-            store.set_component_states(states);
-        }
-    }
-
-    /// Asks the installer for its state while the settings are open and it
-    /// is not known yet, the window just opened, or something installs.
-    fn poll_components(&mut self, store: &Store, now: u64) {
-        let open = store.settings_open;
-        let opened = open && !self.comp_settings;
-        self.comp_settings = open;
-        if !open || self.comp_busy {
-            return;
-        }
-        let active = store
-            .component_states()
-            .is_none_or(notchd_core::components::any_active);
-        if opened || (active && now >= self.comp_next) {
-            self.comp_next = now + COMPONENT_POLL_MS;
-            self.run_installer(store, None);
-        }
-    }
-
-    /// `component status [id] | install <id> | cancel <id> | remove <id>`.
-    fn component_command(&mut self, store: &mut Store, args: &[String]) -> String {
-        use notchd_core::components as c;
-        let usage = "usage: component status [id] | install <id> | cancel <id> | remove <id>";
-        let verb = args.first().map_or("", String::as_str);
-        let id = args.get(1).map_or("", String::as_str);
-        let known = c::by_id(store.component_catalog(), id).is_some();
-        let unknown = {
-            let ids: Vec<&str> = store
-                .component_catalog()
-                .iter()
-                .map(|k| k.id.as_str())
-                .collect();
-            format!("no component {id}; components: {}", ids.join(", "))
-        };
-        match verb {
-            "status" => {
-                if !id.is_empty() && !known {
-                    return unknown;
-                }
-                if store.component_states().is_none() {
-                    let argv = self.installer(store, &["status"]);
-                    if let Ok(r) = notchd_providers::components::run(
-                        &argv,
-                        &[],
-                        notchd_providers::components::STATUS_LIMIT,
-                    ) {
-                        let states = c::parse_status(&r.stdout);
-                        if !states.is_empty() {
-                            store.set_component_states(states);
-                        }
-                    }
-                }
-                let states = store.component_states().cloned().unwrap_or_default();
-                let installed = c::installed_ids(&states);
-                store
-                    .component_catalog()
-                    .iter()
-                    .filter(|k| id.is_empty() || k.id == id)
-                    .map(|k| {
-                        let shared = c::shares_backend(k, store.component_catalog(), &installed);
-                        format!("{}: {}", k.id, c::view(k, states.get(&k.id), shared).text)
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            }
-            "install" | "cancel" | "remove" => {
-                if id.is_empty() {
-                    return usage.into();
-                }
-                if !known {
-                    return unknown;
-                }
-                self.run_installer(store, Some((verb, id)));
-                "ok".into()
-            }
-            _ => usage.into(),
-        }
     }
 
     /// What a terminal module asked of its program.
@@ -704,19 +501,6 @@ impl CoreHost {
                     }
                 }
             }
-            "live" => {
-                let want = args.first().map_or("", String::as_str);
-                match LIVES.iter().find(|a| **a == want) {
-                    Some(a) => *a,
-                    None => {
-                        return Some((
-                            format!("no live module {want}; live modules: {}", LIVES.join(", ")),
-                            Vec::new(),
-                        ));
-                    }
-                }
-            }
-            "component" => return Some((self.component_command(store, args), Vec::new())),
             "terminal" => {
                 let want = args.first().map_or("", String::as_str);
                 let list = notchd_modules::terminal::ids(store.config());
@@ -816,7 +600,6 @@ impl CoreHost {
 
     /// Runs the modules whose time has come.
     pub fn tick(&mut self, store: &mut Store, mods: &mut Mods, now: u64) -> Vec<ToUi> {
-        self.poll_components(store, now);
         let due: Vec<&'static str> = self
             .due
             .iter()
@@ -947,41 +730,24 @@ mod tests {
     }
 
     #[test]
-    fn sidecars_come_from_the_dev_override_then_the_uis_folder_then_the_daemons_own() {
-        let data = std::env::temp_dir().join(format!("notchd-corefile-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&data);
-        let data_str = data.to_string_lossy().into_owned();
-        let env_with = |core: Option<&'static str>| -> Env {
-            let d = data_str.clone();
-            Arc::new(move |k| match k {
-                "XDG_DATA_HOME" => Some(d.clone()),
-                "NOTCHD_CORE_DIR" => core.map(String::from),
-                _ => None,
-            })
-        };
-        let mut store = Store::new();
-        // Nobody named a folder: the files the binary carries, written out.
-        let own = CoreHost::new(None).with_env(env_with(None));
-        let path = own.core_file(&store, "components/install.py");
-        assert!(path.starts_with(&data_str), "{path}");
-        assert!(std::path::Path::new(&path).is_file(), "{path}");
+    fn the_removed_voice_modules_and_their_config_keys_are_ignored_like_any_unknown_one() {
+        let (mut h, mut s, mut m, _) = rig(json!({
+            "modules": ["timer", "codex-live", "local-live"],
+            "codex-live": {"voice": "maple", "command": "codex"},
+            "local-live": {"voiceModel": "piper", "voiceLanguage": "pt"}
+        }));
+        h.sync(&mut s, &mut m, 0);
+        assert!(h.has("timer"), "the others load");
+        assert!(!h.has("codex-live") && !h.has("local-live"));
+        assert_eq!(
+            say(&mut h, &mut s, &mut m, "timer", &["5m"], 1000),
+            "ok",
+            "nothing refused"
+        );
         assert!(
-            std::path::Path::new(&own.core_file(&store, "live/local-live.py")).is_file(),
-            "the bridge finds localai.py beside it"
+            s.config()["codex-live"]["voice"] == "maple",
+            "and nothing rewritten"
         );
-        // A UI's `coreDir` (deprecated) wins over them.
-        store.set_core_dir(Some("/ui/core".into()));
-        assert_eq!(
-            own.core_file(&store, "live/codex-live.py"),
-            "/ui/core/live/codex-live.py"
-        );
-        // The dev override wins over both.
-        let dev = CoreHost::new(None).with_env(env_with(Some("/dev/core/")));
-        assert_eq!(
-            dev.core_file(&store, "live/codex-live.py"),
-            "/dev/core/live/codex-live.py"
-        );
-        let _ = std::fs::remove_dir_all(&data);
     }
 
     #[test]

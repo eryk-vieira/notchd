@@ -8,7 +8,7 @@
 
 use crate::js;
 use serde::Serialize;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 // ---------------------------------------------------------------------------
 // JS semantics the rules rely on
@@ -232,9 +232,6 @@ pub struct ModuleInfo {
     /// A coding agent in a terminal.
     #[serde(skip_serializing_if = "is_false")]
     pub agent: bool,
-    /// A spoken conversation with an agent.
-    #[serde(skip_serializing_if = "is_false")]
-    pub live: bool,
     /// One of the config's own `terminals`.
     #[serde(skip_serializing_if = "is_false")]
     pub terminal: bool,
@@ -290,17 +287,6 @@ pub fn parse_module_info(text: &str) -> ModuleInfo {
             info.error = Some("agent: needs a command".into());
         }
     }
-    if let Some(live) = data.get("live") {
-        let local = live.get("local") == Some(&Value::Bool(true));
-        if live.is_object()
-            && (local || str_of(live, "command").is_some_and(|c| !c.trim().is_empty()))
-        {
-            info.live = true;
-            inherited = live_settings(live, &info.title);
-        } else {
-            info.error = Some("live: needs a command".into());
-        }
-    }
     // A field of its own replaces an inherited one with the same key (and, as
     // in JS, any key-less own field drops the inherited key-less ones).
     let own_keys: Vec<Option<&Value>> = own.iter().map(|f| f.get("key")).collect();
@@ -345,114 +331,6 @@ pub fn agent_settings(agent: &Value, title: &str) -> Vec<Value> {
         }
     }
     fields
-}
-
-/// The voices a Codex realtime (v3) conversation speaks in; "" is Codex's choice.
-const LIVE_VOICES: &[&str] = &[
-    "juniper", "maple", "spruce", "ember", "vale", "breeze", "arbor", "sol", "cove", "aube",
-    "bubbie", "haetsal", "hanul", "himari", "leher", "miko", "neer", "porto", "rindo", "rio",
-    "rivage", "selva", "sonna", "tinta", "viola",
-];
-
-/// `liveSettings`: the fields of a spoken conversation, from its file's
-/// `live` (`live.command` is the default command; `live.local` brings the
-/// local one). `title` names it.
-pub fn live_settings(live: &Value, title: &str) -> Vec<Value> {
-    let name = if title.is_empty() { "the agent" } else { title };
-    let next = "Applies to the next conversation.";
-    if live.get("local") == Some(&Value::Bool(true)) {
-        return local_live_settings(next);
-    }
-    let command = str_of(live, "command").unwrap_or("").trim();
-    let mut voices = vec![json!({ "value": "", "label": "Codex's" })];
-    voices.extend(
-        LIVE_VOICES
-            .iter()
-            .map(|v| json!({ "value": v, "label": capitalize(v) })),
-    );
-    vec![
-        json!({ "key": "command", "type": "string", "label": "Command", "default": command,
-            "help": format!("The command that runs Codex; notchd starts its server (app-server) with it. {next}") }),
-        json!({ "key": "directory", "type": "string", "label": "Folder", "default": "",
-            "help": format!("Where {name} works when you ask it something; ~ is your home. Empty is notchd's own folder, notchd in your Documents folder. {next}") }),
-        json!({ "key": "voice", "type": "choice", "label": "Voice", "default": "", "display": "chips", "options": voices,
-            "help": format!("The voice it speaks in. {next}") }),
-        json!({ "key": "access", "type": "choice", "label": "May", "default": "read-only",
-            "options": [{ "value": "read-only", "label": "Only read" }, { "value": "workspace-write", "label": "Change files in its folder" }],
-            "help": format!("What {name} may do in its folder when you ask it to. It never asks for approval (no one would answer): what it may not do, it doesn't. {next}") }),
-        json!({ "type": "component", "component": "codex-live-audio", "section": "Needs" }),
-    ]
-}
-
-/// The languages of the speech models, named in their own language.
-fn speech_languages() -> Vec<Value> {
-    [
-        ("pt", "Português"),
-        ("en", "English"),
-        ("es", "Español"),
-        ("fr", "Français"),
-        ("de", "Deutsch"),
-        ("it", "Italiano"),
-        ("nl", "Nederlands"),
-    ]
-    .iter()
-    .map(|(v, l)| json!({ "value": v, "label": l }))
-    .collect()
-}
-
-/// `localLiveSettings`: the fields of a local spoken conversation: which
-/// agent's session it joins, speech to text (Voxtype) and text to speech
-/// (a LocalAI voice).
-fn local_live_settings(next: &str) -> Vec<Value> {
-    let part = |id: &str, section: &str| json!({ "type": "component", "component": id, "section": section });
-    let stt = "Speech to text (STT)";
-    let tts = "Text to speech (TTS)";
-    let mut languages = vec![
-        json!({ "value": "", "label": "Voxtype's own" }),
-        json!({ "value": "auto", "label": "Auto-detect" }),
-    ];
-    languages.extend(speech_languages());
-    vec![
-        json!({ "key": "agent", "type": "choice", "section": "Agent", "label": "Agent", "default": "codex",
-            "options": [{ "value": "codex", "label": "Codex" }, { "value": "claude", "label": "Claude Code" }],
-            "help": format!("Whose text session your words go into, the one you also type in. {next}") }),
-        json!({ "key": "command", "type": "string", "section": "Agent", "label": "Command", "default": "",
-            "help": format!("The command line that runs the agent; empty is codex or claude. {next}") }),
-        json!({ "key": "session", "type": "string", "section": "Agent", "label": "Session", "default": "last",
-            "help": format!("last: the agent's most recent session in the folder. new: one of its own. Or a session id. {next}") }),
-        json!({ "key": "directory", "type": "string", "section": "Agent", "label": "Folder", "default": "",
-            "help": format!("Where the agent works, and whose sessions \"last\" looks in; ~ is your home. Empty is notchd's own folder, notchd in your Documents folder. {next}") }),
-        json!({ "key": "access", "type": "choice", "section": "Agent", "label": "May", "default": "read-only",
-            "options": [{ "value": "read-only", "label": "Only read" }, { "value": "workspace-write", "label": "Change files in its folder" }],
-            "help": format!("What the agent may do in its folder when you ask it to (Claude: plan mode, or accept edits). It never asks for approval (no one would answer). {next}") }),
-        part("libpulse", "Audio"),
-        json!({ "type": "note", "section": stt, "label": "Listening",
-            "help": "Speech to text turns what you say into the words the agent receives. It is Voxtype, on this machine, with the speech model you set up for dictation." }),
-        part("voxtype", stt),
-        json!({ "key": "language", "type": "choice", "section": stt, "label": "Language you speak", "default": "", "display": "chips",
-            "options": languages,
-            "help": format!("Empty is Voxtype's own setting. Any other code Voxtype knows can be written in the config file as language. {next}") }),
-        json!({ "key": "speechModel", "type": "string", "section": stt, "label": "Speech model", "default": "",
-            "help": format!("A Voxtype model, such as small or large-v3-turbo (voxtype info models lists them); empty is the one Voxtype is set up with. {next}") }),
-        json!({ "type": "note", "section": tts, "label": "Speaking",
-            "help": "Text to speech is the voice that answers you: the agent's words, read aloud by a LocalAI voice on this machine. Piper is light and quick; Pocket TTS is more natural and heavier." }),
-        part("localai", tts),
-        json!({ "key": "voiceLanguage", "type": "choice", "section": tts, "label": "Language it speaks", "default": "pt", "display": "chips",
-            "options": speech_languages(),
-            "help": format!("The language of the voice: the voices below are the ones of this language. {next}") }),
-        json!({ "type": "components", "section": tts, "match": { "engine": ["piper", "pocket"] }, "by": { "key": "voiceLanguage", "field": "language" } }),
-        json!({ "key": "voiceModel", "type": "choice", "section": tts, "label": "Speaks with", "default": "",
-            "options": [{ "value": "", "label": "First installed" },
-                        { "value": "piper", "label": "Piper", "needs": [{ "engine": "piper", "language": "@voiceLanguage" }] },
-                        { "value": "pocket", "label": "Pocket TTS", "needs": [{ "engine": "pocket", "language": "@voiceLanguage" }] }],
-            "help": format!("Which voice engine speaks, in the language above: the first installed is Piper, else Pocket TTS. {next}") }),
-        json!({ "key": "otherVoiceModel", "type": "string", "section": tts, "label": "Another voice model", "default": "",
-            "help": format!("Any text-to-speech model of the LocalAI you use, by its name; it takes the place of the choice above. {next}") }),
-        json!({ "key": "voice", "type": "string", "section": tts, "label": "Voice", "default": "",
-            "help": format!("A voice of that model, for those that have several: Pocket TTS has alba, azelma, rafael and more. Empty is the model's own. {next}") }),
-        json!({ "key": "localaiUrl", "type": "string", "section": tts, "label": "LocalAI address", "default": "",
-            "help": format!("Where LocalAI answers. Empty is notchd's own, http://127.0.0.1:18080, which it starts when a conversation needs it and stops after; an address where one is already running is used as it is. {next}") }),
-    ]
 }
 
 /// `terminalFields`: the fields of a program in a terminal (an agent or one
@@ -574,56 +452,18 @@ fn standalone_fields(id: &str, edge_preview: &str) -> Vec<Value> {
 }
 
 /// `moduleRefs`: a field's references to other fields of its module
-/// (`when.key`, `by.key`, an option's `needs` value "@key") put under the
-/// module's id, as its own key is.
+/// (`when.key`) put under the module's id, as its own key is.
 fn module_refs(field: &Value, module_id: &str) -> Value {
     let mut out = field.clone();
     let Some(obj) = out.as_object_mut() else {
         return out;
     };
-    for name in ["when", "by"] {
-        if let Some(r) = field.get(name).filter(|r| js::truthy_opt(r.get("key"))) {
-            let mut r = r.clone();
-            let key = js::string(&r["key"]);
-            r["key"] = Value::String(format!("{module_id}.{key}"));
-            obj.insert(name.into(), r);
-        }
+    if let Some(r) = field.get("when").filter(|r| js::truthy_opt(r.get("key"))) {
+        let mut r = r.clone();
+        let key = js::string(&r["key"]);
+        r["key"] = Value::String(format!("{module_id}.{key}"));
+        obj.insert("when".into(), r);
     }
-    if let Some(Value::Array(options)) = field.get("options") {
-        let options: Vec<Value> = options
-            .iter()
-            .map(|o| module_option_refs(o, module_id))
-            .collect();
-        obj.insert("options".into(), Value::Array(options));
-    }
-    out
-}
-
-fn module_option_refs(option: &Value, module_id: &str) -> Value {
-    let Some(Value::Array(needs)) = option.get("needs") else {
-        return option.clone();
-    };
-    let needs: Vec<Value> = needs
-        .iter()
-        .map(|n| match n {
-            Value::String(_) => n.clone(),
-            Value::Object(map) => Value::Object(
-                map.iter()
-                    .map(|(k, v)| {
-                        let v = match v.as_str().and_then(|s| s.strip_prefix('@')) {
-                            Some(rest) => Value::String(format!("@{module_id}.{rest}")),
-                            None => v.clone(),
-                        };
-                        (k.clone(), v)
-                    })
-                    .collect::<Map<_, _>>(),
-            ),
-            // `Object.keys` of a non-object has nothing: an empty object.
-            _ => Value::Object(Map::new()),
-        })
-        .collect();
-    let mut out = option.clone();
-    out["needs"] = Value::Array(needs);
     out
 }
 
@@ -687,12 +527,12 @@ pub fn module_title(id: &str, module: Option<&Value>) -> String {
 }
 
 /// `moduleKind`: which list of the Modules page a module is in: "standalone",
-/// "agent" (a coding agent, or a conversation with one: `live`), "terminal",
+/// "agent" (a coding agent), "terminal",
 /// else "notch".
 pub fn module_kind(m: &Value) -> &'static str {
     if js::truthy_opt(m.get("standalone")) {
         "standalone"
-    } else if js::truthy_opt(m.get("agent")) || js::truthy_opt(m.get("live")) {
+    } else if js::truthy_opt(m.get("agent")) {
         "agent"
     } else if js::truthy_opt(m.get("terminal")) {
         "terminal"
@@ -1000,35 +840,10 @@ mod tests {
             .unwrap()
     }
 
-    fn voice_info() -> ModuleInfo {
-        parse_module_info(&json!({ "title": "Voice", "live": { "local": true } }).to_string())
-    }
-
     fn repo(path: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .join(path)
-    }
-
-    fn registry() -> Vec<Value> {
-        let text = std::fs::read_to_string(repo("core/components/components.json")).unwrap();
-        serde_json::from_str::<Value>(&text).unwrap()["components"]
-            .as_array()
-            .unwrap()
-            .clone()
-    }
-
-    fn voice_key() -> &'static str {
-        "local-live.voiceLanguage"
-    }
-
-    fn voice_fields() -> Vec<Value> {
-        module_fields(
-            &[
-                json!({ "moduleId": "local-live", "title": "Voice", "settings": voice_info().settings }),
-            ],
-            "",
-        )
     }
 
     // Node: mergePages lets a host relabel a core page and append its own
@@ -1449,106 +1264,6 @@ mod tests {
         }
     }
 
-    // Node: a live module's file brings the conversation's fields
-    #[test]
-    fn a_live_modules_file_brings_the_conversations_fields() {
-        let info = parse_module_info(
-            &json!({ "title": "Codex Live", "live": { "command": " codex " } }).to_string(),
-        );
-        assert!(info.live);
-        assert!(!info.agent);
-        let with_key: Vec<_> = info
-            .settings
-            .iter()
-            .filter_map(|f| str_of(f, "key"))
-            .collect();
-        assert_eq!(with_key, ["command", "directory", "voice", "access"]);
-        assert_eq!(
-            setting_default(&info.settings, "command"),
-            Some(json!("codex"))
-        );
-        assert_eq!(
-            setting_default(&info.settings, "access"),
-            Some(json!("read-only"))
-        );
-        // Codex's own voice by default, the others as chips.
-        let voice = field_with(&info, "voice");
-        assert_eq!(voice["default"], "");
-        assert_eq!(voice["display"], "chips");
-        assert_eq!(voice["options"][0]["value"], "");
-        assert!(
-            voice["options"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|o| o["value"] == "maple" && o["label"] == "Maple")
-        );
-        // Listed with the agents.
-        assert_eq!(module_kind(&json!({ "live": true })), "agent");
-        let listed = catalog_part(
-            &[
-                json!({ "moduleId": "codex-live", "live": true }),
-                json!({ "moduleId": "media" }),
-            ],
-            Some("agent"),
-        );
-        assert_eq!(
-            listed
-                .iter()
-                .map(|m| str_of(m, "moduleId").unwrap())
-                .collect::<Vec<_>>(),
-            ["codex-live"]
-        );
-    }
-
-    // Node: a local live module needs no command: its fields are the agent's, the models'
-    #[test]
-    fn a_local_live_module_needs_no_command_its_fields_are_the_agents_the_models() {
-        let info = voice_info();
-        assert!(info.live);
-        assert_eq!(info.error, None);
-        let with_key: Vec<_> = info
-            .settings
-            .iter()
-            .filter_map(|f| str_of(f, "key"))
-            .collect();
-        assert_eq!(
-            with_key,
-            [
-                "agent",
-                "command",
-                "session",
-                "directory",
-                "access",
-                "language",
-                "speechModel",
-                "voiceLanguage",
-                "voiceModel",
-                "otherVoiceModel",
-                "voice",
-                "localaiUrl"
-            ]
-        );
-        let default = |k: &str| setting_default(&info.settings, k);
-        assert_eq!(default("agent"), Some(json!("codex")));
-        assert_eq!(default("session"), Some(json!("last")));
-        assert_eq!(default("language"), Some(json!(""))); // Voxtype's own
-        assert_eq!(default("command"), Some(json!("")));
-        assert_eq!(default("voiceModel"), Some(json!("")));
-        assert_eq!(default("voiceLanguage"), Some(json!("pt")));
-        assert_eq!(default("localaiUrl"), Some(json!("")));
-    }
-
-    // Node: a live module without a command is an error
-    #[test]
-    fn a_live_module_without_a_command_is_an_error() {
-        for live in [json!({}), json!({ "command": " " }), json!(true), json!([])] {
-            let info = parse_module_info(&json!({ "title": "X", "live": live }).to_string());
-            assert!(!info.live, "{live}");
-            assert_eq!(info.error.as_deref(), Some("live: needs a command"));
-        }
-    }
-
     // Node: parseModuleInfo keeps a title and well-formed fields, drops the rest
     #[test]
     fn parse_module_info_keeps_a_title_and_well_formed_fields_drops_the_rest() {
@@ -1649,9 +1364,7 @@ mod tests {
                 .as_object()
                 .unwrap()
                 .keys()
-                .filter(|k| {
-                    !["title", "settings", "standalone", "agent", "live"].contains(&k.as_str())
-                })
+                .filter(|k| !["title", "settings", "standalone", "agent"].contains(&k.as_str()))
                 .collect();
             assert!(unknown.is_empty(), "{file}: unknown keys {unknown:?}");
             if info.standalone {
@@ -1669,8 +1382,6 @@ mod tests {
             }
             let inherited = if info.agent {
                 agent_settings(&data["agent"], &info.title).len()
-            } else if info.live {
-                live_settings(&data["live"], &info.title).len()
             } else {
                 0
             };
@@ -1683,23 +1394,8 @@ mod tests {
                 "{file}: a field was dropped"
             );
             for f in &info.settings {
-                match str_of(f, "type") {
-                    Some("note") => continue,
-                    Some("component") => {
-                        assert!(
-                            js::truthy_opt(f.get("component")),
-                            "{file}: a component row without a component"
-                        );
-                        continue;
-                    }
-                    Some("components") => {
-                        assert!(
-                            js::truthy_opt(f.get("match")),
-                            "{file}: components without a match"
-                        );
-                        continue;
-                    }
-                    _ => {}
+                if str_of(f, "type") == Some("note") {
+                    continue;
                 }
                 assert!(
                     js::truthy_opt(f.get("key")) && f.get("default").is_some(),
@@ -1859,145 +1555,6 @@ mod tests {
         );
     }
 
-    // Node: the voice modules' pages have a row for every component they need, and each exists
-    #[test]
-    fn the_voice_modules_pages_have_a_row_for_every_component_they_need_and_each_exists() {
-        let components = |info: &ModuleInfo| -> Vec<String> {
-            info.settings
-                .iter()
-                .filter(|f| str_of(f, "type") == Some("component"))
-                .map(|f| str_of(f, "component").unwrap().to_string())
-                .collect()
-        };
-        let registry = registry();
-        let local = voice_info();
-        let codex = parse_module_info(
-            &json!({ "title": "Codex Live", "live": { "command": "codex" } }).to_string(),
-        );
-        assert_eq!(components(&local), ["libpulse", "voxtype", "localai"]);
-        assert_eq!(components(&codex), ["codex-live-audio"]);
-        for id in components(&local).iter().chain(components(&codex).iter()) {
-            assert!(registry.iter().any(|c| str_of(c, "id") == Some(id)), "{id}");
-        }
-        // a component row keeps its module's page and sections, and takes no config key
-        let fields = voice_fields();
-        let row = fields
-            .iter()
-            .find(|f| str_of(f, "component") == Some("voxtype"))
-            .unwrap();
-        assert_eq!(row["page"], "modules/local-live");
-        assert_eq!(row["section"], "Speech to text (STT)");
-        assert_eq!(row.get("key"), None);
-    }
-
-    // Node: the Voice page keeps speech to text and text to speech apart, each with a note
-    #[test]
-    fn the_voice_page_keeps_speech_to_text_and_text_to_speech_apart_each_with_a_note() {
-        let sections = sections(&voice_fields(), "modules/local-live");
-        let names: Vec<_> = sections.iter().map(|s| s.name.as_str()).collect();
-        assert_eq!(
-            names,
-            [
-                "Agent",
-                "Audio",
-                "Speech to text (STT)",
-                "Text to speech (TTS)"
-            ]
-        );
-        let named = |name: &str| &sections.iter().find(|s| s.name == name).unwrap().fields;
-        for name in ["Speech to text (STT)", "Text to speech (TTS)"] {
-            assert_eq!(named(name)[0]["type"], "note", "{name}");
-        }
-        let keys_of = |name: &str| -> Vec<String> {
-            named(name)
-                .iter()
-                .filter_map(|f| str_of(f, "key"))
-                .map(|k| k.replace("local-live.", ""))
-                .collect()
-        };
-        assert_eq!(keys_of("Speech to text (STT)"), ["language", "speechModel"]);
-        assert_eq!(
-            keys_of("Text to speech (TTS)"),
-            [
-                "voiceLanguage",
-                "voiceModel",
-                "otherVoiceModel",
-                "voice",
-                "localaiUrl"
-            ]
-        );
-        assert!(
-            named("Speech to text (STT)")
-                .iter()
-                .any(|f| str_of(f, "component") == Some("voxtype"))
-        );
-        assert!(
-            named("Text to speech (TTS)")
-                .iter()
-                .any(|f| str_of(f, "component") == Some("localai"))
-        );
-    }
-
-    // Node: the languages: one list for what you speak and what speaks, each a choice that keeps its default
-    #[test]
-    fn the_languages_one_list_for_what_you_speak_and_what_speaks_each_a_choice_that_keeps_its_default()
-     {
-        let local = voice_info();
-        let stt = field_with(&local, "language");
-        let tts = field_with(&local, "voiceLanguage");
-        let codes = |f: &Value| -> Vec<String> {
-            f["options"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|o| o["value"].as_str().unwrap().to_string())
-                .filter(|v| !v.is_empty() && v != "auto")
-                .collect()
-        };
-        assert_eq!(codes(stt), codes(tts));
-        let first_two: Vec<_> = stt["options"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .take(2)
-            .map(|o| o["value"].clone())
-            .collect();
-        assert_eq!(first_two, [json!(""), json!("auto")]);
-        // every language of the speech models has both engines in the registry, and only those do
-        let registry = registry();
-        let voices: Vec<&Value> = registry
-            .iter()
-            .filter(|c| c.get("engine").is_some())
-            .collect();
-        let mut languages: Vec<String> = voices
-            .iter()
-            .map(|c| str_of(c, "language").unwrap().to_string())
-            .collect();
-        languages.sort();
-        languages.dedup();
-        let mut want = codes(tts);
-        want.sort();
-        assert_eq!(languages, want);
-        for code in codes(tts) {
-            let mut engines: Vec<_> = voices
-                .iter()
-                .filter(|c| str_of(c, "language") == Some(code.as_str()))
-                .map(|c| str_of(c, "engine").unwrap())
-                .collect();
-            engines.sort();
-            assert_eq!(engines, ["piper", "pocket"], "{code}");
-        }
-        // the label is in its own language, and a key the config file already has keeps meaning
-        let pt = stt["options"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|o| o["value"] == "pt")
-            .unwrap();
-        assert_eq!(pt["label"], "Português");
-        assert_eq!(stt["key"], "language");
-    }
-
     // Node: a field with `when` shows only while another field has that value; the default counts
     #[test]
     fn a_field_with_when_shows_only_while_another_field_has_that_value_the_default_counts() {
@@ -2030,117 +1587,10 @@ mod tests {
         let fields = module_fields(
             &[json!({ "moduleId": "m", "title": "M", "settings": [
                 { "key": "lang", "type": "choice", "default": "pt" },
-                { "key": "a", "type": "string", "default": "", "when": { "key": "lang", "is": "pt" } },
-                { "type": "components", "by": { "key": "lang", "field": "language" }, "match": { "engine": "piper" } },
-                { "key": "v", "type": "choice", "default": "", "options": [{ "value": "x", "needs": ["id", { "engine": "piper", "language": "@lang", "plain": "text" }] }] }
+                { "key": "a", "type": "string", "default": "", "when": { "key": "lang", "is": "pt" } }
             ] })],
             "",
         );
         assert_eq!(fields[1]["when"], json!({ "key": "m.lang", "is": "pt" }));
-        assert_eq!(
-            fields[2]["by"],
-            json!({ "key": "m.lang", "field": "language" })
-        );
-        assert_eq!(
-            fields[3]["options"][0]["needs"],
-            json!(["id", { "engine": "piper", "language": "@m.lang", "plain": "text" }])
-        );
-        // the same through the whole chain: the voice page's own references resolve to keys it has
-        let voice = voice_fields();
-        let have: Vec<&str> = voice.iter().filter_map(|f| str_of(f, "key")).collect();
-        for f in &voice {
-            if let Some(when) = f.get("when") {
-                assert!(
-                    have.contains(&when["key"].as_str().unwrap()),
-                    "when {}",
-                    when["key"]
-                );
-            }
-            if let Some(by) = f.get("by") {
-                assert!(
-                    have.contains(&by["key"].as_str().unwrap()),
-                    "by {}",
-                    by["key"]
-                );
-            }
-            for o in f
-                .get("options")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-            {
-                for n in o
-                    .get("needs")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                {
-                    for v in n.as_object().into_iter().flat_map(|m| m.values()) {
-                        if let Some(key) = v.as_str().and_then(|s| s.strip_prefix('@')) {
-                            assert!(have.contains(&key), "needs {v}");
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Node: the Voice page shows the voices of the chosen language only, and every language's on the components page
-    #[test]
-    fn the_voice_page_shows_the_voices_of_the_chosen_language_only() {
-        use crate::components::{decorate, overview_fields, parse_catalog};
-        use std::collections::{BTreeMap, HashMap};
-        let text = std::fs::read_to_string(repo("core/components/components.json")).unwrap();
-        let catalog = parse_catalog(&text);
-        let is_voice = |id: Option<&str>| {
-            catalog
-                .iter()
-                .find(|c| Some(c.id.as_str()) == id)
-                .is_some_and(|c| c.engine.is_some())
-        };
-        let base = decorate(&voice_fields(), &catalog, Some(&[]), &HashMap::new());
-        let voice_rows = |lang: Option<&str>| -> Vec<String> {
-            shown_fields(&base, |k| {
-                if k == voice_key() {
-                    lang.map(|l| json!(l))
-                } else {
-                    None
-                }
-            })
-            .iter()
-            .filter(|f| str_of(f, "type") == Some("component") && is_voice(str_of(f, "component")))
-            .map(|f| str_of(f, "component").unwrap().to_string())
-            .collect()
-        };
-        let mut codes: Vec<&str> = catalog
-            .iter()
-            .filter(|c| c.engine.is_some())
-            .map(|c| c.language.as_deref().unwrap())
-            .collect();
-        codes.sort();
-        codes.dedup();
-        for code in codes {
-            let want: Vec<String> = catalog
-                .iter()
-                .filter(|c| c.engine.is_some() && c.language.as_deref() == Some(code))
-                .map(|c| c.id.clone())
-                .collect();
-            assert_eq!(voice_rows(Some(code)), want, "{code}");
-            assert_eq!(want.len(), 2);
-        }
-        assert_eq!(voice_rows(None), voice_rows(Some("pt"))); // the default language
-        assert!(voice_rows(Some("xx")).is_empty());
-        // the overview lists all of them, a section per language
-        let overview = overview_fields(&catalog, &BTreeMap::new());
-        assert_eq!(
-            overview
-                .iter()
-                .filter(|f| f.get("component").is_some() && is_voice(str_of(f, "component")))
-                .count(),
-            catalog.iter().filter(|c| c.engine.is_some()).count()
-        );
-        let sections: std::collections::HashSet<_> =
-            overview.iter().map(|f| str_of(f, "section")).collect();
-        assert!(sections.len() > 7);
     }
 }

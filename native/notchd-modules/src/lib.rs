@@ -4,8 +4,6 @@
 pub mod activities;
 pub mod claude;
 pub mod codex;
-pub mod codex_live;
-pub mod local_live;
 pub mod media;
 pub mod module;
 pub mod osd;
@@ -15,7 +13,6 @@ pub mod term;
 pub mod terminal;
 pub mod timer;
 pub mod tree;
-pub mod voice;
 
 pub use module::{CoreModule, Ctx, Effect, Facts};
 
@@ -25,8 +22,6 @@ pub const IDS: &[&str] = &[
     "activities",
     "claude",
     "codex",
-    "codex-live",
-    "local-live",
     "media",
     "osd",
     "resources",
@@ -39,8 +34,6 @@ pub fn create(id: &str) -> Option<Box<dyn CoreModule>> {
         "activities" => Box::new(activities::Activities::new()),
         "claude" => Box::new(claude::new()),
         "codex" => Box::new(codex::new()),
-        "codex-live" => Box::new(codex_live::new()),
-        "local-live" => Box::new(local_live::new()),
         "media" => Box::new(media::Media::new()),
         "osd" => Box::new(osd::Osd::new()),
         "resources" => Box::new(resources::Resources::new()),
@@ -57,15 +50,13 @@ const INFO: &[(&str, &str)] = &[
     ("activities", include_str!("../modules/activities.json")),
     ("claude", include_str!("../modules/claude.json")),
     ("codex", include_str!("../modules/codex.json")),
-    ("codex-live", include_str!("../modules/codex-live.json")),
-    ("local-live", include_str!("../modules/local-live.json")),
     ("media", include_str!("../modules/media.json")),
     ("resources", include_str!("../modules/resources.json")),
     ("timer", include_str!("../modules/timer.json")),
 ];
 
 /// The built-in modules as `catalog` entries (`{ moduleId, title, settings,
-/// standalone, agent, live, terminal }`), from their JSON files, in id order.
+/// standalone, agent, terminal }`), from their JSON files, in id order.
 pub fn catalog() -> Vec<serde_json::Value> {
     use notchd_core::settings::{module_title, parse_module_info};
     INFO.iter()
@@ -78,7 +69,6 @@ pub fn catalog() -> Vec<serde_json::Value> {
                 "settings": info.settings,
                 "standalone": info.standalone,
                 "agent": info.agent,
-                "live": info.live,
                 "terminal": info.terminal,
             })
         })
@@ -91,8 +81,6 @@ pub fn title(id: &str) -> &'static str {
         "activities" => "Activities",
         "claude" => "Claude",
         "codex" => "Codex",
-        "codex-live" => "Codex Live",
-        "local-live" => "Voice",
         "media" => "Now playing",
         "osd" => "OSD",
         "resources" => "Resources",
@@ -132,6 +120,5 @@ mod tests {
                 .iter()
                 .any(|f| f["key"] == "command")
         );
-        assert_eq!(get("local-live")["live"], true);
     }
 }

@@ -30,13 +30,10 @@ cp -r -- "$root/tests/modules/flex" "$scratch/shots/modules/flex"
 # Cut off from the session, so nothing here touches its sockets, with the
 # demo player as the only MPRIS player (with-demo-player.sh).
 # Fake `claude` and `codex` terminal UIs, state, data and cache in the
-# scratch dir. A fake live bridge (no microphone, no network) and a fake
-# components installer (nothing is installed).
+# scratch dir.
 NOTCHD_TEST_DAEMON="$root/native/target/release/notchd" NOTCHD_TEST_SOCKETS="$scratch/sock" NOTCHD_TEST_HOOKS=1 \
   NOTCHD_VISUAL_DIR="$scratch/shots" XDG_STATE_HOME="$scratch/shots/state" XDG_DATA_HOME="$scratch/shots/share" XDG_CACHE_HOME="$scratch/shots/cache" \
   CLAUDE_CONFIG_DIR="$scratch/shots/claude" \
-  NOTCHD_LIVE_BRIDGE="$root/tests/qml/fixtures/bin/codex-live" \
-  NOTCHD_COMPONENTS_INSTALLER="$root/tests/qml/fixtures/bin/components" NOTCHD_FAKE_COMPONENTS_DIR="$scratch/shots/components" \
   PATH="$root/tests/qml/fixtures/bin:$PATH" \
   "$root/scripts/with-demo-player.sh" "$scratch/demo" "$scratch/log" \
   timeout 40 quickshell -p "$scratch/config" --no-color || true

@@ -20,21 +20,16 @@ pub enum FieldType {
     Workspaces,
     Notches,
     ModuleCatalog,
-    Component,
-    Components,
     Note,
 }
 
-/// `{ value, label, preview }`; the core adds `disabled` for an option whose
-/// `needs` are not installed.
+/// `{ value, label, preview }`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FieldOption {
     pub value: Value,
     pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub disabled: Option<bool>,
 }
 
 /// The field shows only while the field `key` of the same page is `is` (or one
@@ -67,7 +62,7 @@ pub struct Page {
 pub struct Field {
     pub page: String,
     pub section: String,
-    /// Absent for a `note`, and for a `component` row.
+    /// Absent for a `note`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     pub r#type: FieldType,
@@ -92,17 +87,8 @@ pub struct Field {
     pub value: Value,
     /// `Settings.shownFields`'s answer.
     pub visible: bool,
-    /// `Components.lock`'s reason, or `null`.
-    pub locked: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<When>,
-    /// For `component`: the registry id.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub component: Option<String>,
-    /// For `component`: the row `Components.view` computes (title, status, size
-    /// text, buttons as action ids). Free-form in v1.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub row: Option<Value>,
     /// For `moduleCatalog`: which list of the Modules page (`notch`,
     /// `agent`, `terminal` or `standalone`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -139,8 +125,6 @@ pub struct FieldDef {
     pub unit: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub absolute: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub component: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<When>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

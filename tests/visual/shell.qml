@@ -73,14 +73,6 @@ ShellRoot {
     { name: "claude-light", chat: true, theme: root.light },
     { name: "codex-dark", codex: true, theme: root.dark },
     { name: "codex-light", codex: true, theme: root.light },
-    // A spoken conversation, with the fake bridge's lines.
-    { name: "live-dark", live: true, theme: root.dark },
-    { name: "live-light", live: true, theme: root.light },
-    { name: "module-live-dark", page: "modules/codex-live", theme: root.dark, bar: true, fields: root.omarchyFields },
-    { name: "module-voice-speech-dark", page: "modules/local-live", theme: root.dark, bar: true, fields: root.omarchyFields, scrollTo: 1020 },
-    { name: "module-voice-dark", page: "modules/local-live", theme: root.dark, bar: true, fields: root.omarchyFields, scrollTo: "end" },
-    { name: "components-working-dark", page: "components", theme: root.dark, bar: true, fields: root.omarchyFields, scrollTo: 700 },
-    { name: "components-light", page: "components", theme: root.light, bar: true, fields: root.omarchyFields },
     { name: "agents-dark", agents: true, theme: root.dark },
     // The notch while the daemon is away.
     { name: "daemon-down-dark", down: true, theme: root.dark },
@@ -147,10 +139,6 @@ ShellRoot {
   DemoService { id: claudeBusySvc; tag: "claude-busy"; defaultModules: ["claude"] }
   DemoService { id: codexSvc; tag: "codex"; defaultModules: ["codex"] }
   DemoService { id: codexBusySvc; tag: "codex-busy"; defaultModules: ["codex"] }
-  // Codex Live open on a conversation (the fake bridge), and closed while
-  // it talks.
-  DemoService { id: liveSvc; tag: "live"; defaultModules: ["codex-live"] }
-  DemoService { id: liveClosedSvc; tag: "live-closed"; defaultModules: ["codex-live"] }
   // Both in one notch: with tabs (the default), and one above the other
   // (tabs off) on a screen too short for them, which scrolls.
   DemoService { id: agentsTabsSvc; tag: "agents-tabs"; defaultModules: ["claude", "codex"] }
@@ -215,10 +203,6 @@ ShellRoot {
       codexSvc.setConfigValue("codex.directory", root.outDir)
       codexSvc.open()
       hook(codexBusySvc, "codex", ["title", "⠹ Fix the flaky login test | proj"])
-      liveSvc.open()
-      // Talking, with no bridge: its state by hand.
-      hook(liveClosedSvc, "codex-live", ["state", JSON.stringify({ status: "live", error: "", packages: [], warning: "",
-        transcript: [], working: false, muted: false, level: -100 })])
       var agents = [agentsTabsSvc, agentsStackSvc]
       for (var a = 0; a < agents.length; a++) {
         agents[a].setConfigValue("claude.directory", root.outDir)
@@ -489,21 +473,6 @@ ShellRoot {
   }
 
   FloatingWindow {
-    id: liveWin
-    visible: !!root.scenario && !!root.scenario.live
-    implicitWidth: liveScene.width
-    implicitHeight: liveScene.height
-    color: Theme.background
-    Row {
-      id: liveScene
-      padding: Theme.space(16)
-      spacing: Theme.space(16)
-      MockScreen { svc: liveSvc; width: Theme.space(560); height: Theme.space(600); caption: "codex live, expanded" }
-      MockScreen { svc: liveClosedSvc; width: Theme.space(360); height: Theme.space(120); caption: "closed, listening" }
-    }
-  }
-
-  FloatingWindow {
     id: downWin
     visible: !!root.scenario && !!root.scenario.down
     implicitWidth: downScene.width
@@ -557,8 +526,7 @@ ShellRoot {
     svc.settingsNotch = root.scenario.notch || 0
     for (var i = 0; i < root.demoServices.length; i++)
       root.demoServices[i].setConfigValue("position", root.scenario.edge ? { edge: root.scenario.edge } : undefined)
-    grabTimer.interval = root.scenario.edge || root.scenario.chat || root.scenario.codex || root.scenario.agents
-      || root.scenario.live ? 1200 : 400
+    grabTimer.interval = root.scenario.edge || root.scenario.chat || root.scenario.codex || root.scenario.agents ? 1200 : 400
     grabTimer.start()
     scrollTimer.start()
   }
@@ -573,7 +541,7 @@ ShellRoot {
     running: true
     onTriggered: {
       var all = [svc, mediaSvc, activitySvc, osdSvc, openSvc, resourcesSvc, resourcesOpenSvc, timerSvc, pomodoroSvc, timerIdleSvc,
-                 timerDoneSvc, restSvc, claudeSvc, claudeBusySvc, codexSvc, codexBusySvc, liveSvc, liveClosedSvc, agentsTabsSvc,
+                 timerDoneSvc, restSvc, claudeSvc, claudeBusySvc, codexSvc, codexBusySvc, agentsTabsSvc,
                  agentsStackSvc, agentsClosedSvc, agentsSideSvc, navSvc]
       if (++waited < 100 && !all.every(function(s) { return s.daemonReady })) return
       stop()
@@ -586,7 +554,7 @@ ShellRoot {
     onTriggered: {
       var name = root.scenario.name
       var target = root.scenario.chat ? chatScene : root.scenario.codex ? codexScene : root.scenario.agents ? agentsScene
-        : root.scenario.live ? liveScene : root.scenario.down ? downScene
+        : root.scenario.down ? downScene
         : root.scenario.edge ? notchScene : win.contentItem.children[0]
       target.grabToImage(function(result) {
         if (!result.saveToFile(root.outDir + "/" + name + ".png")) console.warn("could not save " + name)

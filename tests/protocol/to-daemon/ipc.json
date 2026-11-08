@@ -2,8 +2,7 @@
  "message": "ipc",
  "valid": [
   {"t":"ipc","id":6,"method":"timer","args":["3m Tea"]},
-  {"t":"ipc","id":7,"method":"state","args":[]},
-  {"t":"ipc","id":8,"method":"component","args":["install","voice-piper-pt-br"]}
+  {"t":"ipc","id":7,"method":"state","args":[]}
  ],
  "invalid": [
   {"why":"args missing","json":{"t":"ipc","id":6,"method":"state"}},

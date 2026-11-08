@@ -158,7 +158,7 @@ fn a_ui_that_sends_no_catalog_still_gets_the_built_in_modules_in_the_schema() {
     let get = |id: &str| modules.iter().find(|m| m["moduleId"] == id).cloned();
     assert_eq!(get("media").expect("media")["title"], "Now playing");
     assert_eq!(get("claude").expect("claude")["agent"], true);
-    assert_eq!(get("codex-live").expect("codex-live")["live"], true);
+    assert!(get("codex-live").is_none(), "voice is gone");
     assert!(get("osd").is_none(), "the OSD is the host's to declare");
     assert!(
         s.fields

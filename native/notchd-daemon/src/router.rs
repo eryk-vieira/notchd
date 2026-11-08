@@ -43,7 +43,6 @@ pub fn route(store: &mut Store, msg: &ToDaemon, now: u64) -> Vec<ToUi> {
         }
         ToDaemon::Catalog(c) => {
             store.set_ui_catalog(c.modules.clone(), c.default_modules.clone());
-            store.set_core_dir(c.core_dir.clone());
         }
         ToDaemon::Measure(m) => {
             store.measure(&m.notch, &m.screen, m.rest.0, m.compact.0, m.baseline.0)
@@ -252,7 +251,7 @@ mod tests {
     #[test]
     fn a_module_method_is_not_yet_implemented() {
         let mut s = store();
-        for m in ["push", "timer", "agent", "claude", "live", "component"] {
+        for m in ["push", "timer", "agent", "claude"] {
             let (code, msg) = result(route(&mut s, &ipc_msg(m, &["x"]), 0)).unwrap_err();
             assert_eq!(code, "method");
             assert!(msg.contains("not implemented"), "{m}: {msg}");

@@ -7,7 +7,7 @@ import "core/client"
 
 // Every primitive of the view tree, drawn by core/client/ViewTree.qml from the
 // shared fixtures (tests/protocol/tree/*.json, the `valid` entries) plus a few
-// composed views (the media card, the Voice disc, the timer's presets) and the
+// composed views (the media card, a meter disc, the timer's presets) and the
 // error rows of an unknown and an invalid node. One PNG per theme:
 // primitives-dark and primitives-light. scripts/visual-test.sh runs it as its
 // own config, offscreen, with NOTCHD_FIXTURES (tests/protocol), NOTCHD_COVER
@@ -74,7 +74,7 @@ ShellRoot {
     { t: "row", children: [ root.text("1:12", "faint", "caption"), { t: "spacer", fill: true }, root.text("-2:30", "faint", "caption") ] },
     { t: "row", gap: 26, align: "center", children: [
       root.button("󰒮", "prev"), root.button("󰏤", "toggle"), root.button("󰒭", "next", { enabled: false }) ] } ] })
-  readonly property var voiceView: ({ t: "column", gap: 12, align: "center", children: [
+  readonly property var meterView: ({ t: "column", gap: 12, align: "center", children: [
     { t: "stack", children: [ { t: "meter", value: 0.7, size: 96, child: { t: "icon", glyph: "󰍬", size: 38 } } ] },
     { t: "row", gap: 6, children: [ root.button("󰍭", "mute", { tone: "muted" }), root.button("󰓛", "stop"), root.button("󰜉", "restart"),
       root.button("󰅖", "close") ] } ] })
@@ -96,7 +96,7 @@ ShellRoot {
 
   readonly property var composed: [
     { name: "media (composed)", tree: root.mediaView },
-    { name: "voice (composed)", tree: root.voiceView },
+    { name: "meter (composed)", tree: root.meterView },
     { name: "timer (composed)", tree: root.timerView },
     { name: "list, stick end", tree: root.listView },
     { name: "unknown / invalid", tree: { t: "column", gap: 4, children: root.badViews } },

@@ -2,10 +2,8 @@
 //! Each module is one JS file; its tests are that file's Node tests.
 
 pub mod agent;
-pub mod components;
 pub mod config;
 pub mod countdown;
-pub mod live;
 pub mod navigate;
 pub mod peek;
 pub mod position;

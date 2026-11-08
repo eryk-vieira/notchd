@@ -31,7 +31,7 @@ ColumnLayout {
   readonly property bool segmentsFit: !row.segmented || row.width <= 0
     || segmentsProbe.implicitWidth + textRow.spacing + row.textRoom <= row.width
   readonly property bool wide: row.field.type === "modules" || row.field.type === "workspaces"
-    || row.field.type === "notches" || row.field.type === "moduleCatalog" || row.field.type === "component"
+    || row.field.type === "notches" || row.field.type === "moduleCatalog"
     || (row.field.type === "choice" && (row.field.display === "cards" || row.field.display === "chips"))
     || !row.segmentsFit
 
@@ -48,7 +48,6 @@ ColumnLayout {
       case "workspaces": return workspacesControl
       case "notches": return notchesControl
       case "moduleCatalog": return moduleCatalogControl
-      case "component": return componentControl
       case "note": return null
       default: return unknownControl
     }
@@ -155,10 +154,6 @@ ColumnLayout {
   Component {
     id: moduleCatalogControl
     ModuleCatalog { field: row.field; value: row.value; svc: row.svc }
-  }
-  Component {
-    id: componentControl
-    ComponentRow { field: row.field; value: row.value; svc: row.svc; onEdited: function(v) { row.edit(v) } }
   }
   Component {
     id: unknownControl

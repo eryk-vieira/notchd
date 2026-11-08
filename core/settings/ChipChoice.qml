@@ -2,8 +2,8 @@ import QtQuick
 import ".."
 
 // `choice` field with `display: "chips"`: a chip per option, wrapping under
-// the label, the selected one raised. For a long list of short options (a
-// voice), which segments couldn't hold.
+// the label, the selected one raised. For a long list of short options,
+// which segments couldn't hold.
 Flow {
   id: control
 

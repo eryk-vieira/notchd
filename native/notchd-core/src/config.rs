@@ -499,8 +499,6 @@ pub const TERMINAL_MODULE_IDS: &[&str] = &[
     "media",
     "claude",
     "codex",
-    "codex-live",
-    "local-live",
     "timer",
     "activities",
     "resources",

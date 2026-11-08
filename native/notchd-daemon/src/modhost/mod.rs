@@ -107,8 +107,6 @@ impl Options {
                 "activities",
                 "claude",
                 "codex",
-                "codexLive",
-                "localLive",
                 "media",
                 "osd",
                 "resources",

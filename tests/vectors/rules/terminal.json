@@ -1,5 +1,5 @@
 {
-  "description": "core/Terminal.js: the terminal a module shows (tests/agent.test.mjs, tests/components.test.mjs; the shell lines are run for real by the Rust unit tests).",
+  "description": "core/Terminal.js: the terminal a module shows (tests/agent.test.mjs; the shell lines are run for real by the Rust unit tests).",
   "cases": [
     {"name":"a tilde is the home","fn":"expandHome","args":["~","/home/u"],"expected":"/home/u","source":"tests"},
     {"name":"a tilde path","fn":"expandHome","args":["~/work","/home/u"],"expected":"/home/u/work","source":"tests"},

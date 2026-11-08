@@ -188,46 +188,6 @@ test('an agent without a command is an error, not an agent', () => {
   }
 });
 
-test('a live module\'s file brings the conversation\'s fields', () => {
-  const info = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'Codex Live', live: { command: ' codex ' } })));
-  assert.equal(info.live, true);
-  assert.equal(info.agent, undefined);
-  assert.deepEqual(info.settings.filter((f) => f.key).map((f) => f.key), ['command', 'directory', 'voice', 'access']);
-  assert.equal(Settings.settingDefault(info.settings, 'command'), 'codex');
-  assert.equal(Settings.settingDefault(info.settings, 'access'), 'read-only');
-  // Codex's own voice by default, the others as chips.
-  const voice = info.settings.find((f) => f.key === 'voice');
-  assert.equal(voice.default, '');
-  assert.equal(voice.display, 'chips');
-  assert.equal(voice.options[0].value, '');
-  assert.ok(voice.options.some((o) => o.value === 'maple' && o.label === 'Maple'));
-  // Listed with the agents.
-  assert.equal(Settings.moduleKind({ live: true }), 'agent');
-  assert.deepEqual(plain(Settings.catalogPart([{ moduleId: 'codex-live', live: true }, { moduleId: 'media' }], 'agent').map((m) => m.moduleId)), ['codex-live']);
-});
-
-test('a local live module needs no command: its fields are the agent\'s, the models\'', () => {
-  const info = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'Voice', live: { local: true } })));
-  assert.equal(info.live, true);
-  assert.equal(info.error, undefined);
-  assert.deepEqual(info.settings.filter((f) => f.key).map((f) => f.key), ['agent', 'command', 'session', 'directory', 'access', 'language', 'speechModel', 'voiceLanguage', 'voiceModel', 'otherVoiceModel', 'voice', 'localaiUrl']);
-  assert.equal(Settings.settingDefault(info.settings, 'agent'), 'codex');
-  assert.equal(Settings.settingDefault(info.settings, 'session'), 'last');
-  assert.equal(Settings.settingDefault(info.settings, 'language'), '');  // Voxtype's own
-  assert.equal(Settings.settingDefault(info.settings, 'command'), '');
-  assert.equal(Settings.settingDefault(info.settings, 'voiceModel'), '');
-  assert.equal(Settings.settingDefault(info.settings, 'voiceLanguage'), 'pt');
-  assert.equal(Settings.settingDefault(info.settings, 'localaiUrl'), '');
-});
-
-test('a live module without a command is an error', () => {
-  for (const live of [{}, { command: ' ' }, true, []]) {
-    const info = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'X', live })));
-    assert.equal(info.live, undefined, JSON.stringify(live));
-    assert.equal(info.error, 'live: needs a command');
-  }
-});
-
 test('parseModuleInfo keeps a title and well-formed fields, drops the rest', () => {
   assert.deepEqual(plain(Settings.parseModuleInfo('{ "title": "Timer", "settings": [{ "key": "a", "type": "boolean" }, 3, { "key": "b" }] }')),
     { title: 'Timer', settings: [{ key: 'a', type: 'boolean' }] });
@@ -277,16 +237,13 @@ test('every module JSON file is well-formed', () => {
     assert.equal(info.error, undefined, file);
     assert.ok(info.title, `${file}: no title`);
     const keys = Object.keys(JSON.parse(text));
-    assert.deepEqual(keys.filter((k) => !['title', 'settings', 'standalone', 'agent', 'live'].includes(k)), [], `${file}: unknown keys`);
+    assert.deepEqual(keys.filter((k) => !['title', 'settings', 'standalone', 'agent'].includes(k)), [], `${file}: unknown keys`);
     if (info.standalone)
       for (const f of info.settings) assert.ok(!['enabled', 'position'].includes(String(f.key).split('.')[0]), `${file}: ${f.key} is the standalone switch's or position's`);
-    const inherited = info.agent ? Settings.agentSettings(JSON.parse(text).agent, info.title).length
-      : info.live ? Settings.liveSettings(JSON.parse(text).live, info.title).length : 0;
+    const inherited = info.agent ? Settings.agentSettings(JSON.parse(text).agent, info.title).length : 0;
     assert.ok(info.settings.length >= Math.max(inherited, JSON.parse(text).settings?.length ?? 0), `${file}: a field was dropped`);
     for (const f of info.settings) {
       if (f.type === 'note') continue;
-      if (f.type === 'component') { assert.ok(f.component, `${file}: a component row without a component`); continue; }
-      if (f.type === 'components') { assert.ok(f.match, `${file}: components without a match`); continue; }
       assert.ok(f.key && f.default !== undefined, `${file}: ${JSON.stringify(f)}`);
       if (f.min !== undefined) assert.ok(f.default >= f.min && f.default <= f.max, `${file}: ${f.key} out of range`);
       if (f.options) assert.ok(f.options.some((o) => o.value === f.default), `${file}: ${f.key} default not an option`);
@@ -326,35 +283,6 @@ test('a terminal of your own: its entry\'s title and command, then the fields of
   assert.ok(plain(Settings.terminalInfo({ id: 'logs', title: '', command: 'x' })).settings[3].help.includes('logs stops'));
 });
 
-const registry = JSON.parse(fs.readFileSync(new URL('../core/components/components.json', import.meta.url), 'utf8')).components;
-const voiceInfo = () => plain(Settings.parseModuleInfo(JSON.stringify({ title: 'Voice', live: { local: true } })));
-const voiceKey = 'local-live.voiceLanguage';
-
-test('the voice modules\' pages have a row for every component they need, and each exists', () => {
-  const ids = (info) => info.settings.filter((f) => f.type === 'component').map((f) => f.component);
-  const local = voiceInfo();
-  const codex = plain(Settings.parseModuleInfo(JSON.stringify({ title: 'Codex Live', live: { command: 'codex' } })));
-  assert.deepEqual(ids(local), ['libpulse', 'voxtype', 'localai']);
-  assert.deepEqual(ids(codex), ['codex-live-audio']);
-  for (const id of [...ids(local), ...ids(codex)]) assert.ok(registry.some((c) => c.id === id), id);
-});
-
-test('the languages: one list for what you speak and what speaks, each a choice that keeps its default', () => {
-  const local = voiceInfo();
-  const stt = local.settings.find((f) => f.key === 'language');
-  const tts = local.settings.find((f) => f.key === 'voiceLanguage');
-  const codes = (f) => f.options.map((o) => o.value).filter((v) => v !== '' && v !== 'auto');
-  assert.deepEqual(codes(stt), codes(tts));
-  assert.deepEqual(stt.options.slice(0, 2).map((o) => o.value), ['', 'auto']);
-  // every language of the speech models has both engines in the registry, and only those do
-  const voices = registry.filter((c) => c.engine);
-  assert.deepEqual([...new Set(voices.map((c) => c.language))].sort(), codes(tts).slice().sort());
-  for (const code of codes(tts)) assert.deepEqual(voices.filter((c) => c.language === code).map((c) => c.engine).sort(), ['piper', 'pocket'], code);
-  // the label is in its own language, and a key the config file already has keeps meaning
-  assert.equal(stt.options.find((o) => o.value === 'pt').label, 'Português');
-  assert.equal(stt.key, 'language');
-});
-
 test('a field with `when` shows only while another field has that value; the default counts', () => {
   const schema = [
     { key: 'lang', type: 'choice', default: 'pt' },
@@ -390,9 +318,9 @@ test('windowPages: the host core pages, then the daemon\'s notch pages and modul
 });
 
 test('windowFields: drops the daemon\'s resolved parts, previews the edge cards', () => {
-  const edge = { page: 'notch/0', key: 'position.edge', type: 'choice', display: 'cards', value: 'top', visible: true, locked: null,
+  const edge = { page: 'notch/0', key: 'position.edge', type: 'choice', display: 'cards', value: 'top', visible: true,
     options: [{ value: 'top', label: 'Top' }, { value: 'left', label: 'Left' }] };
-  const other = { page: 'general', key: 'hoverOpenDelay', type: 'integer', default: 120, value: 120, visible: true, locked: null };
+  const other = { page: 'general', key: 'hoverOpenDelay', type: 'integer', default: 120, value: 120, visible: true };
   const media = { page: 'modules/media', key: 'media.x', type: 'boolean' };
   const weather = { page: 'modules/weather', key: 'weather.city', type: 'string' };
   const nested = { page: 'notch/1', key: 'notches.1.position.edge', type: 'choice', display: 'cards', options: [{ value: 'top', label: 'Top' }] };
@@ -400,7 +328,7 @@ test('windowFields: drops the daemon\'s resolved parts, previews the edge cards'
   assert.deepEqual(fields.map((f) => f.key), ['position.edge', 'hoverOpenDelay', 'media.x', 'weather.city', 'notches.1.position.edge']);
   assert.deepEqual(fields[0].options.map((o) => o.preview), ['Edge.qml', 'Edge.qml']);
   assert.equal(fields[4].options[0].preview, 'Edge.qml');
-  assert.ok(!('value' in fields[0]) && !('visible' in fields[0]) && !('locked' in fields[1]));
+  assert.ok(!('value' in fields[0]) && !('visible' in fields[0]));
   assert.equal(fields[1].default, 120);
   assert.equal(other.value, 120, 'the daemon\'s field is not mutated');
   assert.deepEqual(plain(Settings.windowFields(null, catalog, 'Edge.qml')), []);

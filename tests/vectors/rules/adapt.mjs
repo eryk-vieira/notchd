@@ -17,7 +17,7 @@ export const encode = (v) => (v === undefined ? { $undefined: true } : plain(v))
 
 // What a parse error says is the engine's own (V8's, serde's); only whether it
 // is one of the rules' fixed messages is compared.
-const FIXED = ['the config must be a JSON object', 'not an object', 'agent: needs a command', 'live: needs a command'];
+const FIXED = ['the config must be a JSON object', 'not an object', 'agent: needs a command'];
 const message = (e) => (e === undefined || FIXED.includes(e) ? e : 'syntax');
 
 const before = {

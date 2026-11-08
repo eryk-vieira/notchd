@@ -77,8 +77,8 @@ function effectiveValue(schema, key, valueOf) {
 }
 
 // A field with `when: { key, is }` shows only while the field `key` has the
-// value `is` (or one of them, when it is a list): the voices of the chosen
-// language, a setting that only means something with another on. The schema
+// value `is` (or one of them, when it is a list): a setting that only means
+// something with another on. The schema
 // without the fields that don't show.
 function shownFields(schema, valueOf) {
   return schema.filter(function(f) {
@@ -113,9 +113,7 @@ function modulePageId(moduleId) { return "modules/" + moduleId }
 // a place of its own), whether it is an `agent` (a coding agent in a
 // terminal: `"agent": { "command": ... }`, which brings the fields every
 // agent has, agentSettings; `"usage"` there names where its plan usage
-// comes from, native/notchd-core/src/usage.rs, as `usage`) and whether it is `live` (a spoken
-// conversation with an agent: `"live": { "command": ... }`, which brings
-// liveSettings). Anything malformed is dropped, so a bad file
+// comes from, native/notchd-core/src/usage.rs, as `usage`). Anything malformed is dropped, so a bad file
 // costs the module its page and nothing else; `error` says why.
 function parseModuleInfo(text) {
   var info = { title: "", settings: [] }
@@ -136,15 +134,6 @@ function parseModuleInfo(text) {
       inherited = agentSettings(agent, info.title)
     } else {
       info.error = "agent: needs a command"
-    }
-  }
-  var live = data.live
-  if (live !== undefined) {
-    if (live && typeof live === "object" && !Array.isArray(live) && (live.local === true || typeof live.command === "string" && live.command.trim() !== "")) {
-      info.live = true
-      inherited = liveSettings(live, info.title)
-    } else {
-      info.error = "live: needs a command"
     }
   }
   // A field of its own replaces an inherited one with the same key.
@@ -173,95 +162,6 @@ function agentSettings(agent, title) {
     if (typeof extra[f.key] === "string" && extra[f.key] !== "") f.help = f.help ? f.help + " " + extra[f.key] : extra[f.key]
   })
   return fields
-}
-
-// The voices a Codex realtime (v3) conversation speaks in; "" is Codex's choice.
-var LIVE_VOICES = ["juniper", "maple", "spruce", "ember", "vale", "breeze", "arbor", "sol", "cove",
-  "aube", "bubbie", "haetsal", "hanul", "himari", "leher", "miko", "neer", "porto", "rindo", "rio",
-  "rivage", "selva", "sonna", "tinta", "viola"]
-
-// The fields of a spoken conversation (LiveModule), from its file's
-// `live`: the agent's command (`live.command` its default), its folder,
-// the voice and what it may do there. `title` names it. With `live.local`
-// it is the local one (localLiveSettings).
-function liveSettings(live, title) {
-  var name = title || "the agent"
-  var next = "Applies to the next conversation."
-  if (live.local === true) return localLiveSettings(name, next)
-  return [
-    { key: "command", type: "string", label: "Command", "default": live.command.trim(),
-      help: "The command that runs Codex; notchd starts its server (app-server) with it. " + next },
-    { key: "directory", type: "string", label: "Folder", "default": "",
-      help: "Where " + name + " works when you ask it something; ~ is your home. Empty is notchd's own folder, notchd in your Documents folder. " + next },
-    { key: "voice", type: "choice", label: "Voice", "default": "", display: "chips",
-      options: [{ value: "", label: "Codex's" }].concat(LIVE_VOICES.map(function(v) {
-        return { value: v, label: v.charAt(0).toUpperCase() + v.slice(1) }
-      })),
-      help: "The voice it speaks in. " + next },
-    { key: "access", type: "choice", label: "May", "default": "read-only",
-      options: [{ value: "read-only", label: "Only read" }, { value: "workspace-write", label: "Change files in its folder" }],
-      help: "What " + name + " may do in its folder when you ask it to. It never asks for approval (no one would answer): what it may not do, it doesn't. " + next },
-    { type: "component", component: "codex-live-audio", section: "Needs" }
-  ]
-}
-
-// The languages of the speech models, by the code Voxtype (speech
-// recognition) and the registry's voices (core/components/components.json:
-// `language`) share, named in their own language.
-var SPEECH_LANGUAGES = [
-  { value: "pt", label: "Português" }, { value: "en", label: "English" }, { value: "es", label: "Español" },
-  { value: "fr", label: "Français" }, { value: "de", label: "Deutsch" }, { value: "it", label: "Italiano" },
-  { value: "nl", label: "Nederlands" }
-]
-
-// The fields of a local spoken conversation (modules/local-live.json): which
-// agent's session it joins, speech to text (Voxtype) and text to speech (a
-// LocalAI voice), both on this machine.
-function localLiveSettings(name, next) {
-  function part(id, section) { return { type: "component", component: id, section: section } }
-  var STT = "Speech to text (STT)"
-  var TTS = "Text to speech (TTS)"
-  return [
-    { key: "agent", type: "choice", section: "Agent", label: "Agent", "default": "codex",
-      options: [{ value: "codex", label: "Codex" }, { value: "claude", label: "Claude Code" }],
-      help: "Whose text session your words go into, the one you also type in. " + next },
-    { key: "command", type: "string", section: "Agent", label: "Command", "default": "",
-      help: "The command line that runs the agent; empty is codex or claude. " + next },
-    { key: "session", type: "string", section: "Agent", label: "Session", "default": "last",
-      help: "last: the agent's most recent session in the folder. new: one of its own. Or a session id. " + next },
-    { key: "directory", type: "string", section: "Agent", label: "Folder", "default": "",
-      help: "Where the agent works, and whose sessions \"last\" looks in; ~ is your home. Empty is notchd's own folder, notchd in your Documents folder. " + next },
-    { key: "access", type: "choice", section: "Agent", label: "May", "default": "read-only",
-      options: [{ value: "read-only", label: "Only read" }, { value: "workspace-write", label: "Change files in its folder" }],
-      help: "What the agent may do in its folder when you ask it to (Claude: plan mode, or accept edits). It never asks for approval (no one would answer). " + next },
-    part("libpulse", "Audio"),
-    { type: "note", section: STT, label: "Listening",
-      help: "Speech to text turns what you say into the words the agent receives. It is Voxtype, on this machine, with the speech model you set up for dictation." },
-    part("voxtype", STT),
-    { key: "language", type: "choice", section: STT, label: "Language you speak", "default": "", display: "chips",
-      options: [{ value: "", label: "Voxtype's own" }, { value: "auto", label: "Auto-detect" }].concat(SPEECH_LANGUAGES),
-      help: "Empty is Voxtype's own setting. Any other code Voxtype knows can be written in the config file as language. " + next },
-    { key: "speechModel", type: "string", section: STT, label: "Speech model", "default": "",
-      help: "A Voxtype model, such as small or large-v3-turbo (voxtype info models lists them); empty is the one Voxtype is set up with. " + next },
-    { type: "note", section: TTS, label: "Speaking",
-      help: "Text to speech is the voice that answers you: the agent's words, read aloud by a LocalAI voice on this machine. Piper is light and quick; Pocket TTS is more natural and heavier." },
-    part("localai", TTS),
-    { key: "voiceLanguage", type: "choice", section: TTS, label: "Language it speaks", "default": "pt", display: "chips",
-      options: SPEECH_LANGUAGES,
-      help: "The language of the voice: the voices below are the ones of this language. " + next },
-    { type: "components", section: TTS, match: { engine: ["piper", "pocket"] }, by: { key: "voiceLanguage", field: "language" } },
-    { key: "voiceModel", type: "choice", section: TTS, label: "Speaks with", "default": "",
-      options: [{ value: "", label: "First installed" },
-                { value: "piper", label: "Piper", needs: [{ engine: "piper", language: "@voiceLanguage" }] },
-                { value: "pocket", label: "Pocket TTS", needs: [{ engine: "pocket", language: "@voiceLanguage" }] }],
-      help: "Which voice engine speaks, in the language above: the first installed is Piper, else Pocket TTS. " + next },
-    { key: "otherVoiceModel", type: "string", section: TTS, label: "Another voice model", "default": "",
-      help: "Any text-to-speech model of the LocalAI you use, by its name; it takes the place of the choice above. " + next },
-    { key: "voice", type: "string", section: TTS, label: "Voice", "default": "",
-      help: "A voice of that model, for those that have several: Pocket TTS has alba, azelma, rafael and more. Empty is the model's own. " + next },
-    { key: "localaiUrl", type: "string", section: TTS, label: "LocalAI address", "default": "",
-      help: "Where LocalAI answers. Empty is notchd's own, http://127.0.0.1:18080, which it starts when a conversation needs it and stops after; an address where one is already running is used as it is. " + next }
-  ]
 }
 
 // The fields of a program in a terminal (native/notchd-modules/src/term.rs), an agent or one
@@ -348,7 +248,6 @@ function userModuleInfo(id, title, schemaFields) {
     var field = Object.assign({}, f, { key: key })
     delete field.value
     delete field.visible
-    delete field.locked
     settings.push(field)
   })
   return { title: title, settings: settings, standalone: standalone }
@@ -363,11 +262,11 @@ function moduleTitle(id, module) {
 }
 
 // Which list of the Modules page a module is in: "standalone" (a place of
-// its own), "agent" (a coding agent, or a conversation with one: `live`),
+// its own), "agent" (a coding agent),
 // "terminal" (one of the config's `terminals`), else "notch".
 function moduleKind(m) {
   if (m && m.standalone) return "standalone"
-  if (m && (m.agent || m.live)) return "agent"
+  if (m && m.agent) return "agent"
   if (m && m.terminal) return "terminal"
   return "notch"
 }
@@ -514,9 +413,8 @@ function storedValue(field, value) {
 // The daemon builds the settings schema (the `schema` message: pages and
 // fields) from the config, the screens and the modules it knows: the core's
 // pages, a page per notch, and a user module's own. What it does not carry
-// yet the QML adds (NotchService): the Components page, the built-in modules'
-// pages (their choices wait on components: `needs`), the host's own fields
-// and the edge cards' previews. These put the halves together.
+// yet the QML adds (NotchService): the host's own fields and the edge
+// cards' previews. These put the halves together.
 
 // The module a page is the settings of ("modules/media" is "media"), else "".
 function pageModule(id) {
@@ -537,7 +435,7 @@ function windowPages(core, host, daemonPages, catalog) {
 
 // The fields of the window the daemon's schema gives: all but the built-in
 // modules' own, as the loose descriptors the controls read (without the
-// daemon's resolved `value`, `visible` and `locked`: the window reads the
+// daemon's resolved `value` and `visible`: the window reads the
 // config for them). The edge cards get `preview`, a QML file the daemon
 // cannot name.
 function windowFields(daemonFields, catalog, edgePreview) {
@@ -546,7 +444,6 @@ function windowFields(daemonFields, catalog, edgePreview) {
     var field = Object.assign({}, f)
     delete field.value
     delete field.visible
-    delete field.locked
     if (field.type === "choice" && field.display === "cards" && field.options
         && /(^|\.)position\.edge$/.test(String(field.key || "")))
       field.options = Array.prototype.map.call(field.options, function(o) { return Object.assign({}, o, { preview: edgePreview }) })

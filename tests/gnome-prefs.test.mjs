@@ -11,11 +11,11 @@ const Config = load('core/Config.js');
 const fixture = (dir, name, i = 0) =>
   JSON.parse(fs.readFileSync(new URL(`./protocol/${dir}/${name}.json`, import.meta.url), 'utf8')).valid[i];
 
-const field = (extra) => ({ page: 'general', section: '', visible: true, locked: null, ...extra });
+const field = (extra) => ({ page: 'general', section: '', visible: true, ...extra });
 
 test('every field type of the schema has a control, the unknown none', () => {
   const types = ['choice', 'integer', 'number', 'boolean', 'string', 'color', 'modules', 'workspaces',
-    'notches', 'moduleCatalog', 'component', 'note'];
+    'notches', 'moduleCatalog', 'note'];
   for (const type of types) assert.notEqual(M.controlOf({ type }), 'unsupported', type);
   assert.equal(M.controlOf({ type: 'slider' }), 'unsupported');
   assert.deepEqual(['modules', 'workspaces', 'notches', 'moduleCatalog'].map((type) => M.isWide({ type })), [true, true, true, true]);
@@ -41,10 +41,10 @@ test('a page groups its fields by section; a wide field takes a group of its own
     [['Hover', '', false, ['a', 'b']], ['Loaded', 'What it shows', true, ['m']], ['', '', false, ['c']]]);
 });
 
-test('a page keeps its shape while only values, visibility and component states change', () => {
+test('a page keeps its shape while only values, and visibility change', () => {
   const f = field({ key: 'a', type: 'integer', min: 0, max: 10, value: 1 });
   const before = M.pageShape({ fields: [f] }, 'general');
-  assert.equal(M.pageShape({ fields: [{ ...f, value: 5, visible: false, locked: 'x', row: { state: 'working' } }] }, 'general'), before);
+  assert.equal(M.pageShape({ fields: [{ ...f, value: 5, visible: false }] }, 'general'), before);
   assert.notEqual(M.pageShape({ fields: [{ ...f, max: 20 }] }, 'general'), before);
   assert.notEqual(M.pageShape({ fields: [f, field({ key: 'b', type: 'boolean' })] }, 'general'), before);
 });
@@ -80,14 +80,14 @@ test('spin rows: a percent is shown 0 to 100 and comes back snapped to the step 
   }
 });
 
-test('combo rows: an option waiting on a component says so and cannot be picked', () => {
+test('combo rows: items by label, the index back to the value, out of range to none', () => {
   const schema = fixture('to-ui', 'schema', 2);
   const f = schema.fields.find((x) => x.key === 'compact');
-  assert.deepEqual(M.comboItems(f).map((i) => i.label), ['Always', 'While playing (not installed)']);
+  assert.deepEqual(M.comboItems(f).map((i) => i.label), ['Always', 'While playing']);
   assert.equal(M.comboIndex(f, 'playing'), 1);
   assert.equal(M.comboIndex(f, 'gone'), 0);
   assert.equal(M.comboValue(f, 0), 'always');
-  assert.equal(M.comboValue(f, 1), undefined);
+  assert.equal(M.comboValue(f, 1), 'playing');
   assert.equal(M.comboValue(f, 9), undefined);
 });
 
@@ -196,12 +196,6 @@ test('a terminal is added under a free id and removed with its settings', () => 
   const cfg = { terminals: { btop: { command: 'btop' } }, btop: { width: 800 }, modules: ['btop', 'media'] };
   assert.deepEqual(plain(M.removeTerminal(cfg, 'btop', Config)),
     [{ key: 'terminals', value: null }, { key: 'btop', value: null }, { key: 'modules', value: ['media'] }]);
-});
-
-test('a component button is the component IPC command; its line says state and size', () => {
-  assert.deepEqual(['install', 'retry', 'remove', 'cancel'].map(M.componentCommand), ['install', 'install', 'remove', 'cancel']);
-  assert.equal(M.componentText({ state: 'absent', text: 'Not installed', size: 'about 40 MB' }), 'Not installed · about 40 MB');
-  assert.equal(M.componentText({ state: 'working', text: 'Downloading 4 %', size: 'about 40 MB' }), 'Downloading 4 %');
 });
 
 test('pages: a notch page counts while the notch exists, another missing page falls back', () => {

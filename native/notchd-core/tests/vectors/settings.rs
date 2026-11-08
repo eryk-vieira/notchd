@@ -7,11 +7,7 @@ use notchd_core::settings as s;
 fn info(i: &s::ModuleInfo) -> Value {
     let mut v = to_json(i);
     if let Some(Value::String(e)) = v.get("error").cloned() {
-        let fixed = [
-            "not an object",
-            "agent: needs a command",
-            "live: needs a command",
-        ];
+        let fixed = ["not an object", "agent: needs a command"];
         if !fixed.contains(&e.as_str()) {
             v["error"] = json!("syntax");
         }
@@ -44,7 +40,6 @@ pub fn call(f: &str, a: &[Value]) -> Option<Value> {
         "modulePageId" => json!(s::module_page_id(&text(a, 0))),
         "parseModuleInfo" => info(&s::parse_module_info(&text(a, 0))),
         "agentSettings" => json!(s::agent_settings(arg(a, 0), &text(a, 1))),
-        "liveSettings" => json!(s::live_settings(arg(a, 0), &text(a, 1))),
         "terminalInfo" => info(&s::terminal_info(arg(a, 0))),
         "moduleInfoPath" => json!(s::module_info_path(&text(a, 0), &text(a, 1))),
         "settingDefault" => or_undef(s::setting_default(&list(a, 0), &text(a, 1))),

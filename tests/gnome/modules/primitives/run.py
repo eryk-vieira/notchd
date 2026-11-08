@@ -39,7 +39,7 @@ def expanded(t, eq_on, eq_mode, lines):
         ]},
         {"t": "row", "gap": 12, "children": [
             {"t": "stack", "children": [
-                {"t": "meter", "id": "voice", "value": level, "size": 48,
+                {"t": "meter", "id": "level", "value": level, "size": 48,
                  "child": {"t": "icon", "name": "audio-input-microphone", "glyph": "", "size": "heading"}},
             ]},
             {"t": "list", "id": "log", "gap": 4, "stick": "end", "maxHeight": 80, "fill": True,

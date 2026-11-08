@@ -1,6 +1,6 @@
 ---
 name: notchd
-description: Control a running notchd instance through its CLI when the user asks to inspect or change notches, activities, timers, agents, terminals, settings, or components. Do not use for ordinary development of the notchd repository or unrelated terminal work.
+description: Control a running notchd instance through its CLI when the user asks to inspect or change notches, activities, timers, agents, terminals, or settings. Do not use for ordinary development of the notchd repository or unrelated terminal work.
 ---
 
 # notchd
@@ -38,7 +38,7 @@ notchd ipc set hoverOpenDelay 200
 - `agent <id> toggle | new | "ask <text>"` controls a loaded `claude` or `codex` module. `terminal <id>` has the same commands for configured terminals. `ask` opens its notch and types into the program; it does not return the program's answer. If `NOTCHD_TERMINAL_ID` names the current terminal, do not send `ask` or `new` to that same terminal from inside it.
 - `open`, `close`, `toggle`, `openNotch`, `closeNotch`, and `toggleNotch` affect the visible notch. `settings` toggles the settings window; `navigate` enters or leaves keyboard navigation.
 - `set <key> <json>` persists a config edit. An empty value removes the key and restores its default. Read the relevant setting in the config or `docs/settings.md` before changing it; use `set` only when the user asked for that change.
-- `component status [id]` reads component status. `install`, `cancel`, and `remove` change installed components; `shutdown` ends the daemon and its terminal sessions. Run these only when the user explicitly requests the corresponding action.
+- `shutdown` ends the daemon and its terminal sessions. Run these only when the user explicitly requests the corresponding action.
 
 Check both the process exit status and the printed reply. Some application errors, such as `no timer running`, `<id> module not loaded`, or `not JSON: ...`, are successful IPC replies rather than CLI failures. For a method's full syntax, consult `docs/ipc.md` or the installed version's documentation instead of guessing.
 

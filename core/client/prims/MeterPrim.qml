@@ -2,7 +2,7 @@ import QtQuick
 import "../.."
 import ".."
 
-// The Voice disc (native/notchd-modules/src/voice.rs): a 96 px accent disc with a line
+// The `meter` disc: a 96 px accent disc with a line
 // border that swells with the level, `1 + value * .35` over 140 ms (longer than
 // the time between levels, so it never stops between steps), and its
 // `child` (the microphone glyph) centered inside. Plain rectangles, so it
