@@ -4,6 +4,8 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-08
+
 ### Added
 
 - Navigation numbers notches by where they are: by monitor (left to right, then top to bottom), then edge (top, left, right, bottom), then position along the edge, ties in config order. The numbers, `←` `→`, the digit keys and the notch navigation starts on all follow that order, and Settings › Notches lists the notches in it, each with its number. The config is never reordered: `notches.1.position` and the `notch/1` page keep their indexes.
