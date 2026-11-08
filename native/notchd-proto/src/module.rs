@@ -11,15 +11,21 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-/// `module.json`. `command` is required; everything else has a default.
+/// `module.json`. A module has a process (`command`), a terminal
+/// (`terminal`) or both: at least one is required; everything else has a
+/// default.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Manifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     /// argv, run with the module's folder as cwd; `${config}` and `${cache}`
-    /// expand to the module's own dirs.
+    /// expand to the module's own dirs. Empty (absent): no process.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command: Vec<String>,
+    /// A live terminal the daemon owns, drawn in the expanded view.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal: Option<TerminalDef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub priority: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -42,10 +48,36 @@ pub struct Manifest {
     pub subscribe: Vec<String>,
 }
 
+/// The `terminal` of a manifest: the program the terminal runs by default
+/// (the `command` setting overrides it).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TerminalDef {
+    pub command: String,
+}
+
+impl Manifest {
+    /// Whether the module has a process to run.
+    pub fn has_process(&self) -> bool {
+        !self.command.is_empty()
+    }
+}
+
 impl Validate for Manifest {
     fn validate(&self) -> Result<(), String> {
-        if self.command.is_empty() || self.command[0].is_empty() {
+        if self.command.first().is_some_and(String::is_empty) {
             return Err("command must be a non-empty argv".into());
+        }
+        match &self.terminal {
+            Some(t) if t.command.trim().is_empty() => {
+                return Err("terminal.command must not be empty".into());
+            }
+            None if self.command.is_empty() => {
+                return Err(
+                    "a module needs a command (a non-empty argv, its process) or a terminal ({ \"command\": ... })"
+                        .into(),
+                );
+            }
+            _ => {}
         }
         for name in &self.subscribe {
             if !crate::version::SUBSCRIBABLE.contains(&name.as_str()) {

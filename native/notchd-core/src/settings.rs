@@ -229,9 +229,6 @@ pub struct ModuleInfo {
     /// A coding agent in a terminal.
     #[serde(skip_serializing_if = "is_false")]
     pub agent: bool,
-    /// One of the config's own `terminals`.
-    #[serde(skip_serializing_if = "is_false")]
-    pub terminal: bool,
     /// Where an agent's plan usage comes from (`agent.usage`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<String>,
@@ -349,42 +346,19 @@ fn terminal_fields(command: &str, name: &str, empty_dir: &str, idle: &str) -> Ve
     ]
 }
 
-/// `terminalInfo`: the module info of a terminal of your own (an entry of the
-/// config's `terminals`: `{ id, title, command }`). Its title and command are
-/// its entry's, edited there (`absolute` keys; the command is `required`).
-pub fn terminal_info(t: &Value) -> ModuleInfo {
-    let id = t.get("id").map(js::string).unwrap_or_default();
-    let title = str_of(t, "title").unwrap_or("");
-    let name = if title.is_empty() { id.as_str() } else { title };
-    let entry = format!("terminals.{id}.");
-    let later = "Applies the next time it starts (the restart button).";
-    let own = [
-        json!({ "key": format!("{entry}title"), "absolute": true, "type": "string", "label": "Title", "default": "",
-            "help": format!("Its name, in the notch and here; empty is its id, {id}.") }),
-        json!({ "key": format!("{entry}command"), "absolute": true, "required": true, "type": "string", "label": "Command",
-            "help": format!("The command line it runs, in a shell: \"btop\", \"cd ~/app && npm run dev\". {later}") }),
-    ];
-    let fields = terminal_fields(
-        str_of(t, "command").unwrap_or(""),
+/// The settings fields of a custom module's terminal (`module.json`'s
+/// `terminal`): folder, command (`command` its default), when it stops, size,
+/// font, each stored under the module's id. `title` names it in the texts.
+pub fn terminal_settings(command: &str, title: &str) -> Vec<Value> {
+    let name = if title.is_empty() { "it" } else { title };
+    terminal_fields(
+        command,
         name,
         "Empty is your home.",
         &format!(
             "Closed this long, {name} stops; the next time the notch opens, it starts again. 0 keeps it running."
         ),
-    );
-    ModuleInfo {
-        title: title.to_string(),
-        terminal: true,
-        settings: own
-            .into_iter()
-            .chain(
-                fields
-                    .into_iter()
-                    .filter(|f| str_of(f, "key") != Some("command")),
-            )
-            .collect(),
-        ..ModuleInfo::default()
-    }
+    )
 }
 
 /// `moduleInfoPath`: the JSON file of the module at `url` (its .qml): the same
@@ -497,13 +471,14 @@ pub fn module_title(id: &str, module: Option<&Value>) -> String {
     }
 }
 
-/// `moduleKind`: which list of the Modules page a module is in: "agent" (a
-/// coding agent), "terminal", else "notch".
+/// `moduleKind`: which list of the Modules page a module is in: "user" for
+/// a custom module (the daemon tags it `origin: "user"`: a folder of the
+/// user's), else "agent" (a coding agent) or "notch".
 pub fn module_kind(m: &Value) -> &'static str {
-    if js::truthy_opt(m.get("agent")) {
+    if m.get("origin").and_then(Value::as_str) == Some("user") {
+        "user"
+    } else if js::truthy_opt(m.get("agent")) {
         "agent"
-    } else if js::truthy_opt(m.get("terminal")) {
-        "terminal"
     } else {
         "notch"
     }
@@ -1396,59 +1371,51 @@ mod tests {
         assert_eq!(module_info_path("", "/c"), "");
     }
 
-    // Node: a terminal of your own: its entry's title and command, then the fields of a terminal, its own list
-    // Its title and command are its entry's, edited in place: a `command`
-    // under its id as well would be a second command for the same terminal.
+    // A custom module's terminal: the fields of a terminal, its `command` defaulting to the manifest's
     #[test]
-    fn a_terminal_of_your_own_its_entrys_title_and_command_then_the_fields_of_a_terminal() {
-        let info = terminal_info(&json!({ "id": "btop", "title": "System", "command": "btop" }));
-        assert_eq!(info.title, "System");
-        assert!(info.terminal);
+    fn a_custom_modules_terminal_has_the_fields_of_a_terminal() {
+        let fields = terminal_settings("btop", "System");
         assert_eq!(
-            keys(&info.settings),
+            keys(&fields),
             [
-                Some("terminals.btop.title"),
-                Some("terminals.btop.command"),
                 Some("directory"),
+                Some("command"),
                 Some("idleMinutes"),
                 Some("width"),
                 Some("height"),
                 Some("font")
             ]
         );
-        assert!(
-            info.settings[0]["absolute"] == true
-                && info.settings[1]["absolute"] == true
-                && info.settings[1]["required"] == true
-        );
-        let help = str_of(&info.settings[2], "help").unwrap();
+        assert_eq!(fields[1]["default"], "btop");
+        let help = str_of(&fields[0], "help").unwrap();
         assert!(help.contains("Empty is your home"), "{help}");
-        assert_eq!(module_kind(&json!({ "terminal": true })), "terminal");
+        // Without a title, the texts say "it".
+        let bare = terminal_settings("x", "");
+        assert!(str_of(&bare[2], "help").unwrap().contains("it stops"));
+    }
+
+    // The Modules page lists a custom module under "user", whatever else it is
+    #[test]
+    fn a_custom_module_is_listed_by_origin_before_kind() {
         assert_eq!(module_kind(&json!({ "agent": true })), "agent");
-        // Without a title, the id names it.
-        let logs = terminal_info(&json!({ "id": "logs", "title": "", "command": "x" }));
-        assert!(
-            str_of(&logs.settings[3], "help")
-                .unwrap()
-                .contains("logs stops")
-        );
-        // On its page, the entry's keys stay as they are; the others go under its id.
-        let fields = module_fields(&[
-            json!({ "moduleId": "btop", "title": "System", "terminal": true, "settings": info.settings }),
-        ]);
-        assert_eq!(
-            keys(&fields)[..3],
-            [
-                Some("terminals.btop.title"),
-                Some("terminals.btop.command"),
-                Some("btop.directory")
-            ]
-        );
-        assert!(
-            fields
+        assert_eq!(module_kind(&json!({})), "notch");
+        assert_eq!(module_kind(&json!({ "origin": "builtin" })), "notch");
+        assert_eq!(module_kind(&json!({ "origin": "user" })), "user");
+        let catalog = [
+            json!({ "moduleId": "media" }),
+            json!({ "moduleId": "linear", "origin": "user" }),
+            json!({ "moduleId": "claude", "agent": true, "origin": "builtin" }),
+            json!({ "moduleId": "herdr", "agent": true, "origin": "user" }),
+        ];
+        let ids = |part: &str| -> Vec<String> {
+            catalog_part(&catalog, Some(part))
                 .iter()
-                .all(|f| str_of(f, "page") == Some("modules/btop"))
-        );
+                .map(|m| m["moduleId"].as_str().unwrap().to_string())
+                .collect()
+        };
+        assert_eq!(ids("notch"), ["media"]);
+        assert_eq!(ids("agent"), ["claude"]);
+        assert_eq!(ids("user"), ["linear", "herdr"]);
     }
 
     // Node: a field with `when` shows only while another field has that value; the default counts

@@ -51,20 +51,13 @@ The notch covers the windows under it. `reserveSpace: true` keeps windows clear 
 | `codex` | [Codex](https://github.com/openai/codex), OpenAI's coding agent, the same way as `claude`: its own terminal UI in the notch (needs `codex` on `PATH`), the thread's title, which Codex makes after the first message, and a green dot closed, `agent codex toggle`, `agent codex new` and `agent codex "ask <question>"` over [IPC](docs/ipc.md#agents). It runs as plain `codex`, connected to the shared background server: options that change its config (`-c`, `--search`) run it without, while `--approve-for-me` doesn't. Its plan's limits show and warn as Claude's do. Settings: Modules › Agents › Codex (folder, notchd's own by default; plan usage; command; size; font; stopping it after a while closed: it takes 500 to 700 MB). Not loaded by default |
 | `osd` | volume and brightness, Omarchy host only (see [hosts/omarchy](hosts/omarchy/README.md)). The host declares a notch for it that shows nothing at rest and appears for a change, top center, on the monitor you work on, over any notch there (see [A notch without decoration](#several-notches)) |
 
-Your own **terminals** are modules too: each entry of the config's `terminals` runs its command in a terminal in the notch, and a notch shows it by its id like any module:
+Your own **custom modules** are modules too: a folder `~/.config/notchd/modules/<id>/` with a `module.json`, which has a program (`command`, any language, drawing the closed and the open notch), a live **terminal** (`terminal`, a command in a terminal the daemon owns), or both. A notch shows it by its id like any module, and Settings › Modules lists it apart, under "Yours". A terminal alone is the smallest one:
 
 ```json
-{
-  "terminals": {
-    "btop": { "title": "System", "command": "btop" },
-    "dev": { "title": "Dev server", "command": "cd ~/app && npm run dev" }
-  },
-  "notches": [{ "modules": ["media"] }, { "id": "tools", "modules": ["btop", "dev"] }],
-  "btop": { "width": 900, "height": 500 }
-}
+{ "title": "System", "terminal": { "command": "btop" } }
 ```
 
-The command is a shell command line, run in your home unless the terminal's `directory` says otherwise. It starts the first time the notch opens and keeps running while it is closed and through a shell reload (it runs in the daemon); closed, the notch shows the title the program gives the terminal (a shell's is where it is), else the entry's `title`. Its other settings live under its id, as an agent's do (`directory`, `idleMinutes`, `width`, `height`, `font`), so the id can't be a config key or another module's. The settings window makes them too: Modules › Terminals › Add terminal starts one running your shell and opens its page (title, command, folder, size); its trash can takes it out of the config and of every notch. `terminal <id> toggle` over [IPC](docs/ipc.md#terminals) opens or closes it.
+saved as `~/.config/notchd/modules/btop/module.json`; the same folder can make a notch's tab out of a dev server (`"command": "cd ~/app && npm run dev"`). With both, the program's compact view shows closed and its expanded view sits above the terminal, which fills the rest (the [Herdr example](docs/examples/modules/herdr/) is one module so). The terminal's command is a shell command line, run in your home unless the module's `directory` setting says otherwise. It starts the first time the notch opens and keeps running while it is closed and through a shell reload (it runs in the daemon); closed, a terminal alone shows the title the program gives the terminal (a shell's is where it is), else the module's `title`. The terminal's settings live under the module's id, as an agent's do (`directory`, `command`, `idleMinutes`, `width`, `height`, `font`), so the id can't be a config key or another module's. Make one without writing the file: Settings › Modules › Yours › Add terminal starts one running your shell and opens its page, or `notchd ipc terminal add btop btop --title System` over [IPC](docs/ipc.md#terminals); the trash can (it asks twice) or `notchd ipc module remove btop` deletes the folder, its settings and its place in every notch. `terminal <id> toggle` opens or closes it. (A config from before this has a `terminals` key: each entry becomes a folder the first time the daemon starts, and the key goes.)
 
 A notch can show nothing at rest: `"decoration": false` (see [Several notches](#several-notches)). The OSD lives in one that the Omarchy host declares.
 
@@ -72,7 +65,7 @@ To write your own, see [docs/modules.md](docs/modules.md).
 
 ## Your own modules
 
-A module is a folder in `~/.config/notchd/modules/<id>/` with a `module.json` and a program in any language that prints JSON lines for what the notch shows and reads the clicks, settings and provider data (CPU, media, screens, plan usage) notchd sends it. It reloads when you save, and a crash or a mistake shows in the notch with the log's path. Start from the [examples](docs/examples/modules/) (shell, Python, Node); the guide is [User modules](docs/modules.md#user-modules).
+A module is a folder in `~/.config/notchd/modules/<id>/` with a `module.json` and a program in any language that prints JSON lines for what the notch shows and reads the clicks, settings and provider data (CPU, media, screens, plan usage) notchd sends it. It reloads when you save, and a crash or a mistake shows in the notch with the log's path. Start from the [examples](docs/examples/modules/) (shell, Python, Node); the guide is [Custom modules](docs/modules.md#custom-modules).
 
 ### Showcase: Herdr
 
@@ -139,7 +132,6 @@ The config lives in `$XDG_CONFIG_HOME/notchd/config.json` (usually `~/.config/no
 | `idleIcons` | `true` | a module with nothing to show closed shows its icon there; see above; *per notch* |
 | `workspaces` | every one | workspaces the closed notch shows on; see above; *per notch* |
 | `notches` | one notch | `[{ "id", ...per-notch keys }]`; see [Several notches](#several-notches) |
-| `terminals` | none | `{ "<id>": { "command", "title" } }`: terminals of your own, modules a notch lists by id; see [Modules](#modules) |
 
 Hosts add their own keys; the standalone host, for example, adds `topOffset` and `theme`. A module's own settings live under its id, `resources` for example. A key missing from the file falls back to its default.
 
@@ -160,7 +152,7 @@ omarchy-shell eryk.notchd push '{"id":"deploy","title":"Deploying api","progress
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md): the daemon, the protocol with the UIs, view primitives, providers
-- [docs/modules.md](docs/modules.md): writing a module, and [user modules](docs/modules.md#user-modules) in any language
+- [docs/modules.md](docs/modules.md): writing a module, and [custom modules](docs/modules.md#custom-modules) in any language
 - [docs/standalone.md](docs/standalone.md): the standalone host
 - [docs/hosts.md](docs/hosts.md): what a host provides, for porting notchd to another desktop
 - [docs/settings.md](docs/settings.md): the settings schema, pages and controls

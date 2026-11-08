@@ -30,13 +30,15 @@ notchd ipc timer '3m Tea'
 notchd ipc agent codex toggle
 notchd ipc agent codex 'ask explain this error'
 notchd ipc terminal shell toggle
+notchd ipc terminal add btop btop --title System
+notchd ipc module remove btop
 notchd ipc openNotch main
 notchd ipc notch add --edge left --modules media
 notchd ipc set hoverOpenDelay 200
 ```
 
 - `push` and `clear` need the `activities` module; `timer` needs `timer`. `clear ""` removes every activity.
-- `agent <id> toggle | new | "ask <text>"` controls a loaded `claude` or `codex` module. `terminal <id>` has the same commands for configured terminals. `ask` opens its notch and types into the program; it does not return the program's answer. If `NOTCHD_TERMINAL_ID` names the current terminal, do not send `ask` or `new` to that same terminal from inside it.
+- `agent <id> toggle | new | "ask <text>"` controls a loaded `claude` or `codex` module. `terminal <id>` has the same commands for the terminal of any custom module (a folder of `~/.config/notchd/modules/` whose `module.json` has a `terminal`). `terminal add <id> <command> [--directory <dir>] [--title <title>]` makes one (a terminal-only module: it writes the folder, no `set` of the config), and `module remove <id>` deletes any custom module at once: its folder, its settings and its place in every notch. Remove only what the user asked to remove. `ask` opens its notch and types into the program; it does not return the program's answer. If `NOTCHD_TERMINAL_ID` names the current terminal, do not send `ask` or `new` to that same terminal from inside it.
 - `open`, `close`, `toggle`, `openNotch`, `closeNotch`, and `toggleNotch` affect the visible notch. `settings` toggles the settings window; `navigate` enters or leaves keyboard navigation. `notch add [--screen <name>] [--edge <edge>] [--modules a,b]` creates a notch (it answers its id) and `notch remove <id>` takes one out; ask the user first.
 - `set <key> <json>` persists a config edit. An empty value removes the key and restores its default. Read the relevant setting in the config or `docs/settings.md` before changing it; use `set` only when the user asked for that change.
 - `shutdown` ends the daemon and its terminal sessions. Run these only when the user explicitly requests the corresponding action.

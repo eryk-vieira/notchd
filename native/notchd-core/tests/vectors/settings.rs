@@ -40,7 +40,6 @@ pub fn call(f: &str, a: &[Value]) -> Option<Value> {
         "modulePageId" => json!(s::module_page_id(&text(a, 0))),
         "parseModuleInfo" => info(&s::parse_module_info(&text(a, 0))),
         "agentSettings" => json!(s::agent_settings(arg(a, 0), &text(a, 1))),
-        "terminalInfo" => info(&s::terminal_info(arg(a, 0))),
         "moduleInfoPath" => json!(s::module_info_path(&text(a, 0), &text(a, 1))),
         "settingDefault" => or_undef(s::setting_default(&list(a, 0), &text(a, 1))),
         "moduleFields" => json!(s::module_fields(&list(a, 0))),

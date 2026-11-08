@@ -265,16 +265,11 @@ function list(value) {
     return Array.isArray(value) ? value.map(String) : [];
 }
 
-// The config's own terminals, by id (Config.terminals).
-export function terminalIds(cfg, Config) {
-    return Config.terminals(cfg ?? {}, []).list.map(t => t.id);
-}
-
 // A `modules` field (ModuleList.qml): every module a notch can show, the
 // switched-on ones first and in order. A row:
 // `{id, title, on, known, canUp, canDown}`.
-export function moduleRows(field, catalog, extraIds = []) {
-    const available = (catalog ?? []).map(m => m.moduleId).concat(extraIds)
+export function moduleRows(field, catalog) {
+    const available = (catalog ?? []).map(m => m.moduleId)
         .filter((id, i, all) => all.indexOf(id) === i);
     const on = list(valueOf(field));
     const names = titles(catalog);
@@ -318,26 +313,23 @@ export function notchRows(state, catalog, Settings) {
     })).sort((a, b) => place(a) - place(b) || a.index - b.index);
 }
 
-// A `moduleCatalog` field (ModuleCatalog.qml): the modules of its `part`,
-// where each shows and whether it has a page. The config's terminals are
-// listed from the config (a UI with no terminal of its own reports none in
-// `catalog`, so the daemon's list has them not), removable.
-// `[{id, title, status, page, removable}]`.
+// A `moduleCatalog` field (ModuleCatalog.qml): the modules of its `part`
+// (the daemon's catalog, each tagged with its `origin`), where each shows and
+// whether it has a page. Yours (`part` "user") are removable and say what
+// they have (`badges`: process, terminal), their folder and permissions.
+// `[{id, title, status, page, removable, badges, detail}]`.
 export function catalogRows(field, schema, state, cfg, Settings, Config) {
     const catalog = schema?.modules ?? [];
     const specs = (state?.notches ?? []).map(n => ({id: n.id, moduleIds: n.modules ?? []}));
     const pageOf = id => findPage(schema, `modules/${id}`) ? `modules/${id}` : '';
-    if (field.part === 'terminal') {
-        return Config.terminals(cfg ?? {}, []).list.map(t => ({
-            id: t.id, title: t.title || t.id,
-            status: Settings.moduleStatus(t.id, specs),
-            page: pageOf(t.id), removable: true,
-        }));
-    }
+    const yours = field.part === 'user';
     return Array.from(Settings.catalogPart(catalog, field.part)).map(m => ({
         id: m.moduleId, title: m.title || capitalized(m.moduleId),
         status: Settings.moduleStatus(m.moduleId, specs),
-        page: pageOf(m.moduleId), removable: false,
+        page: pageOf(m.moduleId), removable: yours,
+        badges: yours ? [m.process ? 'process' : '', m.terminal ? 'terminal' : ''].filter(Boolean) : [],
+        detail: yours ? [m.dir ?? '', m.permissions?.length ? `permissions: ${m.permissions.join(', ')}` : '']
+            .filter(Boolean).join(' · ') : '',
     }));
 }
 
@@ -352,17 +344,6 @@ export function configSets(from, to) {
     }
     return keys.filter(k => JSON.stringify(from?.[k]) !== JSON.stringify(to?.[k]))
         .map(k => ({key: k, value: to?.[k] === undefined ? null : to[k]}));
-}
-
-// A terminal running your shell (Config.withTerminalAdded), its id not one
-// of a module: `{sets, id}`.
-export function addTerminal(cfg, catalog, Config) {
-    const r = Config.withTerminalAdded(cfg ?? {}, (catalog ?? []).map(m => m.moduleId));
-    return {sets: configSets(cfg, r.config), id: r.id};
-}
-
-export function removeTerminal(cfg, id, Config) {
-    return configSets(cfg, Config.withoutTerminal(cfg ?? {}, id));
 }
 
 // -------------------------------------------------------- following

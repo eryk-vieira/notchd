@@ -56,7 +56,7 @@ const INFO: &[(&str, &str)] = &[
 ];
 
 /// The built-in modules as `catalog` entries (`{ moduleId, title, settings,
-/// agent, terminal }`), from their JSON files, in id order.
+/// agent }`), from their JSON files, in id order.
 pub fn catalog() -> Vec<serde_json::Value> {
     use notchd_core::settings::{module_title, parse_module_info};
     INFO.iter()
@@ -68,7 +68,6 @@ pub fn catalog() -> Vec<serde_json::Value> {
                 "title": title,
                 "settings": info.settings,
                 "agent": info.agent,
-                "terminal": info.terminal,
             })
         })
         .collect()

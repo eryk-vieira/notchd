@@ -78,7 +78,8 @@ pub struct Options {
 impl Options {
     pub fn for_dir(modules_dir: &Path) -> Options {
         let parent = modules_dir.parent().unwrap_or(modules_dir);
-        let strings = |list: &[&str]| list.iter().map(|s| s.to_string()).collect();
+        let strings =
+            |list: &[&str]| -> Vec<String> { list.iter().map(|s| s.to_string()).collect() };
         Options {
             poll_interval: Duration::from_millis(300),
             debounce: Duration::from_millis(150),
@@ -95,24 +96,12 @@ impl Options {
             bad_lines_limit: 10,
             config_root: parent.join("module-config"),
             cache_root: parent.join("module-cache"),
-            reserved: strings(&[
-                "modules",
-                "reserveSpace",
-                "draggable",
-                "tabs",
-                "idleIcons",
-                "workspaces",
-                "position",
-                "theme",
-                "activities",
-                "claude",
-                "codex",
-                "media",
-                "osd",
-                "resources",
-                "terminal",
-                "timer",
-            ]),
+            // The config's own keys and the ids of the daemon's modules: a
+            // module's settings are a key of its id.
+            reserved: notchd_core::config::reserved_keys()
+                .into_iter()
+                .chain(strings(notchd_modules::IDS))
+                .collect(),
         }
     }
 }
@@ -142,6 +131,8 @@ pub enum ModEvent {
     Loaded {
         module: String,
         manifest: Box<Manifest>,
+        /// Its folder; a module that lives only in the daemon has none.
+        dir: Option<PathBuf>,
     },
     /// The folder is gone; the module has been stopped.
     Removed {
@@ -782,6 +773,7 @@ impl Ctx {
                 self.emit(ModEvent::Loaded {
                     module: m.id.clone(),
                     manifest: Box::new(manifest),
+                    dir: Some(m.dir.clone()),
                 });
                 if first {
                     self.start_now(m);
@@ -845,7 +837,9 @@ impl Ctx {
     }
 
     fn start_now(&mut self, m: &mut Module) {
-        if m.enabled && !m.removed && m.manifest.is_some() && m.proc.is_none() {
+        // A module with a terminal alone has no process to run.
+        let has_process = m.manifest.as_ref().is_some_and(Manifest::has_process);
+        if m.enabled && !m.removed && has_process && m.proc.is_none() {
             self.spawn(m);
         }
     }

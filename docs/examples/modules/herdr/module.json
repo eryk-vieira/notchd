@@ -1,6 +1,7 @@
 {
   "title": "Herdr",
   "command": ["python3", "run.py"],
+  "terminal": { "command": "herdr" },
   "priority": 65,
   "icon": "󰚩",
   "expandedWidth": 760,

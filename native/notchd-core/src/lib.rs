@@ -4,6 +4,7 @@
 pub mod agent;
 pub mod config;
 pub mod countdown;
+pub mod custom;
 pub mod navigate;
 pub mod peek;
 pub mod position;

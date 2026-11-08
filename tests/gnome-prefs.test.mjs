@@ -122,14 +122,13 @@ const catalog = [
 
 test('a notch module list: switched-on first in order, then the rest', () => {
   const f = field({ type: 'modules', key: 'modules', default: ['media'], value: ['timer', 'gone'] });
-  const rows = M.moduleRows(f, catalog, ['btop']);
+  const rows = M.moduleRows(f, catalog);
   assert.deepEqual(rows.map((r) => [r.id, r.on, r.known, r.canUp, r.canDown]), [
     ['timer', true, true, false, true],
     ['gone', true, false, true, false],
     ['media', false, true, false, false],
     ['osd', false, true, false, false],
     ['claude', false, true, false, false],
-    ['btop', false, true, false, false],
   ]);
   assert.equal(rows[0].title, 'Timer');
   assert.equal(rows[1].title, 'Gone');
@@ -188,26 +187,24 @@ test('a module catalog part: status from the state, a page when the schema has o
     ['timer', 'In main', ''],
     ['osd', 'Off', ''],
   ]);
-  const cfg = { terminals: { btop: { command: 'btop' } } };
-  assert.deepEqual(plain(M.catalogRows({ part: 'terminal' }, schema, state, cfg, Settings, Config)
-    .map((r) => [r.id, r.removable])), [['btop', true]], 'the terminals come from the config');
-  const withTerminalPage = { ...schema, pages: [...schema.pages, { id: 'modules/btop', label: 'System', sub: true }] };
-  assert.equal(M.catalogRows({ part: 'terminal' }, withTerminalPage, state, cfg, Settings, Config)[0].page,
-    'modules/btop');
+  // Yours: every custom module of the catalog, removable, with what it has.
+  const yours = [
+    { moduleId: 'herdr', title: 'Herdr', origin: 'user', process: true, terminal: true, dir: '/c/modules/herdr', permissions: ['network'] },
+    { moduleId: 'btop', title: 'btop', origin: 'user', terminal: true, dir: '/c/modules/btop' },
+  ];
+  const withYours = { modules: [...catalog, ...yours], pages: [...schema.pages, { id: 'modules/btop', label: 'btop', sub: true }] };
+  const yourRows = M.catalogRows({ part: 'user' }, withYours, state, {}, Settings, Config);
+  assert.deepEqual(plain(yourRows.map((r) => [r.id, r.removable, r.badges, r.detail, r.page])), [
+    ['herdr', true, ['process', 'terminal'], '/c/modules/herdr · permissions: network', ''],
+    ['btop', true, ['terminal'], '/c/modules/btop', 'modules/btop'],
+  ]);
+  assert.equal(M.catalogRows({ part: 'notch' }, withYours, state, {}, Settings, Config).some((r) => r.removable), false,
+    'the built-in ones are not removable');
 });
 
 test('config edits are one set per top-level key that changed, null for a removal', () => {
   assert.deepEqual(M.configSets({ a: 1, b: { c: 2 }, gone: 1 }, { a: 1, b: { c: 3 }, d: [] }),
     [{ key: 'b', value: { c: 3 } }, { key: 'gone', value: null }, { key: 'd', value: [] }]);
-});
-
-test('a terminal is added under a free id and removed with its settings', () => {
-  const r = M.addTerminal({}, catalog, Config);
-  assert.equal(r.id, 'terminal');
-  assert.deepEqual(plain(r.sets), [{ key: 'terminals', value: { terminal: { title: 'Terminal', command: '$SHELL' } } }]);
-  const cfg = { terminals: { btop: { command: 'btop' } }, btop: { width: 800 }, modules: ['btop', 'media'] };
-  assert.deepEqual(plain(M.removeTerminal(cfg, 'btop', Config)),
-    [{ key: 'terminals', value: null }, { key: 'btop', value: null }, { key: 'modules', value: ['media'] }]);
 });
 
 test('pages: a notch page counts while the notch exists, another missing page falls back', () => {

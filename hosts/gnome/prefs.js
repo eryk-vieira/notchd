@@ -362,6 +362,10 @@ class SettingsUi {
             this._set(s.key, s.value);
     }
 
+    _ipc(method, args) {
+        this._client.send(Protocol.ipc(++this._requestId, method, args));
+    }
+
     _edit(op, fields) {
         this._client.send(Protocol.edit(++this._requestId, op, fields));
     }
@@ -390,8 +394,8 @@ class SettingsUi {
         case 'entry': return this._entry(field, group, false);
         case 'color': return this._entry(field, group, true);
         case 'note': return this._note(field, group);
-        case 'modules': return this._list(group, f => Model.moduleRows(f, this._ctx.schema.modules,
-            Model.terminalIds(this._ctx.cfg, Config)), r => this._moduleRow(r, pageId));
+        case 'modules': return this._list(group, f => Model.moduleRows(f, this._ctx.schema.modules),
+            r => this._moduleRow(r, pageId));
         case 'workspaces': return this._workspaces(field, group, pageId);
         case 'notches': return this._notches(field, group);
         case 'catalog': return this._catalog(field, group);
@@ -653,33 +657,62 @@ class SettingsUi {
     }
 
     // `moduleCatalog` (ModuleCatalog.qml): a part of the Modules page, each
-    // module with where it shows and its page; the terminals' list adds and
-    // removes them.
+    // module with where it shows and its page. Yours adds a terminal (the
+    // daemon writes its folder: `terminal add`) and a trash can per module
+    // that asks twice before the daemon deletes it (`module remove`).
     _catalog(field, group) {
-        const terminals = field.part === 'terminal';
-        if (terminals) {
+        const yours = field.part === 'user';
+        if (yours) {
             const add = new Gtk.Button({label: 'Add terminal', valign: Gtk.Align.CENTER});
-            add.connect('clicked', () => this._sets(Model.addTerminal(this._ctx.cfg, this._ctx.schema.modules, Config).sets));
+            add.connect('clicked', () => this._ipc('terminal', ['add']));
             group.header_suffix = add;
         }
         return this._list(group, f => Model.catalogRows(f, this._ctx.schema, this._ctx.state, this._ctx.cfg, Settings, Config), m => {
-            const r = row(Adw.ActionRow, {title: m.title, subtitle: `${m.id} · ${m.status}`, activatable: !!m.page});
+            const parts = [m.id, ...m.badges, m.status];
+            const r = row(Adw.ActionRow, {title: m.title, subtitle: parts.join(' · '), activatable: !!m.page});
             if (/off$/i.test(m.status))
                 r.add_css_class('dim-label');
-            if (m.removable) {
-                r.add_suffix(iconButton('user-trash-symbolic', 'Remove this terminal',
-                    () => this._sets(Model.removeTerminal(this._ctx.cfg, m.id, Config))));
+            if (m.detail) {
+                const detail = new Gtk.Label({label: m.detail, valign: Gtk.Align.CENTER, ellipsize: 3});
+                detail.add_css_class('dim-label');
+                r.add_suffix(detail);
             }
+            if (m.removable)
+                r.add_suffix(this._deleteButton(m.id));
             if (m.page) {
                 r.add_suffix(new Gtk.Image({icon_name: 'go-next-symbolic'}));
                 r.connect('activated', () => this._openSub(m.page));
-            } else if (!terminals) {
+            } else if (!yours) {
                 const none = new Gtk.Label({label: 'No settings', valign: Gtk.Align.CENTER});
                 none.add_css_class('dim-label');
                 r.add_suffix(none);
             }
             return r;
-        }, {empty: terminals ? 'None yet.' : ''});
+        }, {empty: yours ? 'None yet.' : ''});
+    }
+
+    // A trash can that asks twice: the first click arms it, the second has
+    // the daemon delete the module (its folder, settings and place in every
+    // notch); it disarms after a few seconds.
+    _deleteButton(id) {
+        let armed = null;
+        const button = iconButton('user-trash-symbolic', 'Delete this module', () => {
+            if (armed !== null) {
+                GLib.source_remove(armed);
+                armed = null;
+                this._ipc('module', ['remove', id]);
+                return;
+            }
+            button.set_icon_name('dialog-warning-symbolic');
+            button.set_tooltip_text('Click again to delete it, with its folder and settings');
+            armed = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 4, () => {
+                armed = null;
+                button.set_icon_name('user-trash-symbolic');
+                button.set_tooltip_text('Delete this module');
+                return GLib.SOURCE_REMOVE;
+            });
+        });
+        return button;
     }
 
     // ------------------------------------------------- the keyboard page

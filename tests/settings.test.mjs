@@ -261,20 +261,13 @@ test('moduleInfoPath finds the JSON file next to a module, file or qs: url', () 
   assert.equal(Settings.moduleInfoPath('', '/c'), '');
 });
 
-// Its title and command are its entry's, edited in place: a `command`
-// under its id as well would be a second command for the same terminal.
-test('a terminal of your own: its entry\'s title and command, then the fields of a terminal, its own list', () => {
-  const info = plain(Settings.terminalInfo({ id: 'btop', title: 'System', command: 'btop' }));
-  assert.equal(info.title, 'System');
-  assert.equal(info.terminal, true);
-  assert.deepEqual(info.settings.map((f) => f.key),
-    ['terminals.btop.title', 'terminals.btop.command', 'directory', 'idleMinutes', 'width', 'height', 'font']);
-  assert.ok(info.settings[0].absolute && info.settings[1].absolute && info.settings[1].required);
-  assert.ok(info.settings[2].help.includes('Empty is your home'), info.settings[2].help);
-  assert.equal(Settings.moduleKind({ terminal: true }), 'terminal');
-  assert.equal(Settings.moduleKind({ agent: true }), 'agent');
-  // Without a title, the id names it.
-  assert.ok(plain(Settings.terminalInfo({ id: 'logs', title: '', command: 'x' })).settings[3].help.includes('logs stops'));
+test('a custom module is listed by origin before kind', () => {
+  assert.equal(Settings.moduleKind({ origin: 'user', agent: true }), 'user');
+  assert.equal(Settings.moduleKind({ origin: 'builtin', agent: true }), 'agent');
+  assert.equal(Settings.moduleKind({}), 'notch');
+  const catalog = [{ moduleId: 'media' }, { moduleId: 'btop', origin: 'user' }, { moduleId: 'claude', agent: true }];
+  assert.deepEqual(plain(Settings.catalogPart(catalog, 'user')).map((m) => m.moduleId), ['btop']);
+  assert.deepEqual(plain(Settings.catalogPart(catalog, 'notch')).map((m) => m.moduleId), ['media']);
 });
 
 test('a field with `when` shows only while another field has that value; the default counts', () => {

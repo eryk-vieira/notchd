@@ -1,6 +1,6 @@
 # Writing a module
 
-A module's logic lives in the daemon and the notch draws its **view trees** (made of primitives: [architecture.md](architecture.md#primitive-tree-v1)). There are two kinds: a **built-in** module is a Rust file in `native/notchd-modules/` ([below](#a-module-in-the-daemon)); a **user module** is a program of your own in any language, run by the daemon ([User modules](#user-modules)). No built-in module is QML any more: `native/notchd-modules/modules/` holds each one's JSON file (title, settings, defaults). A module draws with primitives only; when a view needs something they lack, the answer is a new light primitive in every UI, not QML, a canvas or a webview.
+A module's logic lives in the daemon and the notch draws its **view trees** (made of primitives: [architecture.md](architecture.md#primitive-tree-v1)). There are two kinds: a **built-in** module is a Rust file in `native/notchd-modules/` ([below](#a-module-in-the-daemon)); a **custom module** is a folder of your own with a program in any language, a terminal, or both, run by the daemon ([Custom modules](#custom-modules)). No built-in module is QML any more: `native/notchd-modules/modules/` holds each one's JSON file (title, settings, defaults). A module draws with primitives only; when a view needs something they lack, the answer is a new light primitive in every UI, not QML, a canvas or a webview.
 
 `NotchModule` is still the QML base type, for what the QML loads itself: a host's own module (the Omarchy `osd` is a `CoreModule` that only owns the IPC target, `hosts/omarchy/modules/`, importing `"../../../core"`, registered through the service's `hostModules`) and the test fixtures. Its properties are the facts every module has, so the vocabulary below (`priority`, `active`, `attention`...) is the same for the daemon's modules, which send them as the `module` message. A QML module looks like this:
 
@@ -40,7 +40,7 @@ A peek asked for while the notch is open (on another tab, say) doesn't show. For
 
 ## A module in the daemon
 
-The timer, activities, resources, media, OSD, the agents (`claude`, `codex`) and your terminals, and every user module (a folder of `modules/` in the config dir, run by the daemon as a process), keep their logic in the daemon and send **view trees**, not QML. `core/CoreModule.qml` is the one QML type that shows them, so to the notch (tabs, compact row, peeks, the settings page) they are modules like any other:
+The timer, activities, resources, media, OSD, the agents (`claude`, `codex`) and every custom module (a folder of `modules/` in the config dir: a process the daemon runs, a terminal it owns, or both), keep their logic in the daemon and send **view trees**, not QML. `core/CoreModule.qml` is the one QML type that shows them, so to the notch (tabs, compact row, peeks, the settings page) they are modules like any other:
 
 - Its facts (`title`, `priority`, `active`, `icon`, `attention`, `urgentPeek`, `peekOnFocusedScreen`, `expandedWidth`) are the daemon's `module` message, bound as properties (`daemonOwned` is true, so the service never reports facts for it).
 - Each slot (`compact`, `verticalCompact`, `peek`, `verticalPeek`, `expanded`) is a stable `Component` that draws `client.view(id, slot)` with `ViewTree`, or `null` while the daemon sends no tree for it. A press in a view goes back as the client's `event(module, slot, action, value)`.
@@ -52,9 +52,17 @@ A tree draws like the QML it replaced where a few general properties say so: `wi
 
 Icons: an `icon` (and a `button`) takes a `name`, a `glyph`, or both. `name` is a named icon the UI draws with its own symbols (`media-playback-start`, `window-close`, `list-add`...; the list is "Named icons" in `docs/architecture.md`), which is what makes a view look right on a desktop without Nerd Fonts. `glyph` is a Nerd Font codepoint (`String.fromCodePoint(0xF051B)`) and is what a UI draws when it does not know the `name`, or when you send no name. A name nobody knows is not an error, it falls back to `glyph`, so send both when you want a known look everywhere; a node with neither is invalid.
 
-## User modules
+## Custom modules
 
-A module of your own, in any language: a folder in the config dir whose program talks to notchd in lines of JSON. No QML, no build, no plugin API. Copy one of [the examples](examples/modules/) to start: `counter` (shell, a button), `cpu` (Python, a provider) and `greeting` (Node, settings).
+A module of your own: a folder in the config dir, always with a `module.json`. It has a **program** (`command`, in any language, talking to notchd in lines of JSON), a **terminal** (`terminal`, a live terminal the daemon owns) or both; at least one. No QML, no build, no plugin API. Copy one of [the examples](examples/modules/) to start: `counter` (shell, a button), `cpu` (Python, a provider), `greeting` (Node, settings) and `herdr` (a program and a terminal).
+
+- **A program only** (`command`): what this page describes below.
+- **A terminal only** (`terminal`): no code at all. `{ "title": "System", "terminal": { "command": "btop" } }` is a whole module. The command is a shell script (`cd ~/app && npm run dev` runs both), started the first time the notch opens in your home (or the `directory` setting), kept running while the notch is closed, and stopped when the module is unloaded or `idleMinutes` says so. Closed, the notch shows the title the program gives the terminal, else the module's `title`.
+- **Both**: a summary and a live terminal in one module. Closed, the program's compact view (the terminal's title when it sends none); open, the program's expanded view on top and the terminal filling the rest. There is no `terminal` primitive: the daemon places the terminal itself.
+
+The terminal's `command` is a setting under the module's id like its `directory`, `idleMinutes`, `width`, `height` and `font`: the manifest's `terminal.command` is its default, and the settings page changes it without touching the file. Over IPC, `terminal <id> toggle | new | "ask <text>"` works for any custom module that has a terminal ([ipc.md](ipc.md#terminals)). The terminal's header and surface fire the actions `typed`, `leave`, `keyboard`, `close` and `restart`; a program's view should not use those ids for its own buttons (the daemon sends them to the terminal), except that `restart` on the error row goes to the program.
+
+A custom module is made and deleted without editing files: `notchd ipc terminal add <id> <command> [--directory <dir>] [--title <title>]` writes the folder of a terminal-only module, `notchd ipc module remove <id>` deletes any custom module (its folder, its settings and its place in every notch; at once, with no confirmation, like `notchd ipc` removing a notch), and Settings › Modules does the same with Add terminal and a trash can per module that asks twice. The Modules page lists them apart from the built-in ones, under "Yours", with what each has (process, terminal), its folder (and a button to open it), the permissions its manifest declares and its error. The daemon builds a module from its manifest, not from a folder: nothing in the loading assumes one, so a module that lives only in the daemon can come later.
 
 ```
 ~/.config/notchd/modules/<id>/
@@ -66,11 +74,10 @@ A module of your own, in any language: a folder in the config dir whose program 
 2. Turn it on: Settings, Notches, your notch, Loaded modules, Counter or put its id in a notch's `modules` list in the config. The daemon finds a new folder by itself; Modules lists it, with a gear to its page when its manifest has `settings`. A module no notch lists is not started.
 3. Edit `run.sh` and save: the module restarts by itself (reload on save). Any file in its folder counts; hidden files, `__pycache__`, `node_modules` and `target` do not.
 
-The [Herdr example](examples/modules/herdr/) uses the same user-module protocol to
-show Herdr's agent, workspace and pane counts. It chooses when to send `peek`
-and, optionally, `notify` from its own settings. Pair it with a terminal whose
-command is `herdr` in a notch with `tabs: false` to put the summary above the
-live Herdr interface; no built-in module is needed.
+The [Herdr example](examples/modules/herdr/) is a program and a terminal in one
+module: it shows Herdr's agent, workspace and pane counts above the live Herdr
+interface. It chooses when to send `peek` and, optionally, `notify` from its own
+settings.
 
 The folder name is the id: letters, digits, `-` and `_`, and not a config key or built-in id (`modules`, `position`, `theme`, `media`, `timer`...); such a folder is reported in the log and ignored.
 
@@ -80,6 +87,7 @@ The folder name is the id: letters, digits, `-` and `_`, and not a config key or
 {
   "title": "Weather",
   "command": ["python3", "run.py", "${cache}"],
+  "terminal": { "command": "htop" },
   "priority": 40,
   "icon": "",
   "expandedWidth": 360,
@@ -90,7 +98,8 @@ The folder name is the id: letters, digits, `-` and `_`, and not a config key or
 
 | Field | |
 |---|---|
-| `command` | required: the argv, run with the module's folder as its working directory. `${config}` and `${cache}` become folders of its own (`<config dir>/module-config/<id>` and `module-cache/<id>`), made for it. `NOTCHD_MODULE_ID` and `NOTCHD_MODULE_DIR` are in its environment |
+| `command` | the program's argv, run with the module's folder as its working directory; without it the module has no program (it needs a `terminal`). `${config}` and `${cache}` become folders of its own (`<config dir>/module-config/<id>` and `module-cache/<id>`), made for it. `NOTCHD_MODULE_ID` and `NOTCHD_MODULE_DIR` are in its environment |
+| `terminal` | `{ "command": "<shell command line>" }`: a live terminal in the expanded view, the command being the `command` setting's default. A module needs a `command`, a `terminal` or both |
 | `title` | the tab and the settings page; the id by default |
 | `priority`, `icon`, `expandedWidth`, `urgentPeek`, `peekOnFocusedScreen` | the properties of a `NotchModule` of the same name (see the top of this page) |
 | `settings` | fields of its settings page, below |
@@ -161,7 +170,7 @@ A module that does not read its input is not waited for: provider data beyond a 
 
 ## Settings
 
-A built-in module's title, settings fields and whether it is an [agent](#agents) are in a JSON file named after it (`native/notchd-modules/modules/resources.json`, embedded in the daemon; a host's in its own folder, `hosts/omarchy/modules/osd.json`, which the host reports in `catalog`). The daemon reads it whether the module loads or not, so the module has its page in the settings window (Modules, then its gear) even while no notch shows it. `settings` uses the settings schema's format (see [settings.md](settings.md)) with `key` relative to the module; values are stored under the module's id, and the module reads them with its config: the value, else the field's default (`tree::Settings`; a QML module uses `setting(key)`). A field that names another `page` shows there, under the module's title. Without a `title`, the title is the id. A user module's `module.json` is the same format.
+A built-in module's title, settings fields and whether it is an [agent](#agents) are in a JSON file named after it (`native/notchd-modules/modules/resources.json`, embedded in the daemon; a host's in its own folder, `hosts/omarchy/modules/osd.json`, which the host reports in `catalog`). The daemon reads it whether the module loads or not, so the module has its page in the settings window (Modules, then its gear) even while no notch shows it. `settings` uses the settings schema's format (see [settings.md](settings.md)) with `key` relative to the module; values are stored under the module's id, and the module reads them with its config: the value, else the field's default (`tree::Settings`; a QML module uses `setting(key)`). A field that names another `page` shows there, under the module's title. Without a `title`, the title is the id. A custom module's `module.json` is the same format (a terminal adds its own fields first: `directory`, `command`, `idleMinutes`, `width`, `height`, `font`).
 
 ```json
 {
@@ -220,7 +229,7 @@ A coding agent (`claude`, `codex`) is a module of the daemon (`native/notchd-mod
 }
 ```
 
-A terminal of your own needs no file: each entry of the config's `terminals` (`"<id>": { "command", "title" }`, `config::terminals`) is a module of the daemon (`terminal.rs`) that runs the command as a shell script, starts in your home without a `directory` and shows the terminal's title as it is (`terminal::plain_title`). Its info is made from the entry (`settings::terminal_info`): its title, the entry's own `title` and `command` as fields with `absolute` keys (`terminals.<id>.command`, `required`), then the fields every agent has but `command`, under its id. So the id is a config key: one the config already has (`config::RESERVED_KEYS`, a host's settings keys) or a module's is skipped with a warning in the log, as is an id with anything but letters, digits, `-` and `_`. The Modules page lists them under Terminals, where Add terminal makes one (`config::with_terminal_added`: a free id, your shell) and the trash can removes one with its settings and its place in every notch (`config::without_terminal`); over IPC, `terminal <id> <command>` reaches them. A terminal that leaves the config, or that no notch lists, stops its program.
+The terminal of a custom module (`module.json`'s `terminal`, [Custom modules](#custom-modules)) is the same module of the daemon (`terminal.rs`): it runs the command as a shell script, starts in your home without a `directory` and shows the terminal's title as it is (`terminal::plain_title`). Its title and default command are the manifest's (`CoreModule::define`); its fields (`settings::terminal_settings`) are the ones every agent has, under the module's id, so the id is a config key and a folder name that is neither one the config already has nor a built-in module's (`config::reserved_keys`). Over IPC, `terminal <id> <command>` reaches it. A terminal that no notch lists, or whose module is deleted, stops its program.
 
 An agent with `usage` shows its plan's limits under its header: a bar per window (5 hours, the week, a model's week), how much is used and when it resets (`plan.rs`, rules in `notchd-core/src/usage.rs`). The daemon asks the endpoint the agent's own CLI calls (Claude's `api/oauth/usage`, Codex's `backend-api/wham/usage`, with `curl` on a thread of its own) with the login the CLI keeps (`~/.claude/.credentials.json`, `~/.codex/auth.json`, or under `CLAUDE_CONFIG_DIR`, `CODEX_HOME`): every 5 minutes, when the agent finishes a task (at most once a minute), and, while the login is missing or lapsed, every 5 seconds by looking at its file (no request until it has changed). That login is only read, never refreshed or written; when it lapses, the last limits stay, faint, with why, until the agent renews it by running. A 429 leaves it alone for at least 5 minutes. A limit that passes `usageWarn` (80 % by default) peeks once in its window, and again when it is reached; the first answer after a start is taken as seen, so a restart doesn't warn again. Offscreen (`scripts/isolated.sh` sets `NOTCHD_OFFLINE=1`, which the daemon reads) nothing asks the network or reads a login; the tests' and the renders' limits come from the module's test hook (`notchd ipc test-claude usage <json>`, with `NOTCHD_TEST_HOOKS=1`; also `title <text> [attention]` and `peek <ms>`).
 

@@ -32,11 +32,14 @@ if [[ ${1:-} == --inner ]]; then
   mkdir -p "$phases"
   rm -f "$phases"/*
   python3 - "$cfg" "$root/scripts/bench-terminal-driver.py" "$phases" <<'EOF'
-import json, sys
+import json, os, sys
 cfg, driver, phases = sys.argv[1:]
-json.dump({"modules": ["bench"],
-           "terminals": {"bench": {"title": "Bench", "command": f"exec python3 {driver} {phases}"}},
-           "bench": {"width": 760, "height": 420}}, open(cfg, "w"))
+# The terminal is a custom module: a folder of modules/ next to the config.
+folder = os.path.join(os.path.dirname(cfg), "modules", "bench")
+os.makedirs(folder, exist_ok=True)
+json.dump({"title": "Bench", "terminal": {"command": f"exec python3 {driver} {phases}"}},
+          open(os.path.join(folder, "module.json"), "w"))
+json.dump({"modules": ["bench"], "bench": {"width": 760, "height": 420}}, open(cfg, "w"))
 EOF
   NOTCHD_CONFIG=$cfg quickshell -p "$root" --no-color > "$scratch/qs-$renderer.log" 2>&1 &
   qs_pid=$!

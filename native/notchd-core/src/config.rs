@@ -757,21 +757,13 @@ pub fn terminals(cfg: &Value, taken: &[&str]) -> Terminals {
     out
 }
 
-/// What [`with_terminal_added`] returns: `{ config, id }`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct TerminalAdded {
-    pub config: Value,
-    pub id: String,
-}
-
-/// `withTerminalAdded(cfg, taken)`: a copy of cfg with a new terminal, id
-/// "terminal" else terminal-<n>, the first no config key, terminal or `taken`
-/// id has; it runs your shell, for its page to change.
-pub fn with_terminal_added(cfg: &Value, taken: &[&str]) -> TerminalAdded {
-    let mut out = copy_cfg(cfg);
+/// `terminal`, `terminal-2`...: the first id that no config key, module or
+/// `taken` id (the module folders and the catalog's ids) has; the id a new
+/// terminal module gets.
+pub fn new_terminal_id(cfg: &Value, taken: &[&str]) -> String {
     let mut used = reserved_keys();
     used.extend(taken.iter().map(|t| (*t).to_owned()));
-    if let Value::Object(map) = &out {
+    if let Value::Object(map) = cfg {
         used.extend(map.keys().cloned());
         if let Some(Value::Object(t)) = map.get("terminals") {
             used.extend(t.keys().cloned());
@@ -787,40 +779,39 @@ pub fn with_terminal_added(cfg: &Value, taken: &[&str]) -> TerminalAdded {
     let n = (1..)
         .find(|&n| !used.contains(&name(n)))
         .expect("an unbounded range");
-    let id = name(n);
-    if let Value::Object(map) = &mut out {
-        if !matches!(map.get("terminals"), Some(Value::Object(_))) {
-            map.insert("terminals".into(), json!({}));
-        }
-        if let Some(Value::Object(t)) = map.get_mut("terminals") {
-            let title = if n == 1 {
-                "Terminal".to_owned()
-            } else {
-                format!("Terminal {n}")
-            };
-            t.insert(id.clone(), json!({ "title": title, "command": "$SHELL" }));
-        }
-    }
-    TerminalAdded { config: out, id }
+    name(n)
 }
 
-/// `withoutTerminal(cfg, id)`: a copy of cfg without terminal `id`: its
-/// entry, its settings (the key of its id) and its place in every notch's
-/// `modules`. `terminals` goes once empty. Not a terminal: unchanged.
-pub fn without_terminal(cfg: &Value, id: &str) -> Value {
+/// Whether `id` can name a custom module's folder: letters, digits, `-` and
+/// `_`, and no config key or other module has it.
+pub fn is_module_id_free(id: &str, taken: &[&str]) -> bool {
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        && !reserved_keys().iter().any(|k| k == id)
+        && !taken.contains(&id)
+}
+
+/// `module.json` of a terminal-only module: its `title` (left out when
+/// empty) and the `terminal.command` it runs.
+pub fn terminal_manifest(title: &str, command: &str) -> Value {
+    let mut m = Object::new();
+    if !title.trim().is_empty() {
+        m.insert("title".into(), json!(title.trim()));
+    }
+    m.insert("terminal".into(), json!({ "command": command }));
+    Value::Object(m)
+}
+
+/// A copy of cfg without module `id`: its settings (the key of its id) and
+/// its place in every notch's `modules`. Removing a custom module's folder is
+/// the daemon's; this is the config's side of it.
+pub fn without_module(cfg: &Value, id: &str) -> Value {
     let mut out = copy_cfg(cfg);
     let Value::Object(map) = &mut out else {
         return out;
     };
-    let Some(Value::Object(terms)) = map.get_mut("terminals") else {
-        return out;
-    };
-    if terms.shift_remove(id).is_none() {
-        return out;
-    }
-    if terms.is_empty() {
-        map.shift_remove("terminals");
-    }
     map.shift_remove(id);
     let drop_from = |entry: &mut Value| {
         if let Some(Value::Array(modules)) = entry.get_mut("modules") {
@@ -830,6 +821,60 @@ pub fn without_terminal(cfg: &Value, id: &str) -> Value {
     drop_from(&mut out);
     if let Some(Value::Array(list)) = out.get_mut("notches") {
         list.iter_mut().for_each(drop_from);
+    }
+    out
+}
+
+/// What the one-time move of the config's `terminals` into module folders
+/// needs: [`terminal_migration`].
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct TerminalMigration {
+    /// `(id, module.json)` for each entry whose folder is still to be written.
+    pub folders: Vec<(String, Value)>,
+    /// The entries whose folder already holds exactly what they would write
+    /// (an earlier run got that far).
+    pub done: Vec<String>,
+    /// `"<id>: why"` for each entry that stays in `terminals`.
+    pub left: Vec<String>,
+}
+
+/// The folders the config's `terminals` become: one per valid entry, its
+/// `title` and `terminal.command`. `existing` is each folder of the modules
+/// directory with its `module.json` (`Null` when it has none or it does not
+/// parse). An entry whose id is a folder with other contents, or that is no
+/// terminal (a bad id, a taken one, no command), stays and is said in `left`.
+pub fn terminal_migration(cfg: &Value, existing: &[(String, Value)]) -> TerminalMigration {
+    let read = terminals(cfg, TERMINAL_MODULE_IDS);
+    let mut out = TerminalMigration {
+        left: read.errors,
+        ..TerminalMigration::default()
+    };
+    for t in read.list {
+        let manifest = terminal_manifest(&t.title, &t.command);
+        match existing.iter().find(|(id, _)| *id == t.id) {
+            None => out.folders.push((t.id, manifest)),
+            Some((_, found)) if *found == manifest => out.done.push(t.id),
+            Some(_) => out
+                .left
+                .push(format!("{}: a folder with that name exists", t.id)),
+        }
+    }
+    out
+}
+
+/// A copy of cfg whose `terminals` has lost `done` (the entries now folders);
+/// `terminals` goes once empty. Their settings stay: they are under the
+/// module's id already.
+pub fn without_migrated_terminals(cfg: &Value, done: &[String]) -> Value {
+    let mut out = copy_cfg(cfg);
+    let Value::Object(map) = &mut out else {
+        return out;
+    };
+    if let Some(Value::Object(terms)) = map.get_mut("terminals") {
+        terms.retain(|id, _| !done.contains(id));
+        if terms.is_empty() {
+            map.shift_remove("terminals");
+        }
     }
     out
 }
@@ -1393,52 +1438,148 @@ mod tests {
         );
     }
 
-    // withTerminalAdded: a free id, running your shell
     #[test]
-    fn with_terminal_added_a_free_id_running_your_shell() {
-        let first = with_terminal_added(&json!({ "modules": ["media"] }), &[]);
-        assert_eq!(first.id, "terminal");
+    fn a_new_terminal_gets_the_first_free_id() {
+        assert_eq!(new_terminal_id(&json!({}), &[]), "terminal");
+        // Taken by a config key, a module or a folder: the next number.
         assert_eq!(
-            first.config,
-            json!({ "modules": ["media"],
-                    "terminals": { "terminal": { "title": "Terminal", "command": "$SHELL" } } })
+            new_terminal_id(&json!({ "terminal": { "width": 1 } }), &[]),
+            "terminal-2"
         );
-        // Taken by a terminal, a config key or a module: the next number.
-        let next = with_terminal_added(
-            &json!({ "terminals": { "terminal": { "command": "x" } }, "terminal-2": { "width": 1 } }),
-            &["terminal-3"],
-        );
-        assert_eq!(next.id, "terminal-4");
         assert_eq!(
-            next.config["terminals"]["terminal-4"],
-            json!({ "title": "Terminal 4", "command": "$SHELL" })
+            new_terminal_id(&json!({ "terminal-2": { "width": 1 } }), &["terminal"]),
+            "terminal-3"
         );
-        assert!(terminals(&next.config, &[]).errors.is_empty());
+        assert_eq!(
+            new_terminal_id(&json!(null), &["terminal", "terminal-2"]),
+            "terminal-3"
+        );
     }
 
-    // withoutTerminal: its entry, its settings and its place in every notch go
     #[test]
-    fn without_terminal_its_entry_its_settings_and_its_place_in_every_notch_go() {
+    fn a_module_id_is_free_when_it_is_an_id_no_key_or_module_has() {
+        assert!(is_module_id_free("btop", &["media"]));
+        assert!(is_module_id_free("1x_y-z", &[]));
+        assert!(!is_module_id_free("", &[]));
+        assert!(!is_module_id_free("a b", &[]));
+        assert!(!is_module_id_free("../x", &[]));
+        assert!(!is_module_id_free("media", &["media"]));
+        assert!(!is_module_id_free("position", &[]));
+        assert!(!is_module_id_free("terminals", &[]));
+    }
+
+    #[test]
+    fn a_terminal_manifest_has_a_title_when_given_and_its_command() {
+        assert_eq!(
+            terminal_manifest(" Btop ", "btop"),
+            json!({ "title": "Btop", "terminal": { "command": "btop" } })
+        );
+        assert_eq!(
+            terminal_manifest("", "$SHELL"),
+            json!({ "terminal": { "command": "$SHELL" } })
+        );
+    }
+
+    #[test]
+    fn without_module_its_settings_and_its_place_in_every_notch_go() {
         let cfg = json!({
             "modules": ["media", "btop"],
             "notches": [{}, { "id": "tools", "modules": ["btop", "dev"] }],
-            "terminals": { "btop": { "command": "btop" }, "dev": { "command": "npm run dev" } },
-            "btop": { "width": 900 }
+            "btop": { "width": 900 },
+            "dev": { "width": 500 }
         });
         assert_eq!(
-            without_terminal(&cfg, "btop"),
+            without_module(&cfg, "btop"),
             json!({
                 "modules": ["media"],
                 "notches": [{}, { "id": "tools", "modules": ["dev"] }],
-                "terminals": { "dev": { "command": "npm run dev" } }
+                "dev": { "width": 500 }
             })
         );
-        let none = without_terminal(&without_terminal(&cfg, "btop"), "dev");
-        assert!(none.get("terminals").is_none());
-        // Not a terminal: nothing changes, a module's settings least of all.
+        // An id nothing has: nothing changes.
+        assert_eq!(without_module(&cfg, "zz"), cfg);
+    }
+
+    #[test]
+    fn the_terminals_become_folders_and_what_cannot_stays() {
+        let cfg = json!({
+            "terminals": {
+                "btop": { "title": "System", "command": "btop" },
+                "dev": { "command": "npm run dev" },
+                "again": { "command": "x" },
+                "taken": { "command": "x" },
+                "media": { "command": "x" },
+                "empty": {},
+                "1bad": { "command": "x" }
+            }
+        });
+        let existing = [
+            ("taken".to_owned(), json!({ "command": ["./run.sh"] })),
+            ("blank".to_owned(), Value::Null),
+            // An earlier run wrote this one and stopped before the config.
+            (
+                "again".to_owned(),
+                json!({ "terminal": { "command": "x" } }),
+            ),
+        ];
+        let m = terminal_migration(&cfg, &existing);
         assert_eq!(
-            without_terminal(&json!({ "media": { "equalizer": "light" } }), "media"),
-            json!({ "media": { "equalizer": "light" } })
+            m.folders,
+            vec![
+                (
+                    "btop".to_owned(),
+                    json!({ "title": "System", "terminal": { "command": "btop" } })
+                ),
+                (
+                    "dev".to_owned(),
+                    json!({ "terminal": { "command": "npm run dev" } })
+                ),
+            ]
+        );
+        assert_eq!(m.done, ["again"]);
+        assert!(
+            m.left.iter().any(|l| l.starts_with("taken: ")),
+            "{:?}",
+            m.left
+        );
+        assert!(
+            m.left.iter().any(|l| l.starts_with("media: ")),
+            "{:?}",
+            m.left
+        );
+        assert!(
+            m.left.iter().any(|l| l.starts_with("empty: ")),
+            "{:?}",
+            m.left
+        );
+        assert!(
+            m.left.iter().any(|l| l.starts_with("1bad: ")),
+            "{:?}",
+            m.left
+        );
+        assert_eq!(
+            terminal_migration(&json!({}), &[]),
+            TerminalMigration::default()
+        );
+    }
+
+    #[test]
+    fn terminals_goes_once_every_entry_is_done_and_the_settings_stay() {
+        let cfg = json!({
+            "terminals": { "a": { "command": "x" }, "b": { "command": "y" } },
+            "a": { "width": 900 }
+        });
+        assert_eq!(
+            without_migrated_terminals(&cfg, &["a".to_owned()]),
+            json!({ "terminals": { "b": { "command": "y" } }, "a": { "width": 900 } })
+        );
+        assert_eq!(
+            without_migrated_terminals(&cfg, &["a".to_owned(), "b".to_owned()]),
+            json!({ "a": { "width": 900 } })
+        );
+        assert_eq!(
+            without_migrated_terminals(&json!({ "x": 1 }), &["a".to_owned()]),
+            json!({ "x": 1 })
         );
     }
 }

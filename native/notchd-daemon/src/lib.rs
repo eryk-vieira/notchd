@@ -2,6 +2,7 @@
 
 pub mod attach;
 pub mod corehost;
+pub mod custom;
 pub mod daemon;
 pub mod ensure;
 pub mod grid;

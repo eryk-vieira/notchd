@@ -220,11 +220,11 @@ ShellRoot {
       { name: "agent usage: the limits show in the open notch, and passing the warning peeks once", run: root.agentUsage },
       { name: "claude: the closed notch keeps its size while it works", run: root.agentBusySteady },
       { name: "codex: closed and idle for idleMinutes, it stops; opened again, it starts", run: root.codexIdle },
-      { name: "a terminal of your own: from the config, in your home, its title closed, terminal <id> toggle", run: root.ownTerminal },
-      { name: "settings: Add terminal makes one and opens its page; its trash can takes it out of the config", run: root.addAndRemoveTerminal },
+      { name: "a terminal of your own: a custom module, in your home, its title closed, terminal <id> toggle", run: root.ownTerminal },
+      { name: "settings: Add terminal makes a module and opens its page; its trash can asks twice, then takes it, its settings and its place", run: root.addAndRemoveTerminal },
       { name: "settings: a required text field refuses to be emptied", run: root.requiredTextField },
       { name: "settings: no row is wider than its page; segments that don't fit beside the text wrap as chips under it", run: root.settingRowsFitPage },
-      { name: "renaming or removing a terminal keeps the modules ready, and warns of nothing", run: root.terminalRenameStaysReady },
+      { name: "making or removing a custom module keeps the modules ready, and warns of nothing", run: root.terminalAddKeepsModulesReady },
       { name: "terminal: a connection that drops is made again, and the program goes on", run: root.terminalReconnects },
       { name: "a window its monitor took away comes back with the monitor", run: root.keepShownReopens },
       { name: "an open notch taller than its screen fits it and scrolls", run: root.tallNotchScrolls },
@@ -1162,8 +1162,13 @@ ShellRoot {
       root.check(JSON.stringify(svc.config.removedNotches) === JSON.stringify(["osd"]), "removal not written: " + JSON.stringify(svc.config))
       root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "osd" && m.standalone === undefined }), "the OSD left the catalog")
       var lists = svc.settingsSchema.filter(function(f) { return f.type === "moduleCatalog" }).map(function(f) { return f.part })
-      root.check(JSON.stringify(lists) === JSON.stringify(["notch", "agent", "terminal"]),
-                 "the Modules page lists: " + JSON.stringify(lists))
+      root.check(JSON.stringify(lists) === JSON.stringify(["notch", "agent", "user"]),
+                 "the Modules page does not list the built-in and your modules apart: " + JSON.stringify(lists))
+      var sections = svc.settingsSchema.filter(function(f) { return f.type === "moduleCatalog" }).map(function(f) { return f.section })
+      root.check(JSON.stringify(sections) === JSON.stringify(["Built-in", "Built-in", "Yours"]),
+                 "the lists are not grouped by origin: " + JSON.stringify(sections))
+      root.check(svc.moduleCatalog.every(function(m) { return m.origin === "builtin" || m.moduleId === "hello" || m.moduleId === "gauge" }),
+                 "a module of the daemon is tagged yours")
       root.check(!svc.settingsSchema.some(function(f) { return f.key === "osd.enabled" || f.key === "osd.position.edge" }), "the old osd keys are still fields")
       root.check(svc.moduleCatalog.some(function(m) { return m.moduleId === "claude" && m.agent }), "claude is no agent")
       root.check(svc.reportedCatalog.every(function(m) { return m.moduleId === "osd" }), "the host reported more than its own modules: " + JSON.stringify(svc.reportedCatalog.map(function(m) { return m.moduleId })))
@@ -2244,7 +2249,8 @@ ShellRoot {
     })
   }
 
-  // A terminal of your own (`terminals`): its id is a module a notch lists,
+  // A terminal of your own (a custom module with a `terminal`: a folder the
+  // daemon writes with `terminal add`): its id is a module a notch lists,
   // with its title and the fields of a terminal; it runs its command in
   // your home, shows the title the program sets, and `terminal <id>`
   // reaches it, `agent <id>` doesn't.
@@ -2256,29 +2262,52 @@ ShellRoot {
     defaultModules: []
   }
   NotchCard { notch: ownTermSvc.notches.length > 0 ? ownTermSvc.notches[0].copies[0] : null }
+  // A terminal module made the way a script makes one: `terminal add`, then
+  // listed by the notch. Resumes once its module is loaded.
+  function addTerminalModule(svc, id, command, title) {
+    return function(resume) {
+      var args = ["add", id, command]
+      if (title) args = args.concat(["--title", title])
+      svc.client.ipc("terminal", args, function(reply) {
+        root.check(reply.t === "ok" && reply.result === "ok", "terminal add " + id + ": " + JSON.stringify(reply))
+        svc.replaceConfig({ modules: [id] })
+        root.until(function() { return !!svc.moduleById(id) && svc.isTerminal(id) }, resume, 5000)
+      })
+    }
+  }
+  // Its folder, settings and place go (`module remove`); the config is empty after.
+  function removeTerminalModule(svc, id) {
+    return function(resume) {
+      svc.client.ipc("module", ["remove", id], function(reply) {
+        root.check(reply.t === "ok" && reply.result === "ok", "module remove " + id + ": " + JSON.stringify(reply))
+        svc.replaceConfig({})
+        root.until(function() { return !svc.moduleById(id) && !svc.isTerminal(id) }, resume, 5000)
+      })
+    }
+  }
   function ownTerminal() {
     var pwdFile = root.dir + "/own-terminal-pwd"
-    ownTermSvc.replaceConfig({
-      terminals: { mine: { title: "Mine", command: "printf '\\033]0;Own title\\007'; pwd > " + pwdFile + "; exec cat" } },
-      modules: ["mine"]
-    })
     root.go(function*() {
-      yield root.waitFor(function() { return !!ownTermSvc.moduleById("mine") }, 4000)
+      yield root.addTerminalModule(ownTermSvc, "mine",
+        "printf '\\033]0;Own title\\007'; pwd > " + pwdFile + "; exec cat", "Mine")
       var m = ownTermSvc.moduleById("mine")
-      if (!root.check(!!m, "the terminal from the config did not load")) return
+      if (!root.check(!!m, "the terminal module did not load")) return
       var copy = ownTermSvc.notches[0].copies[0]
       yield root.settle(ownTermSvc)
       root.check(m.title === "Mine", "its title: " + m.title)
-      root.check(ownTermSvc.moduleCatalog.some(function(c) { return c.moduleId === "mine" && c.terminal && !c.agent }),
-                 "the catalog has no terminal mine")
-      root.check(ownTermSvc.settingsSchema.some(function(f) { return f.key === "terminals.mine.command" && f.page === "modules/mine" }),
+      root.check(ownTermSvc.moduleCatalog.some(function(c) { return c.moduleId === "mine" && c.terminal && !c.process && !c.agent && c.origin === "user" }),
+                 "the catalog has no terminal mine of yours")
+      root.check(ownTermSvc.settingsSchema.some(function(f) { return f.key === "mine.command" && f.page === "modules/mine" }),
                  "its page has no command field")
-      root.check(ownTermSvc.settingsSchema.some(function(f) { return f.type === "moduleCatalog" && f.part === "terminal" }),
-                 "the Modules page does not list terminals apart")
+      root.check(ownTermSvc.moduleSettingDefault("mine", "command").indexOf("exec cat") !== -1,
+                 "its command's default is the module.json's: " + ownTermSvc.moduleSettingDefault("mine", "command"))
+      root.check(ownTermSvc.settingsSchema.some(function(f) { return f.type === "moduleCatalog" && f.part === "user" }),
+                 "the Modules page does not list your modules apart")
       root.check(ownTermSvc.agentCommand("mine", "toggle").indexOf("no agent mine") === 0, "a terminal took an agent command")
       root.check(ownTermSvc.terminalCommand("nope", "toggle") === "no terminal nope; terminals: mine", "an unknown terminal did not say so")
       if (!ownTermSvc.terminalAvailable) {
         console.log("NOTE " + root.current + ": this UI draws no terminal; the terminal was not run")
+        yield root.removeTerminalModule(ownTermSvc, "mine")
         return
       }
       root.check(ownTermSvc.terminalCommand("mine", "toggle") === "ok", "toggle failed")
@@ -2296,6 +2325,7 @@ ShellRoot {
       root.check(ownTermSvc.terminalCommand("mine", "toggle") === "ok", "toggle failed")
       yield root.settle(ownTermSvc)
       root.check(!copy.pinned, "toggle did not close it")
+      yield root.removeTerminalModule(ownTermSvc, "mine")
     })
   }
 
@@ -2313,9 +2343,8 @@ ShellRoot {
   NotchCard { id: reconnectCard; notch: reconnectSvc.notches.length > 0 ? reconnectSvc.notches[0].copies[0] : null }
   function terminalReconnects() {
     var pidFile = root.dir + "/reconnect-pid"
-    reconnectSvc.replaceConfig({ terminals: { rdrop: { command: "echo $$ > " + pidFile + "; exec cat" } }, modules: ["rdrop"] })
     root.go(function*() {
-      yield root.waitFor(function() { return !!reconnectSvc.moduleById("rdrop") && reconnectSvc.isTerminal("rdrop") }, 4000)
+      yield root.addTerminalModule(reconnectSvc, "rdrop", "echo $$ > " + pidFile + "; exec cat", "")
       root.check(reconnectSvc.terminalCommand("rdrop", "toggle") === "ok", "toggle failed")
       var card = reconnectCard
       yield root.waitFor(function() { var t = root.terminalIn(card); return !!t && t.connected }, 5000)
@@ -2340,68 +2369,88 @@ ShellRoot {
       root.check(shellCmd.out.trim() === pid, "the program was restarted: " + pid + " -> " + shellCmd.out.trim())
       root.check(reconnectSvc.terminalCommand("rdrop", "toggle") === "ok", "toggle failed")
       yield root.settle(reconnectSvc)
-      reconnectSvc.replaceConfig({})
+      yield root.removeTerminalModule(reconnectSvc, "rdrop")
     })
   }
 
-  // Bug: renaming a terminal (or removing one) warned of an unknown module
-  // and emptied the list of modules for a moment: its new id had no info
-  // yet, so the modules were not ready; they came back with the old id.
-  // (The run fails on the warning.)
-  function terminalRenameStaysReady() {
+  // A custom module made and deleted while the shell runs: the list of
+  // modules is never "not ready" (which emptied it and made them all again, an
+  // agent's session with them), and nothing is warned of. (The run fails on a
+  // warning.)
+  function terminalAddKeepsModulesReady() {
     var flips = 0
     var count = function() { flips++ }
-    ownTermSvc.replaceConfig({ terminals: { a: { command: "cat" } }, modules: ["activities", "a"] })
+    ownTermSvc.replaceConfig({ modules: ["activities"] })
     ownTermSvc.moduleInfoReadyChanged.connect(count)
-    root.steps([
-      [200, function() {
-        root.check(!!ownTermSvc.moduleById("activities") && !!ownTermSvc.moduleById("a"), "activities and a did not load")
-        ownTermSvc.replaceConfig({ terminals: { b: { command: "cat" } }, modules: ["activities", "b"] })
-      }],
-      [200, function() {
-        root.check(!!ownTermSvc.moduleById("b") && !ownTermSvc.moduleById("a"), "the rename did not apply")
-        ownTermSvc.replaceConfig({ modules: ["activities"] })
-      }],
-      [200, function() {
-        root.check(!ownTermSvc.moduleById("b"), "the removed terminal is still loaded")
-        root.check(flips === 0, "the modules were not ready for a moment, " + flips + " changes")
-      }]
-    ], function() {
+    root.go(function*() {
+      yield root.waitFor(function() { return !!ownTermSvc.moduleById("activities") }, 4000)
+      yield root.addTerminalModule(ownTermSvc, "a", "cat", "")
+      ownTermSvc.replaceConfig({ modules: ["activities", "a"] })
+      yield root.waitFor(function() { return !!ownTermSvc.moduleById("a") }, 4000)
+      root.check(!!ownTermSvc.moduleById("activities") && !!ownTermSvc.moduleById("a"), "activities and a did not load")
+      yield root.removeTerminalModule(ownTermSvc, "a")
+      root.check(!ownTermSvc.moduleById("a"), "the removed terminal is still loaded")
+      root.check(flips === 0, "the modules were not ready for a moment, " + flips + " changes")
       ownTermSvc.moduleInfoReadyChanged.disconnect(count)
-      ownTermSvc.replaceConfig({})
-      root.done()
     })
   }
 
+  // The row of module `id` in a ModuleCatalog.
+  function catalogRow(list, id) {
+    var found = null
+    function walk(item) {
+      if (!item || found) return
+      if (item.confirmRemove !== undefined && item.title !== undefined && item.subtitle.indexOf(id + " ") === 0) found = item
+      var kids = item.children
+      for (var i = 0; kids && i < kids.length; i++) walk(kids[i])
+    }
+    walk(list)
+    return found
+  }
   function addAndRemoveTerminal() {
     var start = { modules: ["activities"] }
     ownTermSvc.replaceConfig(start)
     catalog.svc = ownTermSvc
-    // The daemon's answer first: until then its list still has an earlier
-    // case's terminal (the same service), and the list showed two.
-    root.until(function() { return catalog.modules.length === 0 }, function() {
-    var add = null
-    for (var i = 0; i < catalog.children.length; i++)
-      if (catalog.children[i].text === "Add terminal") add = catalog.children[i]
-    if (!root.check(!!add && add.visible, "the Terminals list has no Add button")) { root.done(); return }
-    add.clicked()
-    root.check(JSON.stringify(ownTermSvc.config.terminals) === JSON.stringify({ terminal: { title: "Terminal", command: "$SHELL" } }),
-               "the new terminal: " + JSON.stringify(ownTermSvc.config.terminals))
-    root.check(ownTermSvc.settingsPage === "modules/terminal", "Add did not open its page: " + ownTermSvc.settingsPage)
-    root.check(catalog.modules.length === 1 && catalog.modules[0].moduleId === "terminal", "the list does not show it")
-    ownTermSvc.setConfigValue("modules", ["activities", "terminal"])
-    ownTermSvc.removeTerminal("terminal")
-    root.check(JSON.stringify(ownTermSvc.config) === JSON.stringify(start), "the config came back as " + JSON.stringify(ownTermSvc.config))
-    root.check(catalog.modules.length === 0, "removed, the list still shows it")
-    ownTermSvc.settingsPage = "general"
-    catalog.svc = null
-    root.done()
-    }, 4000)
+    var ids = function() { return catalog.modules.map(function(m) { return m.moduleId }) }
+    root.go(function*() {
+      // The daemon's answer first: until then the list still has an earlier
+      // case's terminal (the same service).
+      yield root.waitFor(function() { return ids().indexOf("terminal") === -1 && ids().indexOf("mine") === -1 }, 4000)
+      var add = null
+      for (var i = 0; i < catalog.children.length; i++)
+        if (catalog.children[i].text === "Add terminal") add = catalog.children[i]
+      if (!root.check(!!add && add.visible, "your modules' list has no Add button")) { catalog.svc = null; return }
+      add.clicked()
+      yield root.waitFor(function() { return ids().indexOf("terminal") !== -1 }, 5000)
+      root.check(ids().indexOf("terminal") !== -1, "the list does not show it: " + JSON.stringify(ids()))
+      root.check(ownTermSvc.config.terminals === undefined, "a terminal went into the config: " + JSON.stringify(ownTermSvc.config.terminals))
+      yield root.waitFor(function() { return ownTermSvc.settingsPage === "modules/terminal" }, 2000)
+      root.check(ownTermSvc.settingsPage === "modules/terminal", "Add did not open its page: " + ownTermSvc.settingsPage)
+      var entry = catalog.modules.filter(function(m) { return m.moduleId === "terminal" })[0]
+      root.check(entry.origin === "user" && entry.terminal && !entry.process && entry.title === "Terminal", "its entry: " + JSON.stringify(entry))
+      root.check(JSON.stringify(catalog.badgesOf(entry)) === JSON.stringify(["terminal"]), "its badges: " + JSON.stringify(catalog.badgesOf(entry)))
+      root.check(/modules\/terminal$/.test(entry.dir) && catalog.detailOf(entry).indexOf(entry.dir) === 0, "its folder: " + catalog.detailOf(entry))
+      ownTermSvc.setConfigValue("modules", ["activities", "terminal"])
+      ownTermSvc.setConfigValue("terminal.width", 900)
+      var row = root.catalogRow(catalog, "terminal")
+      if (!root.check(!!row && row.removable && row.confirmRemove && row.folder, "its row: " + row)) { catalog.svc = null; return }
+      // The trash can asks twice: the first click only arms it.
+      row.askRemove()
+      yield root.wait(100)
+      root.check(row.armed && ids().indexOf("terminal") !== -1, "the first click removed it, or did not arm the can")
+      row.askRemove()
+      yield root.waitFor(function() { return ids().indexOf("terminal") === -1 }, 5000)
+      root.check(ids().indexOf("terminal") === -1, "removed, the list still shows it")
+      yield root.waitFor(function() { return JSON.stringify(ownTermSvc.config) === JSON.stringify(start) }, 3000)
+      root.check(JSON.stringify(ownTermSvc.config) === JSON.stringify(start), "the config came back as " + JSON.stringify(ownTermSvc.config))
+      ownTermSvc.settingsPage = "general"
+      catalog.svc = null
+    })
   }
   ModuleCatalog {
     id: catalog
     width: 400
-    field: ({ type: "moduleCatalog", part: "terminal" })
+    field: ({ type: "moduleCatalog", part: "user" })
   }
 
   // Bug guarded: emptying a terminal's command removed it, and with it the

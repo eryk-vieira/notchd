@@ -119,6 +119,9 @@ pub trait CoreModule: Send {
     fn title(&self) -> Option<String> {
         None
     }
+    /// The title and default command a custom module's terminal has from its
+    /// `module.json` (the host calls it before `config`, on every load).
+    fn define(&mut self, _title: &str, _command: &str) {}
     fn facts(&self, now: u64) -> Facts;
     /// The tree of a slot now; `None`: no view for it.
     fn view(&self, slot: Slot, now: u64) -> Option<Node>;
