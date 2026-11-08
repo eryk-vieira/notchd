@@ -2,7 +2,9 @@
  "message": "ipc",
  "valid": [
   {"t":"ipc","id":6,"method":"timer","args":["3m Tea"]},
-  {"t":"ipc","id":7,"method":"state","args":[]}
+  {"t":"ipc","id":7,"method":"state","args":[]},
+  {"t":"ipc","id":9,"method":"notch","args":["add","--screen","DP-1","--edge","top","--modules","media,timer"]},
+  {"t":"ipc","id":10,"method":"notch","args":["remove","notch-2"]}
  ],
  "invalid": [
   {"why":"args missing","json":{"t":"ipc","id":6,"method":"state"}},

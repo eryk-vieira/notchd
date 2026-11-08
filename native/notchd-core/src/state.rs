@@ -400,71 +400,6 @@ pub struct ScreenState {
     pub allowed: bool,
 }
 
-/// What `notchScreen` looks at.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct ScreenContext {
-    pub screens: Vec<ScreenState>,
-    pub focused: String,
-    /// Peeks or is expanded.
-    pub open: bool,
-    /// The screen it was opened from (counts only while open); "" for none.
-    #[serde(rename = "override")]
-    pub override_screen: String,
-    /// The screen the config's position names; "" for none.
-    pub home: String,
-}
-
-/// `notchScreen`: the screen the notch goes on, by name; "" for none. Closed:
-/// home if allowed, else the focused screen if allowed, else the first
-/// allowed. Open: where the pointer opened it; else where it hangs closed
-/// (with a home screen), else the focused screen.
-pub fn notch_screen(s: &ScreenContext) -> String {
-    let find = |name: &str| s.screens.iter().find(|x| x.name == name);
-    let focused = find(&s.focused).or(s.screens.first());
-    let home = if s.home.is_empty() {
-        None
-    } else {
-        find(&s.home)
-    };
-    let closed = || -> String {
-        if let Some(h) = home.filter(|h| h.allowed) {
-            return h.name.clone();
-        }
-        if let Some(f) = focused.filter(|f| f.allowed) {
-            return f.name.clone();
-        }
-        s.screens
-            .iter()
-            .find(|x| x.allowed)
-            .map(|x| x.name.clone())
-            .unwrap_or_default()
-    };
-    if !s.open {
-        return closed();
-    }
-    if !s.override_screen.is_empty()
-        && let Some(over) = find(&s.override_screen)
-    {
-        return over.name.clone();
-    }
-    if let Some(h) = home {
-        let c = closed();
-        return if c.is_empty() { h.name.clone() } else { c };
-    }
-    focused.map(|f| f.name.clone()).unwrap_or_default()
-}
-
-/// `reserveScreens`: the screens that keep windows clear of the closed notch:
-/// just `home` while it can hang there, else every allowed screen.
-pub fn reserve_screens(screens: &[ScreenState], home: &str) -> Vec<String> {
-    let allowed: Vec<&ScreenState> = screens.iter().filter(|s| s.allowed).collect();
-    if !home.is_empty() && allowed.iter().any(|s| s.name == home) {
-        return vec![home.to_string()];
-    }
-    allowed.iter().map(|s| s.name.clone()).collect()
-}
-
 /// `peekCopy`: the copy of a notch that shows a peek, by screen name: the one
 /// on the focused screen, else the first; None for no copies.
 pub fn peek_copy<'a>(copies: &'a [String], focused: &str) -> Option<&'a str> {
@@ -501,11 +436,16 @@ pub struct PeekNotch {
     /// Where a `Homed` notch hangs.
     #[serde(default)]
     pub screen: Option<String>,
+    /// The other screens it hangs on, when it hangs on several.
+    #[serde(default)]
+    pub screens: Vec<String>,
 }
 
 impl PeekNotch {
     fn peeks_on(&self, focused: &str) -> bool {
-        self.kind != PeekKind::Homed || self.screen.as_deref() == Some(focused)
+        self.kind != PeekKind::Homed
+            || self.screen.as_deref() == Some(focused)
+            || self.screens.iter().any(|s| s == focused)
     }
 }
 
@@ -567,36 +507,24 @@ mod tests {
         list.iter().map(|m| m.id.clone()).collect()
     }
 
-    fn screens(list: &[(&str, bool)]) -> Vec<ScreenState> {
-        list.iter()
-            .map(|(n, a)| ScreenState {
-                name: (*n).into(),
-                allowed: *a,
-            })
-            .collect()
-    }
-
     fn strs(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| (*s).into()).collect()
-    }
-
-    fn ctx(s: &[ScreenState], focused: &str) -> ScreenContext {
-        ScreenContext {
-            screens: s.to_vec(),
-            focused: focused.into(),
-            ..Default::default()
-        }
     }
 
     fn homed(screen: &str) -> PeekNotch {
         PeekNotch {
             kind: PeekKind::Homed,
             screen: Some(screen.into()),
+            screens: Vec::new(),
         }
     }
 
     fn kind(kind: PeekKind) -> PeekNotch {
-        PeekNotch { kind, screen: None }
+        PeekNotch {
+            kind,
+            screen: None,
+            screens: Vec::new(),
+        }
     }
 
     // activeModules keeps active ones, highest priority first
@@ -1154,65 +1082,6 @@ mod tests {
         ));
     }
 
-    // notchScreen: closed, the focused screen if allowed, else the first allowed one
-    #[test]
-    fn notch_screen_closed_the_focused_screen_if_allowed_else_the_first_allowed_one() {
-        let s = screens(&[("DP-1", true), ("eDP-1", false)]);
-        assert_eq!(notch_screen(&ctx(&s, "DP-1")), "DP-1");
-        assert_eq!(notch_screen(&ctx(&s, "eDP-1")), "DP-1");
-        assert_eq!(notch_screen(&ctx(&screens(&[("a", false)]), "a")), "");
-        assert_eq!(notch_screen(&ctx(&[], "a")), "");
-    }
-
-    // notchScreen: open, the screen it was opened from, else the focused one
-    #[test]
-    fn notch_screen_open_the_screen_it_was_opened_from_else_the_focused_one() {
-        let s = screens(&[("DP-1", true), ("eDP-1", false)]);
-        let open = |focused: &str| ScreenContext {
-            open: true,
-            ..ctx(&s, focused)
-        };
-        assert_eq!(notch_screen(&open("eDP-1")), "eDP-1");
-        assert_eq!(
-            notch_screen(&ScreenContext {
-                override_screen: "DP-1".into(),
-                ..open("eDP-1")
-            }),
-            "DP-1"
-        );
-        assert_eq!(notch_screen(&open("gone")), "DP-1");
-        let closed = |focused: &str, over: &str| ScreenContext {
-            override_screen: over.into(),
-            ..ctx(&s, focused)
-        };
-        assert_eq!(notch_screen(&closed("eDP-1", "gone")), "DP-1");
-        assert_eq!(notch_screen(&closed("DP-1", "eDP-1")), "DP-1");
-    }
-
-    // notchScreen: closed, the notch stays on its home screen whatever has focus
-    #[test]
-    fn notch_screen_closed_the_notch_stays_on_its_home_screen_whatever_has_focus() {
-        let s = screens(&[("DP-1", true), ("eDP-1", true)]);
-        let with_home = |s: &[ScreenState], focused: &str, home: &str| ScreenContext {
-            home: home.into(),
-            ..ctx(s, focused)
-        };
-        assert_eq!(notch_screen(&with_home(&s, "DP-1", "eDP-1")), "eDP-1");
-        // A home whose workspace does not take the notch, or that is gone, falls back.
-        let busy = screens(&[("DP-1", true), ("eDP-1", false)]);
-        assert_eq!(notch_screen(&with_home(&busy, "eDP-1", "eDP-1")), "DP-1");
-        assert_eq!(notch_screen(&with_home(&s, "DP-1", "HDMI-A-1")), "DP-1");
-    }
-
-    // reserveScreens: only the home screen while the notch can hang there
-    #[test]
-    fn reserve_screens_only_the_home_screen_while_the_notch_can_hang_there() {
-        let s = screens(&[("DP-1", true), ("eDP-1", true), ("HDMI-A-1", false)]);
-        assert_eq!(reserve_screens(&s, "eDP-1"), ["eDP-1"]);
-        assert_eq!(reserve_screens(&s, ""), ["DP-1", "eDP-1"]);
-        assert_eq!(reserve_screens(&s, "HDMI-A-1"), ["DP-1", "eDP-1"]);
-    }
-
     // peekCopy: the copy on the focused screen, else the first
     #[test]
     fn peek_copy_the_copy_on_the_focused_screen_else_the_first() {
@@ -1248,30 +1117,6 @@ mod tests {
         .map(|(k, v)| (k.to_string(), v))
         .into();
         assert_eq!(zones, want);
-    }
-
-    // notchScreen: open, a notch with a home screen stays where it hangs
-    #[test]
-    fn notch_screen_open_a_notch_with_a_home_screen_stays_where_it_hangs() {
-        let s = screens(&[("DP-1", true), ("eDP-1", true)]);
-        let open = |s: &[ScreenState], focused: &str, home: &str| ScreenContext {
-            open: true,
-            home: home.into(),
-            ..ctx(s, focused)
-        };
-        assert_eq!(notch_screen(&open(&s, "eDP-1", "DP-1")), "DP-1");
-        // Its home's workspace leaves it out: it opens where it hangs instead.
-        let busy = screens(&[("DP-1", false), ("eDP-1", true), ("HDMI-A-1", true)]);
-        assert_eq!(notch_screen(&open(&busy, "HDMI-A-1", "DP-1")), "HDMI-A-1");
-        // Hanging nowhere, it opens on its home.
-        let none = screens(&[("DP-1", false), ("eDP-1", false)]);
-        assert_eq!(notch_screen(&open(&none, "eDP-1", "DP-1")), "DP-1");
-        // Opened by the pointer on another screen, it stays there.
-        let over = ScreenContext {
-            override_screen: "eDP-1".into(),
-            ..open(&s, "DP-1", "DP-1")
-        };
-        assert_eq!(notch_screen(&over), "eDP-1");
     }
 
     // needsVisitor: only when no notch with the module peeks on the focused screen

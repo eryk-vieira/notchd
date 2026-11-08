@@ -18,9 +18,8 @@ use crate::peek::{self, CopyPeek, Missed};
 use crate::position;
 use crate::schema;
 use crate::settings;
-use crate::state::{
-    self, KeyboardContext, ModeContext, ModuleInfo, ScreenContext, ScreenState, WorkspaceKey,
-};
+use crate::spatial::{self, Placed, ScreenAt};
+use crate::state::{self, KeyboardContext, ModeContext, ModuleInfo, ScreenState, WorkspaceKey};
 use crate::timers::Timers;
 use notchd_proto::Num;
 use notchd_proto::common::{Edge, KeyboardFocus, Mode, Slot};
@@ -70,8 +69,8 @@ impl ModuleFacts {
     }
 }
 
-/// A copy is named by its notch (a standalone module's by `@<id>`) and its
-/// screen, `""` for the one copy that moves.
+/// A copy is named by its notch (a standalone module's by `@<id>`) and the
+/// screen it hangs on.
 type Key = (String, String);
 
 #[derive(Debug, Clone, PartialEq)]
@@ -94,8 +93,6 @@ struct CopyState {
     /// (`NotchCopy.keyboardHeld`).
     held: bool,
     tab: String,
-    /// The screen the pointer opened the moving copy on.
-    open_screen: String,
     peek: Option<PeekState>,
     missed: Vec<Missed>,
     was_open: bool,
@@ -133,20 +130,39 @@ enum Timer {
     NavSettle,
 }
 
+/// What a move in navigation puts back on Escape.
 #[derive(Debug, Clone)]
 struct MoveFrom {
-    notch: usize,
+    /// The notch's id.
+    notch: String,
     position: Option<Value>,
     workspaces: Option<Value>,
+    /// The notch was created by this move (`n`): Escape takes it away, and
+    /// the selection goes back to `prev`.
+    created: bool,
+    prev: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 struct Nav {
     mode: NavMode,
-    selected: i64,
+    /// The selected notch's id (not its index: the order is spatial and a
+    /// notch need not be in the config).
+    selected: Option<String>,
     /// Each copy's tab as navigation started, given back on Escape.
     tabs: Vec<(Key, String)>,
     move_from: Option<MoveFrom>,
+}
+
+/// A notch to create (`Store::add_notch`): what is left out, the creation
+/// rule decides.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct NewNotch {
+    /// A connected screen's name.
+    pub screen: Option<String>,
+    /// top, bottom, left or right.
+    pub edge: Option<String>,
+    pub modules: Vec<String>,
 }
 
 /// What changed since the last call, to send to every UI.
@@ -169,8 +185,6 @@ struct NotchView {
     visitor: bool,
     spec: Option<NotchSpec>,
     pos: position::Position,
-    every: bool,
-    homed: bool,
     tabs: bool,
     module_ids: Vec<String>,
     compact: Vec<ModuleInfo>,
@@ -443,10 +457,23 @@ impl Store {
             .unwrap_or_default()
     }
 
+    /// The connected screens' names in layout order (left to right, then top
+    /// to bottom): the first is where a notch with no screen hangs.
     fn screen_names(&self) -> Vec<String> {
         self.screens
             .as_ref()
-            .map(|s| s.screens.iter().map(|x| x.name.clone()).collect())
+            .map(|s| {
+                spatial::layout(
+                    &s.screens
+                        .iter()
+                        .map(|x| ScreenAt {
+                            name: x.name.clone(),
+                            x: x.x,
+                            y: x.y,
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            })
             .unwrap_or_default()
     }
 
@@ -515,9 +542,9 @@ impl Store {
         let specs = config::notches(&self.config, &self.default_refs());
         let screens = self.screen_names();
         for spec in specs {
-            let pos = position::resolve(spec.position.as_ref().unwrap_or(&Value::Null));
-            let every = pos.screen == position::ALL_SCREENS;
-            let homed = !every && !pos.screen.is_empty();
+            let mut pos = position::resolve(spec.position.as_ref().unwrap_or(&Value::Null));
+            let copy_screens = spatial::screens_of(spec.position.as_ref(), &screens);
+            pos.screen = copy_screens.first().cloned().unwrap_or_default();
             let module_ids: Vec<String> = spec
                 .module_ids
                 .iter()
@@ -546,13 +573,7 @@ impl Store {
                 module_ids,
                 compact,
                 expanded,
-                copy_screens: if every {
-                    screens.clone()
-                } else {
-                    vec![String::new()]
-                },
-                every,
-                homed,
+                copy_screens,
                 pos,
                 spec: Some(spec),
             });
@@ -569,8 +590,6 @@ impl Store {
                 visitor: false,
                 spec: None,
                 pos: self.standalone_position(id),
-                every: true,
-                homed: false,
                 tabs: false,
                 module_ids: vec![id.clone()],
                 compact: Vec::new(),
@@ -594,8 +613,6 @@ impl Store {
             visitor: true,
             spec: None,
             pos: position::resolve(&json!({"screen": position::ALL_SCREENS})),
-            every: true,
-            homed: false,
             tabs: false,
             expanded: self.expanded_of(&visitor_ids),
             module_ids: visitor_ids,
@@ -605,14 +622,41 @@ impl Store {
         out
     }
 
+    /// The notches of the config in the spatial order (`spatial::order`):
+    /// what the numbers, the arrows and the digits go by.
+    fn order_ids(&self, views: &[NotchView]) -> Vec<String> {
+        let placed: Vec<Placed> = views
+            .iter()
+            .filter(|v| !v.guest)
+            .map(|v| Placed {
+                id: v.id.clone(),
+                edge: v.pos.edge.clone(),
+                offset: v.pos.offset,
+                screens: v.copy_screens.clone(),
+            })
+            .collect();
+        spatial::order(&placed, &self.screen_names())
+    }
+
+    /// The views of the notches of the config, in the spatial order.
+    fn ordered<'a>(&self, views: &'a [NotchView]) -> Vec<&'a NotchView> {
+        self.order_ids(views)
+            .iter()
+            .filter_map(|id| views.iter().find(|v| !v.guest && v.id == *id))
+            .collect()
+    }
+
     fn focused_copy_screen<'a>(&self, nv: &'a NotchView, focused: &str) -> Option<&'a str> {
         state::peek_copy(&nv.copy_screens, focused)
     }
 
     fn mode_of(&self, nv: &NotchView, cs: &str, copy: &CopyState, focused: &str) -> state::Mode {
         let navigating = self.nav.is_some() && !nv.guest;
-        let selected = self.nav.as_ref().map(|n| n.selected);
-        let nav_selected = navigating && nv.index.is_some_and(|i| Some(i as i64) == selected);
+        let nav_selected = navigating
+            && self
+                .nav
+                .as_ref()
+                .is_some_and(|n| n.selected.as_deref() == Some(nv.id.as_str()));
         let preview = nav_selected && self.focused_copy_screen(nv, focused) == Some(cs);
         state::mode(&ModeContext {
             peek_module: copy.peek.is_some(),
@@ -637,41 +681,16 @@ impl Store {
         let open = matches!(mode, state::Mode::Peek | state::Mode::Expanded);
         let workspaces = nv.spec.as_ref().and_then(|s| s.workspaces.clone());
         let states = self.screen_states(&workspaces);
-        let home = if nv.pos.screen == position::ALL_SCREENS {
-            cs.to_string()
-        } else {
-            nv.pos.screen.clone()
-        };
         let allowed = |name: &str| {
             states
                 .iter()
                 .find(|s| s.name == name)
                 .is_some_and(|s| s.allowed)
         };
-        let wanted = if !cs.is_empty() {
-            if nv.guest {
-                if open { cs.to_string() } else { String::new() }
-            } else if open || allowed(cs) {
-                cs.to_string()
-            } else {
-                String::new()
-            }
-        } else {
-            state::notch_screen(&ScreenContext {
-                screens: states.clone(),
-                focused: focused.clone(),
-                open,
-                override_screen: copy.open_screen.clone(),
-                home,
-            })
-        };
-        let screen = if !wanted.is_empty() {
-            wanted.clone()
-        } else if !cs.is_empty() {
-            cs.to_string()
-        } else {
-            focused.clone()
-        };
+        // A notch stays on its screen; with its workspace not there it hangs
+        // nowhere (a guest, while closed), unless open.
+        let wanted = if nv.guest { open } else { open || allowed(cs) };
+        let screen = cs.to_string();
         let shown = state::shown_modules(&nv.expanded, nv.tabs, &copy.tab);
         let keyboard = KeyboardContext {
             pinned: copy.pinned,
@@ -684,7 +703,7 @@ impl Store {
         };
         CopyView {
             mode,
-            covered: wanted.is_empty(),
+            covered: !wanted,
             screen,
             keyboard,
             shown: shown.modules.iter().map(|m| m.id.clone()).collect(),
@@ -694,14 +713,7 @@ impl Store {
     }
 
     fn key_of(nv: &NotchView, screen: &str) -> Key {
-        (
-            nv.key.clone(),
-            if nv.every {
-                screen.to_string()
-            } else {
-                String::new()
-            },
-        )
+        (nv.key.clone(), screen.to_string())
     }
 
     fn find_view<'a>(views: &'a [NotchView], notch: &str) -> Option<&'a NotchView> {
@@ -718,6 +730,7 @@ impl Store {
         let mut notches = Vec::new();
         let mut standalone = Vec::new();
         let mut visitor = Vec::new();
+        let order = self.order_ids(&views);
         let slot = |nv: &NotchView| {
             if nv.vertical() {
                 Slot::VerticalPeek
@@ -788,6 +801,10 @@ impl Store {
                 edge: to_edge(&nv.pos.edge),
                 offset: Num(nv.pos.offset),
                 screen: nv.pos.screen.clone(),
+                number: order
+                    .iter()
+                    .position(|id| *id == nv.id)
+                    .map_or(0, spatial::number),
                 draggable: spec.is_none_or(|s| s.draggable),
                 tabs: nv.tabs,
                 modules: nv.module_ids.clone(),
@@ -795,9 +812,11 @@ impl Store {
             });
         }
         let navigation = self.nav.as_ref().map(|n| {
-            let tab = usize::try_from(n.selected)
-                .ok()
-                .and_then(|i| views.iter().find(|v| v.index == Some(i)))
+            let nv = n
+                .selected
+                .as_deref()
+                .and_then(|id| views.iter().find(|v| !v.guest && v.id == id));
+            let tab = nv
                 .and_then(|nv| {
                     let focused = self.focused();
                     let cs = self.focused_copy_screen(nv, &focused)?;
@@ -810,7 +829,8 @@ impl Store {
                     NavMode::Move => ps::NavMode::Move,
                     NavMode::Remove => ps::NavMode::Remove,
                 },
-                selected: n.selected.max(0) as u32,
+                notch: nv.map(|v| v.id.clone()).unwrap_or_default(),
+                selected: nv.and_then(|v| v.index).unwrap_or(0) as u32,
                 tab,
             }
         });
@@ -820,6 +840,7 @@ impl Store {
             settings_open: self.settings_open,
             settings_page: self.settings_page.clone(),
             notches,
+            order,
             reserve: self.reserve_state(&views),
             standalone,
             visitor,
@@ -969,7 +990,6 @@ impl Store {
             }
             for key in closed {
                 if let Some(c) = self.copies.get_mut(&key) {
-                    c.open_screen.clear();
                     // `onIsOpenChanged`: the window stays `windowLinger` ms.
                     c.lingering = true;
                 }
@@ -1062,14 +1082,7 @@ impl Store {
             .collect();
         let places: Vec<state::PeekNotch> = owners
             .iter()
-            .map(|nv| {
-                let at = if nv.homed {
-                    self.copy_view(nv, "").screen
-                } else {
-                    String::new()
-                };
-                peek::place(nv.homed, nv.every, &at)
-            })
+            .map(|nv| peek::place(&nv.copy_screens))
             .collect();
         let route = peek::route(&places, &focused, facts.peek_on_focused_screen);
         for i in route.notches {
@@ -1169,9 +1182,6 @@ impl Store {
                 let c = self.copies.entry(key.clone()).or_default();
                 let was_inside = c.inside;
                 c.inside = true;
-                if !screen.is_empty() {
-                    c.open_screen = screen.to_string();
-                }
                 if !was_inside {
                     self.timers.cancel(&Timer::Close(key.clone()));
                     self.timers
@@ -1180,14 +1190,6 @@ impl Store {
             }
             PointerEv::Leave => {
                 let r = self.resolved();
-                let open = {
-                    let focused = self.focused();
-                    let copy = self.copies.get(&key).cloned().unwrap_or_default();
-                    matches!(
-                        self.mode_of(nv, &key.1, &copy, &focused),
-                        state::Mode::Peek | state::Mode::Expanded
-                    )
-                };
                 let c = self.copies.entry(key.clone()).or_default();
                 let was_inside = c.inside;
                 c.inside = false;
@@ -1195,16 +1197,10 @@ impl Store {
                     self.timers.cancel(&Timer::Open(key.clone()));
                     self.timers
                         .after(Timer::Close(key.clone()), now, r.hover_close_delay as u64);
-                    if !open {
-                        self.copies.entry(key).or_default().open_screen.clear();
-                    }
                 }
             }
             PointerEv::Press => {
                 let c = self.copies.entry(key.clone()).or_default();
-                if !screen.is_empty() {
-                    c.open_screen = screen.to_string();
-                }
                 let next = !c.pinned;
                 self.set_pinned(&key, next, now);
             }
@@ -1283,7 +1279,7 @@ impl Store {
         self.set_pinned(&key, false, now);
         self.set_hovered(&key, false);
         if let (Some(i), Some(to)) = (nv.index, to) {
-            self.move_to(i, &to);
+            self.move_to(i, &to, screen);
         }
         self.advance(now);
     }
@@ -1357,15 +1353,16 @@ impl Store {
             .nth(index)
     }
 
-    /// `Notch.moveTo`: to `place`; taken to a screen showing a workspace the
-    /// notch leaves out, that workspace is let in first.
-    fn move_to(&mut self, index: usize, place: &navigate::Position) {
+    /// `Notch.moveTo`: the copy on screen `from` to `place`; taken to a screen
+    /// showing a workspace the notch leaves out, that workspace is let in
+    /// first. The screen is always written: a notch on several screens has
+    /// `from` replaced by the new one in its list, any other becomes the one
+    /// screen.
+    fn move_to(&mut self, index: usize, place: &navigate::Position, from: &str) {
         let Some(spec) = self.spec_at(index) else {
             return;
         };
-        let home = !place.screen.is_empty()
-            && place.screen != position::ALL_SCREENS
-            && self.screen_names().contains(&place.screen);
+        let home = !place.screen.is_empty() && self.screen_names().contains(&place.screen);
         if home && spec.workspaces.is_some() && !self.shows_on(&spec.workspaces, &place.screen) {
             let ws = self
                 .workspace_of(&place.screen)
@@ -1377,9 +1374,37 @@ impl Store {
         let inherited = (!spec.prefix.is_empty())
             .then(|| config::value_at(&self.config, "position").cloned())
             .flatten();
-        let target =
-            json!({"edge": edge_name(place.edge), "offset": place.offset, "screen": place.screen});
-        let stored = position::config_value(&target, inherited.as_ref());
+        let target = json!({"edge": edge_name(place.edge), "offset": place.offset});
+        let mut stored = position::config_value(&target, inherited.as_ref())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        if !place.screen.is_empty() {
+            let mut screens = spec
+                .position
+                .as_ref()
+                .map(position::listed_screens)
+                .unwrap_or_default();
+            match screens.iter().position(|s| s == from) {
+                Some(at) => screens[at] = place.screen.clone(),
+                None => screens = vec![place.screen.clone()],
+            }
+            let mut seen = Vec::new();
+            screens.retain(|s| {
+                !seen.contains(s) && {
+                    seen.push(s.clone());
+                    true
+                }
+            });
+            stored.insert(
+                "screen".into(),
+                if screens.len() == 1 {
+                    json!(screens[0])
+                } else {
+                    json!(screens)
+                },
+            );
+        }
+        let stored = (!stored.is_empty()).then_some(Value::Object(stored));
         self.set_value(&format!("{}position", spec.prefix), stored.as_ref());
     }
 
@@ -1392,7 +1417,7 @@ impl Store {
         let Some(cs) = self.focused_copy_screen(nv, &focused).map(str::to_string) else {
             return false;
         };
-        let key = (nv.key.clone(), if nv.every { cs } else { String::new() });
+        let key = (nv.key.clone(), cs);
         if let Some(t) = tab {
             self.copies.entry(key.clone()).or_default().tab = t.to_string();
         }
@@ -1512,15 +1537,21 @@ impl Store {
         self.advance(now);
     }
 
-    /// IPC `recenter`: every `position` removed.
+    /// IPC `recenter`: every `position` back to top-center, on the screen it
+    /// is on (only the `screen` key stays).
     pub fn recenter(&mut self) {
-        let mut cfg = config::with_value(&self.config, "position", None);
+        fn centered(cfg: &Value, key: &str) -> Value {
+            let screen = config::value_at(cfg, &format!("{key}.screen")).cloned();
+            let kept = screen.map(|s| json!({ "screen": s }));
+            config::with_value(cfg, key, kept.as_ref())
+        }
+        let mut cfg = centered(&self.config, "position");
         let n = match cfg.get("notches") {
             Some(Value::Array(l)) if config::has_notch_list(&cfg) => l.len(),
             _ => 0,
         };
         for i in 0..n {
-            cfg = config::with_value(&cfg, &format!("notches.{i}.position"), None);
+            cfg = centered(&cfg, &format!("notches.{i}.position"));
         }
         self.replace_config(cfg);
     }
@@ -1549,6 +1580,88 @@ impl Store {
         Ok(())
     }
 
+    // ----------------------------------------------------- creating, removing
+
+    /// `notch add`, `n` in navigation and Settings' Add: a notch in the
+    /// config. Where it goes is [`spatial::new_spot`]'s rule, its screen
+    /// written; it is selected by the caller, if anyone. Returns its id.
+    pub fn add_notch(&mut self, req: &NewNotch) -> Result<String, String> {
+        let layout = self.screen_names();
+        if let Some(s) = req.screen.as_deref().filter(|s| !s.is_empty())
+            && !layout.is_empty()
+            && !layout.iter().any(|l| l == s)
+        {
+            return Err(format!("no screen {s}"));
+        }
+        if let Some(e) = req.edge.as_deref()
+            && !position::is_edge(e)
+        {
+            return Err(format!("no edge {e}"));
+        }
+        let views = self.notch_views();
+        let others: Vec<Placed> = views
+            .iter()
+            .filter(|v| !v.guest)
+            .map(|v| Placed {
+                id: v.id.clone(),
+                edge: v.pos.edge.clone(),
+                offset: v.pos.offset,
+                screens: v.copy_screens.clone(),
+            })
+            .collect();
+        let spot = spatial::new_spot(
+            &others,
+            &layout,
+            &self.focused(),
+            req.screen.as_deref(),
+            req.edge.as_deref(),
+        );
+        let ids: Vec<&str> = others.iter().map(|o| o.id.as_str()).collect();
+        let id = config::free_notch_id(&ids);
+        let mut position = json!({"edge": spot.edge, "offset": spot.offset});
+        if !spot.screen.is_empty() {
+            position["screen"] = json!(spot.screen);
+        }
+        let entry = json!({"id": id, "modules": req.modules, "position": position});
+        let next = config::with_notch_added(&self.config, &entry);
+        self.replace_config(next);
+        Ok(id)
+    }
+
+    /// Takes a notch out of the config; the last one stays. Navigation, when
+    /// it had the notch selected, moves to the one that took its place.
+    pub fn remove_notch(&mut self, id: &str) -> Result<(), String> {
+        let specs = config::notches(&self.config, &self.default_refs());
+        let spec = specs
+            .iter()
+            .find(|s| s.id == id)
+            .ok_or_else(|| format!("no notch {id}"))?;
+        if specs.len() < 2 {
+            return Err("the last notch stays".into());
+        }
+        let before = self.order_ids(&self.notch_views());
+        let at = before.iter().position(|o| o == id).unwrap_or(0);
+        let next = config::without_notch(&self.config, spec.index as i64);
+        self.replace_config(next);
+        if self
+            .nav
+            .as_ref()
+            .is_some_and(|n| n.selected.as_deref() == Some(id))
+        {
+            let after = self.order_ids(&self.notch_views());
+            let picked = after.get(at.min(after.len().saturating_sub(1))).cloned();
+            if let Some(n) = self.nav.as_mut() {
+                n.selected = picked;
+                n.mode = NavMode::Select;
+            }
+        }
+        if let Some(n) = self.nav.as_mut() {
+            // Its copies went with it: no tab to give back on Escape.
+            n.tabs.retain(|(k, _)| k.0 != id);
+        }
+        Ok(())
+    }
+
     // -------------------------------------------------------- navigation
 
     pub fn navigating(&self) -> bool {
@@ -1569,12 +1682,12 @@ impl Store {
 
     fn start_navigation(&mut self) -> String {
         let views = self.notch_views();
-        let config_notches: Vec<&NotchView> = views.iter().filter(|v| !v.guest).collect();
-        if config_notches.is_empty() {
+        let ordered = self.ordered(&views);
+        if ordered.is_empty() {
             return "no notches".into();
         }
         let focused = self.focused();
-        let infos: Vec<Option<navigate::NotchInfo>> = config_notches
+        let infos: Vec<Option<navigate::NotchInfo>> = ordered
             .iter()
             .map(|nv| {
                 let mut info = navigate::NotchInfo::default();
@@ -1586,7 +1699,9 @@ impl Store {
                 Some(info)
             })
             .collect();
-        let selected = navigate::start(&infos, &focused).map_or(-1, |i| i as i64);
+        let selected = navigate::start(&infos, &focused)
+            .and_then(|i| ordered.get(i))
+            .map(|nv| nv.id.clone());
         let tabs = self
             .copies
             .iter()
@@ -1603,7 +1718,7 @@ impl Store {
     }
 
     /// `endNavigation(restore)`: Escape gives each copy its tab back and a
-    /// notch being moved its place.
+    /// notch being moved its place (a notch being created, away).
     fn end_navigation(&mut self, restore: bool, now: u64) {
         let Some(mut nav) = self.nav.take() else {
             return;
@@ -1633,7 +1748,14 @@ impl Store {
 
     fn undo_move(&mut self, from: Option<MoveFrom>) {
         let Some(from) = from else { return };
-        let Some(spec) = self.spec_at(from.notch) else {
+        if from.created {
+            let _ = self.remove_notch(&from.notch);
+            return;
+        }
+        let Some(spec) = config::notches(&self.config, &self.default_refs())
+            .into_iter()
+            .find(|s| s.id == from.notch)
+        else {
             return;
         };
         self.set_value(
@@ -1653,11 +1775,13 @@ impl Store {
     fn nav_key(&mut self, key: KeyName, now: u64) {
         let Some(nav) = self.nav.clone() else { return };
         let views = self.notch_views();
-        let notches: Vec<&NotchView> = views.iter().filter(|v| !v.guest).collect();
+        let notches = self.ordered(&views);
         let focused = self.focused();
-        let notch = usize::try_from(nav.selected)
-            .ok()
-            .and_then(|i| notches.get(i).copied());
+        let at = nav
+            .selected
+            .as_deref()
+            .and_then(|id| notches.iter().position(|v| v.id == id));
+        let notch = at.map(|i| notches[i]);
         let copy_screen =
             notch.and_then(|nv| self.focused_copy_screen(nv, &focused).map(str::to_string));
         let copy_key = notch
@@ -1682,7 +1806,7 @@ impl Store {
         let next = navigate::step(
             &StepState {
                 mode: nav.mode,
-                selected: nav.selected,
+                selected: at.map_or(-1, |i| i as i64),
                 count: notches.len() as i64,
                 tabs,
                 tab: shown.clone(),
@@ -1690,9 +1814,14 @@ impl Store {
             key,
         );
         let notch_index = notch.and_then(|nv| nv.index);
-        let notch_keys: Vec<String> = notch
-            .map(|nv| nv.copy_screens.iter().map(|_| nv.key.clone()).collect())
-            .unwrap_or_default();
+        let notch_id = notch.map(|nv| nv.id.clone());
+        // Where the selection goes: the place `step` says, by id, unless an
+        // action says otherwise.
+        let mut picked: Option<String> = usize::try_from(next.selected)
+            .ok()
+            .and_then(|i| notches.get(i))
+            .map(|nv| nv.id.clone());
+        let mut mode = next.mode;
         match next.action {
             Action::Leave => {
                 self.end_navigation(true, now);
@@ -1700,8 +1829,10 @@ impl Store {
             }
             Action::Open => {
                 self.end_navigation(false, now);
-                for i in 0..notches.len() {
-                    if Some(i) != notch_index {
+                for nv in &notches {
+                    if let Some(i) = nv.index
+                        && Some(i) != notch_index
+                    {
                         self.close_notch_at(i, now);
                     }
                 }
@@ -1711,46 +1842,72 @@ impl Store {
                 return;
             }
             Action::Settings => {
-                let index = nav.selected;
                 self.end_navigation(true, now);
-                if index >= 0 {
-                    self.open_settings(Some(settings::notch_page_id(index as u64)));
-                } else {
-                    self.open_settings(None);
+                match notch_index {
+                    Some(i) => self.open_settings(Some(settings::notch_page_id(i as u64))),
+                    None => self.open_settings(None),
                 }
                 return;
             }
-            Action::Remove if notch.is_some() => {
-                // Its copies go with it: no tab to give back on Escape.
+            Action::Remove if notch_id.is_some() => {
+                let id = notch_id.clone().unwrap_or_default();
+                let survivors: Vec<&str> = notches
+                    .iter()
+                    .filter(|v| v.id != id)
+                    .map(|v| v.id.as_str())
+                    .collect();
+                picked = usize::try_from(next.selected)
+                    .ok()
+                    .and_then(|i| survivors.get(i))
+                    .map(|s| (*s).to_string());
                 if let Some(n) = self.nav.as_mut() {
-                    n.tabs.retain(|(k, _)| !notch_keys.contains(&k.0));
+                    // Its copies go with it: no tab to give back on Escape.
+                    n.tabs.retain(|(k, _)| k.0 != id);
+                    n.selected = None;
                 }
-                let next_cfg = config::without_notch(&self.config, nav.selected);
-                self.replace_config(next_cfg);
+                let _ = self.remove_notch(&id);
             }
-            Action::MoveStart if notch.is_some() => {
-                if let (Some(i), Some(spec)) =
-                    (notch_index, notch_index.and_then(|i| self.spec_at(i)))
-                {
+            Action::New => {
+                match self.add_notch(&NewNotch::default()) {
+                    Ok(id) => {
+                        if let Some(n) = self.nav.as_mut() {
+                            n.move_from = Some(MoveFrom {
+                                notch: id.clone(),
+                                position: None,
+                                workspaces: None,
+                                created: true,
+                                prev: notch_id.clone(),
+                            });
+                        }
+                        picked = Some(id);
+                    }
+                    // No screen to put it on: nothing is created.
+                    Err(_) => mode = NavMode::Select,
+                }
+            }
+            Action::MoveStart if notch_id.is_some() => {
+                if let Some(spec) = notch_index.and_then(|i| self.spec_at(i)) {
                     let get = |k: &str| {
                         config::value_at(&self.config, &format!("{}{k}", spec.prefix)).cloned()
                     };
                     let from = MoveFrom {
-                        notch: i,
+                        notch: spec.id.clone(),
                         position: get("position"),
                         workspaces: get("workspaces"),
+                        created: false,
+                        prev: None,
                     };
                     if let Some(n) = self.nav.as_mut() {
                         n.move_from = Some(from);
                     }
                 }
             }
-            Action::Move if notch.is_some() => {
+            Action::Move if notch_id.is_some() => {
                 if let (Some(nv), Some(i)) = (notch, notch_index) {
                     let current = navigate::Position {
                         edge: nav_edge(&nv.pos.edge),
                         offset: nv.pos.offset,
-                        screen: nv.pos.screen.clone(),
+                        screen: copy_name.clone(),
                     };
                     let target = navigate::move_target(
                         &current,
@@ -1758,23 +1915,39 @@ impl Store {
                         &self.screen_names(),
                         &copy_name,
                     );
-                    self.move_to(i, &target);
+                    self.move_to(i, &target, &copy_name);
                 }
             }
             Action::MoveDone => {
-                if let Some(n) = self.nav.as_mut() {
-                    n.move_from = None;
+                let from = self.nav.as_mut().and_then(|n| n.move_from.take());
+                if let Some(from) = from.filter(|f| f.created) {
+                    // A new notch kept: navigation ends and Settings opens on
+                    // its page, to name it and pick its modules.
+                    let page = self
+                        .index_of(&from.notch)
+                        .map(|i| settings::notch_page_id(i as u64));
+                    self.end_navigation(false, now);
+                    self.open_settings(page);
+                    return;
                 }
             }
             Action::MoveCancel => {
                 let from = self.nav.as_mut().and_then(|n| n.move_from.take());
+                let created = from.as_ref().is_some_and(|f| f.created);
+                let prev = from.as_ref().and_then(|f| f.prev.clone());
                 self.undo_move(from);
+                if created {
+                    let order = self.order_ids(&self.notch_views());
+                    picked = prev
+                        .filter(|p| order.contains(p))
+                        .or_else(|| order.first().cloned());
+                }
             }
             _ => {}
         }
         if let Some(n) = self.nav.as_mut() {
-            n.mode = next.mode;
-            n.selected = next.selected;
+            n.mode = mode;
+            n.selected = picked;
         }
         if !next.tab.is_empty()
             && next.tab != shown
@@ -1811,27 +1984,19 @@ impl Store {
     }
 
     /// `NotchCopy.reservedScreens`: the screens a copy keeps windows clear
-    /// on. A guest reserves nowhere; a copy on its own screen there while it
-    /// may hang there; the one copy as `State.reserveScreens` says.
+    /// on. A guest reserves nowhere; a notch's copy only on its own screen,
+    /// and only while its workspace is there.
     fn reserved_screens(&self, nv: &NotchView, cs: &str) -> Vec<String> {
         if nv.guest {
             return Vec::new();
         }
         let workspaces = nv.spec.as_ref().and_then(|s| s.workspaces.clone());
         let states = self.screen_states(&workspaces);
-        if !cs.is_empty() {
-            return if states.iter().any(|s| s.name == cs && s.allowed) {
-                vec![cs.to_string()]
-            } else {
-                Vec::new()
-            };
-        }
-        let home = if nv.pos.screen == position::ALL_SCREENS {
-            cs
+        if states.iter().any(|s| s.name == cs && s.allowed) {
+            vec![cs.to_string()]
         } else {
-            &nv.pos.screen
-        };
-        state::reserve_screens(&states, home)
+            Vec::new()
+        }
     }
 
     /// `ReservedSpace.target`: `State.reservedSpace` over what the UI
@@ -2041,6 +2206,7 @@ impl Store {
         schema::build(&schema::Inputs {
             config: &self.config,
             notches: &notches,
+            order: &self.order_ids(&self.notch_views()),
             settings_notch: self.settings_notch,
             screens: &screens,
             supports_workspaces: self.screens.as_ref().is_some_and(|s| s.supports_workspaces),
@@ -2070,12 +2236,7 @@ impl Store {
                 })
                 .collect()
         };
-        let selected_id = self.nav.as_ref().and_then(|n| {
-            views
-                .iter()
-                .find(|v| !v.guest && v.index.is_some_and(|i| Some(i as i64) == Some(n.selected)))
-                .map(|v| v.id.clone())
-        });
+        let selected_id = self.nav.as_ref().and_then(|n| n.selected.clone());
         let notches: Vec<Value> = views
             .iter()
             .filter(|v| !v.guest)

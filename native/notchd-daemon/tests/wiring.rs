@@ -262,7 +262,7 @@ fn a_measured_depth_becomes_the_reserve_and_a_shrink_waits() {
     let measure = |baseline: f64| {
         ToDaemon::Measure(Measure {
             notch: "main".into(),
-            screen: "".into(),
+            screen: "DP-1".into(),
             rest: Num(6.0),
             compact: Num(0.0),
             baseline: Num(baseline),
@@ -420,8 +420,14 @@ fn a_module_that_peeks_peeks_the_notch() {
         r#"{"title":"Pk","command":["./run.sh"]}"#,
         PEEKER,
     );
-    r.start_modules();
+    // The UI first: a notch has a copy once a screen is known, and a peek
+    // asked before that has nowhere to show.
     let mut ui = r.ui();
+    state_where(&mut ui, START_WAIT, |s| {
+        s.notches.first().is_some_and(|n| !n.copies.is_empty())
+    })
+    .expect("a copy once the screens are known");
+    r.start_modules();
     let st = state_where(&mut ui, START_WAIT, |s| {
         s.notches
             .first()
@@ -591,11 +597,9 @@ fn the_timer_activities_and_osd_live_in_the_daemon_and_answer_their_ipc() {
         "counting down"
     );
     let st = state_where(&mut ui, WAIT, |s| {
-        s.notches[0].copies[0].mode == Mode::Peek
-            && s.notches[0].copies[0]
-                .peek
-                .as_ref()
-                .is_some_and(|p| p.module == "timer")
+        s.notches[0].copies.first().is_some_and(|c| {
+            c.mode == Mode::Peek && c.peek.as_ref().is_some_and(|p| p.module == "timer")
+        })
     });
     assert!(st.is_some(), "a start confirms with a peek");
     assert_eq!(answer(&mut ui, "push", &["nope"]).unwrap(), "invalid json");

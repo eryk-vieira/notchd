@@ -5,7 +5,7 @@
 use crate::testhooks;
 use notchd_core::navigate;
 use notchd_core::state::ModuleInfo;
-use notchd_core::store::{EditOp, ModuleFacts, Store};
+use notchd_core::store::{EditOp, ModuleFacts, NewNotch, Store};
 use notchd_proto::request::{EditOp as WireOp, ErrReply, OkReply};
 use notchd_proto::ui::DragEv;
 use notchd_proto::version::IPC_METHODS;
@@ -167,6 +167,7 @@ fn ipc(store: &mut Store, method: &str, args: &[String], now: u64) -> IpcResult 
         // the reply is flushed. The store has nothing to do.
         "shutdown" => return Ok("ok".into()),
         "navigate" => return Ok(store.navigate(now)),
+        "notch" => return Ok(ipc_notch(store, args)),
         "recenter" => store.recenter(),
         "set" => return Ok(ipc_set(store, args)),
         "state" => return Ok(store.ipc_state()),
@@ -180,6 +181,48 @@ fn ipc(store: &mut Store, method: &str, args: &[String], now: u64) -> IpcResult 
         m => return Err(("method", format!("unknown method: {m}"))),
     }
     Ok(String::new())
+}
+
+const NOTCH_USAGE: &str =
+    "usage: notch add [--screen <name>] [--edge <edge>] [--modules a,b] | notch remove <id>";
+
+/// `notch add [--screen <name>] [--edge <edge>] [--modules a,b]` creates a
+/// notch (the creation rule of `Store::add_notch`) and answers its id;
+/// `notch remove <id>` takes one out. Human answers, like `set`'s.
+fn ipc_notch(store: &mut Store, args: &[String]) -> String {
+    match args.first().map(String::as_str) {
+        Some("add") => {
+            let mut req = NewNotch::default();
+            let mut rest = args[1..].iter();
+            while let Some(flag) = rest.next() {
+                let Some(value) = rest.next() else {
+                    return NOTCH_USAGE.into();
+                };
+                match flag.as_str() {
+                    "--screen" => req.screen = Some(value.clone()),
+                    "--edge" => req.edge = Some(value.clone()),
+                    "--modules" => {
+                        req.modules = value
+                            .split(',')
+                            .map(str::trim)
+                            .filter(|m| !m.is_empty())
+                            .map(str::to_string)
+                            .collect()
+                    }
+                    _ => return NOTCH_USAGE.into(),
+                }
+            }
+            store.add_notch(&req).unwrap_or_else(|e| e)
+        }
+        Some("remove") => match args.get(1) {
+            Some(id) if args.len() == 2 => match store.remove_notch(id) {
+                Ok(()) => "ok".into(),
+                Err(e) => e,
+            },
+            _ => NOTCH_USAGE.into(),
+        },
+        _ => NOTCH_USAGE.into(),
+    }
 }
 
 /// `set <key> <json>`: an empty value resets the key to its default.
@@ -307,6 +350,57 @@ mod tests {
             result(route(&mut s, &ipc_msg("toggleNotch", &["main"]), 0)).unwrap(),
             "ok"
         );
+    }
+
+    #[test]
+    fn notch_add_creates_a_notch_and_answers_its_id_and_notch_remove_takes_it_out() {
+        let mut s = store();
+        let r = |s: &mut Store, a: &[&str]| result(route(s, &ipc_msg("notch", a), 0)).unwrap();
+        assert_eq!(r(&mut s, &["add"]), "notch-2");
+        assert_eq!(s.config()["notches"][1]["modules"], json!([]));
+        assert_eq!(
+            r(
+                &mut s,
+                &["add", "--edge", "left", "--modules", "media, timer,"]
+            ),
+            "notch-3"
+        );
+        assert_eq!(
+            s.config()["notches"][2]["modules"],
+            json!(["media", "timer"])
+        );
+        assert_eq!(s.config()["notches"][2]["position"]["edge"], "left");
+        assert!(s.take_write().is_some());
+        assert_eq!(r(&mut s, &["remove", "notch-2"]), "ok");
+        assert_eq!(r(&mut s, &["remove", "notch-2"]), "no notch notch-2");
+        assert_eq!(s.config()["notches"].as_array().unwrap().len(), 2);
+        // The rule's own refusals come back as words.
+        assert_eq!(r(&mut s, &["add", "--edge", "middle"]), "no edge middle");
+        let screens = notchd_proto::parse::<ToDaemon>(
+            r#"{"t":"screens","screens":[{"name":"DP-1","x":0,"y":0,"w":1,"h":1,"scale":1}],"focused":"DP-1","fullscreen":[],"workspaces":{},"known":[],"supportsWorkspaces":false,"barEdge":null}"#,
+        )
+        .unwrap();
+        route(&mut s, &screens, 0);
+        assert_eq!(r(&mut s, &["add", "--screen", "HDMI"]), "no screen HDMI");
+        assert_eq!(r(&mut s, &["remove", "notch-3"]), "ok");
+        assert_eq!(r(&mut s, &["remove", "main"]), "the last notch stays");
+    }
+
+    #[test]
+    fn notch_with_a_bad_action_or_flag_answers_the_usage() {
+        let mut s = store();
+        for a in [
+            &[][..],
+            &["nope"],
+            &["add", "--screen"],
+            &["add", "--what", "x"],
+            &["remove"],
+            &["remove", "a", "b"],
+        ] {
+            let r = result(route(&mut s, &ipc_msg("notch", a), 0)).unwrap();
+            assert!(r.starts_with("usage: notch add"), "{a:?}: {r}");
+        }
+        assert!(s.config().get("notches").is_none(), "nothing was created");
     }
 
     #[test]

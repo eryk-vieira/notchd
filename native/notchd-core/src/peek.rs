@@ -91,22 +91,13 @@ pub fn route(places: &[PeekNotch], focused: &str, on_focused_screen: bool) -> Ro
     }
 }
 
-/// `peekPlace`: how a notch hangs, for [`route`]. `homed_screen` is the screen
-/// a homed notch is on now.
-pub fn place(homed: bool, every_screen: bool, homed_screen: &str) -> PeekNotch {
-    if !homed {
-        return PeekNotch {
-            kind: if every_screen {
-                PeekKind::All
-            } else {
-                PeekKind::Follow
-            },
-            screen: None,
-        };
-    }
+/// `peekPlace`: how a notch hangs, for [`route`]: kept on the `screens` it
+/// hangs on, which are never the focused one's to follow.
+pub fn place(screens: &[String]) -> PeekNotch {
     PeekNotch {
         kind: PeekKind::Homed,
-        screen: Some(homed_screen.to_string()),
+        screen: screens.first().cloned(),
+        screens: screens.to_vec(),
     }
 }
 
@@ -231,6 +222,7 @@ mod tests {
         PeekNotch {
             kind,
             screen: Some(screen.into()),
+            screens: Vec::new(),
         }
     }
 
@@ -253,10 +245,12 @@ mod tests {
             PeekNotch {
                 kind: PeekKind::Follow,
                 screen: None,
+                screens: Vec::new(),
             },
             PeekNotch {
                 kind: PeekKind::All,
                 screen: None,
+                screens: Vec::new(),
             },
         ];
         let r = route(&places, "DP-1", true);
@@ -279,14 +273,16 @@ mod tests {
     }
 
     #[test]
-    fn place_says_how_a_notch_hangs() {
-        assert_eq!(place(false, true, "").kind, PeekKind::All);
-        assert_eq!(place(false, false, "").kind, PeekKind::Follow);
-        let p = place(true, false, "DP-2");
+    fn place_says_which_screens_a_notch_hangs_on() {
+        let p = place(&["DP-2".to_string()]);
         assert_eq!(
             (p.kind, p.screen.as_deref()),
             (PeekKind::Homed, Some("DP-2"))
         );
+        // On several, it peeks on each; on none, nowhere.
+        let two = place(&["DP-1".to_string(), "DP-2".to_string()]);
+        assert_eq!(route(&[two], "DP-2", true).notches, vec![0]);
+        assert!(route(&[place(&[])], "DP-2", true).visitor);
     }
 
     #[test]

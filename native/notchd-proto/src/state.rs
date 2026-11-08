@@ -15,7 +15,13 @@ pub struct State {
     /// window shows while it is open, and what a UI opens it on when the core
     /// opens it (navigation's `s`, `ipc settings`).
     pub settings_page: String,
+    /// In config order: an index here is the config's (`notches.<i>.…`).
     pub notches: Vec<Notch>,
+    /// The ids of `notches` in the spatial order (screen by its place in the
+    /// layout, then edge top, left, right, bottom, then offset, ties by
+    /// config order): what the numbers, the arrows and the digits go by,
+    /// and the order Settings lists the notches in.
+    pub order: Vec<String>,
     pub reserve: Vec<Reserve>,
     pub standalone: Vec<Standalone>,
     /// The visitor (`NotchService.visitor`): the default notch, a copy per
@@ -37,7 +43,9 @@ pub enum NavMode {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Navigation {
     pub mode: NavMode,
-    /// Index into `notches`.
+    /// The selected notch's id (`""` for none).
+    pub notch: String,
+    /// The same notch's index into `notches` (config order).
     pub selected: u32,
     /// The tab shown, `""` for the notch's own.
     pub tab: String,
@@ -48,8 +56,12 @@ pub struct Notch {
     pub id: String,
     pub edge: Edge,
     pub offset: Num,
-    /// `""`: the focused screen.
+    /// The first screen it hangs on (`copies` has one per screen); `""` while
+    /// no screen is known.
     pub screen: String,
+    /// What navigation numbers it: its place in `order`, 1 to 9; 0 for no
+    /// number (reached with the arrows).
+    pub number: u32,
     pub draggable: bool,
     pub tabs: bool,
     pub modules: Vec<String>,
