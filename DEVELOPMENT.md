@@ -29,7 +29,8 @@ shell.qml             standalone host: the repo root is also a Quickshell config
 native/               the daemon (Rust workspace; Cargo.toml, rust-toolchain.toml, releases.json)
   notchd-proto/       the wire: every message and view primitive as serde types, JSON Schema (schema/), limits
   notchd-core/        the rules, no I/O: config, settings schema, notch state, peek, navigation, timers,
-                      usage, agent titles rules; a `store` that holds the whole state
+                      usage, agent titles rules; the spatial order and creation rule
+                      (`spatial.rs`); a `store` that holds the whole state
   notchd-modules/     the built-in modules (media, timer, activities, resources, osd, claude, codex,
                       terminals) as `CoreModule`s: state in, facts, view trees and effects out
   notchd-providers/   what the OS gives: media (MPRIS), /proc, PTYs, plan usage; `linux/` backends

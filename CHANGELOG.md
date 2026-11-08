@@ -4,9 +4,25 @@ All user-visible changes. The format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+### Added
+
+- Navigation numbers notches by where they are: by monitor (left to right, then top to bottom), then edge (top, left, right, bottom), then position along the edge, ties in config order. The numbers, `←` `→`, the digit keys and the notch navigation starts on all follow that order, and Settings › Notches lists the notches in it, each with its number. The config is never reordered: `notches.1.position` and the `notch/1` page keep their indexes.
+- `n` in navigation creates a notch at the top of the focused monitor, in the first free spot near the middle, and starts moving it: `Enter` keeps it and opens its page in settings, to name it and pick its modules; `Esc` takes it away again.
+- `notchd ipc notch add [--screen <name>] [--edge <edge>] [--modules a,b]` and `notch remove <id>` (on the Omarchy and standalone targets: `notch add "<options>"`, `notch remove <id>`). Settings' Add notch uses the same rule, now the daemon's.
+- `position.screen` takes a list of monitor names: a copy of the notch on each.
+
+### Changed
+
+- A notch stays on its monitor: it no longer follows focus. Without `position.screen` it hangs on the first monitor of the layout; dragging a notch or creating one always writes its monitor. A notch whose monitor is unplugged shows on the first monitor left until it is back, without touching the config.
+- `workspaces` hides the closed notch on its monitor when that monitor shows a workspace left out, instead of moving it to another monitor; `reserveSpace` reserves only on the monitors the notch hangs on.
+- `recenter` puts each notch back at the top middle of the monitor it is on, instead of removing its `position` and with it the monitor.
+- `"all"` is no longer offered in Settings (the screen choice lists the monitors); in a config it still means every connected monitor.
+- The README and `docs/ipc.md` present `openNotch`, `agent … toggle` and the like as IPC reference rather than keys to bind.
+
 ### Removed
 
 - The voice modules (`codex-live` and `local-live`) and the optional components (the Components page of the settings, and the `live` and `component` IPC methods) are gone; voice will come back redesigned. Keys left in your config for them (`codex-live`, `local-live`, `voiceModel`...) and their ids in a notch's `modules` are ignored like any unknown one, and nothing is rewritten. What the components installed stays on disk and can be deleted by hand: `$XDG_DATA_HOME/notchd/` (usually `~/.local/share/notchd/`), for example its `localai` folder (LocalAI and the voices), and the installer's state under `$XDG_STATE_HOME/notchd/components/`.
+- Following focus: the Screen choice's "Follow focus" and "Every screen" options.
 
 ## [0.7.3] — 2026-11-08
 
