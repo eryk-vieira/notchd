@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Tests of scripts/fetch-daemon.py, the pinned daemon download, and of the
+"""Tests of scripts/fetch-daemon.py, the pinned daemon download, of
+scripts/ensure-daemon.sh, which picks the binary a host starts, and of the
 version the plugin pins.
 
 Hermetic: the destination and XDG_DATA_HOME are temp dirs, the "release" is a
@@ -26,6 +27,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FETCH = os.path.join(ROOT, "scripts", "fetch-daemon.py")
+ENSURE = os.path.join(ROOT, "scripts", "ensure-daemon.sh")
 TIMEOUT = shutil.which("timeout")
 VERSION = "9.9.9"
 TARGET = "x86_64-unknown-linux-gnu"
@@ -35,10 +37,16 @@ def fake_daemon(version):
     return ("#!/bin/sh\necho 'notchd %s'\n" % version).encode()
 
 
-def tarball(version=VERSION, name="notchd"):
+def fake_ensuring_daemon(version):
+    """A `notchd` whose `daemon --ensure` prints a socket path naming its version."""
+    return ("#!/bin/sh\ncase \"$1\" in\n  --version) echo 'notchd %s' ;;\n"
+            "  daemon) echo 'starting'; echo '/run/notchd-%s.sock' ;;\n  *) exit 2 ;;\nesac\n" % (version, version)).encode()
+
+
+def tarball(version=VERSION, name="notchd", data=None):
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        data = fake_daemon(version)
+        data = data or fake_daemon(version)
         info = tarfile.TarInfo("notchd-%s-%s/%s" % (version, TARGET, name))
         info.size = len(data)
         info.mode = 0o644
@@ -202,6 +210,108 @@ class Fetch(unittest.TestCase):
         p = subprocess.run([TIMEOUT, "-k", "2", "30", sys.executable, "-I", FETCH, "--releases", self.releases,
                             "--target", TARGET, "--version", VERSION], capture_output=True, text=True, env=env)
         self.assertEqual(p.stdout.strip(), os.path.join(self.dir, "data", "notchd", "bin", "notchd"))
+
+
+class Ensure(unittest.TestCase):
+    """scripts/ensure-daemon.sh, run on copies of the plugin's scripts in a temp
+    tree whose manifest.json says VERSION and whose releases.json pins a
+    release served on 127.0.0.1. The fake `notchd` only prints: no daemon starts."""
+
+    tier = "integration"  # the script and fetch-daemon.py as processes, a local server
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="notchd-ensure-test.")
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.plugin = os.path.join(self.dir, "plugin")
+        os.makedirs(os.path.join(self.plugin, "scripts"))
+        os.makedirs(os.path.join(self.plugin, "native"))
+        for f in (ENSURE, FETCH):
+            shutil.copy(f, os.path.join(self.plugin, "scripts"))
+        with open(os.path.join(self.plugin, "manifest.json"), "w") as f:
+            json.dump({"version": VERSION}, f)
+        # A PATH with what the scripts need and no `notchd`.
+        self.path = os.path.join(self.dir, "path")
+        os.makedirs(self.path)
+        for tool in ("python3", "dirname", "tail"):
+            os.symlink(shutil.which(tool), os.path.join(self.path, tool))
+        self.data = os.path.join(self.dir, "data", "notchd", "bin")
+        self.archive = tarball(data=fake_ensuring_daemon(VERSION))
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.server.files = {"/notchd.tar.gz": self.archive}
+        self.server.hits = []
+        self.server.daemon_threads = True
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.addCleanup(self.server.server_close)
+        self.addCleanup(self.server.shutdown)
+        self.pin("http://127.0.0.1:%d/notchd.tar.gz" % self.server.server_address[1])
+
+    def pin(self, url):
+        machine = subprocess.run([sys.executable, "-c", "import platform; print(platform.machine())"],
+                                 capture_output=True, text=True).stdout.strip().lower()
+        target = {"x86_64": TARGET, "amd64": TARGET}.get(machine, "aarch64-unknown-linux-gnu")
+        sha = hashlib.sha256(self.archive).hexdigest()
+        with open(os.path.join(self.plugin, "native", "releases.json"), "w") as f:
+            json.dump({VERSION: {target: {"url": url, "sha256": sha}}}, f)
+
+    def install(self, version, where=None):
+        where = where or self.data
+        os.makedirs(where, exist_ok=True)
+        path = os.path.join(where, "notchd")
+        with open(path, "wb") as f:
+            f.write(fake_ensuring_daemon(version))
+        os.chmod(path, 0o755)
+        return path
+
+    def ensure(self, **extra):
+        env = {"PATH": self.path, "HOME": self.dir, "XDG_DATA_HOME": os.path.join(self.dir, "data")}
+        env.update(extra)
+        p = subprocess.run([TIMEOUT, "-k", "2", "30", "/bin/bash", os.path.join(self.plugin, "scripts", "ensure-daemon.sh")],
+                           capture_output=True, text=True, env=env)
+        return p.returncode, p.stdout.strip()
+
+    def version_of(self, path):
+        return subprocess.run([path, "--version"], capture_output=True, text=True).stdout.strip()
+
+    def test_nothing_installed_fetches_the_pinned_release(self):
+        self.assertEqual(self.ensure(), (0, "/run/notchd-%s.sock" % VERSION))
+        self.assertEqual(self.version_of(os.path.join(self.data, "notchd")), "notchd " + VERSION)
+
+    def test_an_older_plugin_binary_is_replaced_by_the_pinned_release(self):
+        # Issue #22: after a plugin update the old daemon stayed for good.
+        self.install("0.0.1")
+        self.assertEqual(self.ensure(), (0, "/run/notchd-%s.sock" % VERSION))
+        self.assertEqual(self.version_of(os.path.join(self.data, "notchd")), "notchd " + VERSION)
+        self.assertEqual(len(self.server.hits), 1)
+
+    def test_the_right_version_is_kept_without_a_download(self):
+        self.install(VERSION)
+        self.assertEqual(self.ensure(), (0, "/run/notchd-%s.sock" % VERSION))
+        self.assertEqual(self.server.hits, [])
+
+    def test_offline_keeps_the_binary_that_is_there(self):
+        self.pin("http://127.0.0.1:9/notchd.tar.gz")
+        self.install("0.0.1")
+        self.assertEqual(self.ensure(), (0, "/run/notchd-0.0.1.sock"))
+
+    def test_offline_with_nothing_installed_says_why(self):
+        self.pin("http://127.0.0.1:9/notchd.tar.gz")
+        code, out = self.ensure()
+        self.assertEqual(code, 1)
+        self.assertIn("cannot download", json.loads(out)["error"])
+
+    def test_the_users_own_binary_is_used_as_it_is(self):
+        mine = self.install("0.0.2", os.path.join(self.dir, "mine"))
+        self.assertEqual(self.ensure(NOTCHD_BIN=mine), (0, "/run/notchd-0.0.2.sock"))
+        self.install("0.0.3", self.path)
+        self.assertEqual(self.ensure(), (0, "/run/notchd-0.0.3.sock"))
+        self.assertEqual(self.server.hits, [])
+        self.assertFalse(os.path.exists(self.data))
+
+    def test_a_bad_notchd_bin_is_an_error_not_the_plugins_binary(self):
+        self.install(VERSION)
+        code, out = self.ensure(NOTCHD_BIN=os.path.join(self.dir, "nope"))
+        self.assertEqual(code, 1)
+        self.assertIn("NOTCHD_BIN is not executable", json.loads(out)["error"])
 
 
 if __name__ == "__main__":
