@@ -475,6 +475,7 @@ mod tests {
             program: "/bin/sh".into(),
             args: vec!["-c".into(), script.into()],
             cwd: None,
+            unset: Vec::new(),
             env: vec![("TERM".into(), "xterm-256color".into())],
             cols: 80,
             rows: 24,
